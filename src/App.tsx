@@ -15,6 +15,7 @@ type Trade = { id: string | number; customer: string; direction: string; amount:
 
 function App() {
   validateClientEnvironment()
+  const inspectionMode = import.meta.env.DEV && import.meta.env.VITE_AUTH_GATE_DISABLED === 'true'
   const supabaseConfigured = Boolean(readPublicSupabaseConfig())
   const [activeNav, setActiveNav] = useState('Dashboard')
   const [showTrade, setShowTrade] = useState(false)
@@ -35,39 +36,43 @@ function App() {
   const [authPassword, setAuthPassword] = useState('')
   const [authMessage, setAuthMessage] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
-  const [organizationId, setOrganizationId] = useState<string | null>(null)
+  const [organizationId, setOrganizationId] = useState<string | null>(inspectionMode ? 'inspection' : null)
   const [branchId, setBranchId] = useState<string | null>(null)
   const [cashboxId, setCashboxId] = useState<string | null>(null)
-  const [organizationLoading, setOrganizationLoading] = useState(true)
+  const [organizationLoading, setOrganizationLoading] = useState(!inspectionMode)
   const [businessName, setBusinessName] = useState('')
   const hidden = privacy ? '••••••' : ''
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key)
 
   useEffect(() => {
+    document.documentElement.dir = isRtl(language) ? 'rtl' : 'ltr'
+    document.documentElement.lang = language
+    if (inspectionMode) return
     const updateConnection = () => setOnline(navigator.onLine)
     window.addEventListener('online', updateConnection)
     window.addEventListener('offline', updateConnection)
-    document.documentElement.dir = isRtl(language) ? 'rtl' : 'ltr'
-    document.documentElement.lang = language
     return () => { window.removeEventListener('online', updateConnection); window.removeEventListener('offline', updateConnection) }
-  }, [language])
+  }, [inspectionMode, language])
 
   useEffect(() => {
+    if (inspectionMode) return
     const client = getSupabaseClient()
     if (!client) return
     void client.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
     const listener = client.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
     return () => listener.data.subscription.unsubscribe()
-  }, [])
+  }, [inspectionMode])
 
   useEffect(() => {
+    if (inspectionMode) return
     if (!user) return
     const client = getSupabaseClient()
     if (!client) return
     void client.from('organization_memberships').select('organization_id').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle().then(({ data }) => { setOrganizationId(data?.organization_id ?? null); setOrganizationLoading(false) })
-  }, [user])
+  }, [inspectionMode, user])
 
   useEffect(() => {
+    if (inspectionMode) return
     if (!organizationId) return
     const client = getSupabaseClient()
     if (!client) return
@@ -76,16 +81,17 @@ function App() {
       if (!branch) return
       void client.from('cashboxes').select('id').eq('organization_id', organizationId).eq('branch_id', branch.id).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data: cashbox }) => setCashboxId(cashbox?.id ?? null))
     })
-  }, [organizationId])
+  }, [inspectionMode, organizationId])
 
   useEffect(() => {
+    if (inspectionMode) return
     if (!organizationId) return
     void getOwnerDashboard(organizationId).then((result) => {
       if (result.error) { setToast(`Dashboard not loaded: ${result.error}`); return }
       setDashboard(result.data)
       setTrades((result.data?.activity ?? []).map((item) => ({ id: item.id, customer: item.reference, direction: item.type, amount: 'Recorded', rate: '-', time: new Date(item.occurred_at).toLocaleTimeString(), status: item.status })))
     })
-  }, [organizationId, dashboardRefresh])
+  }, [dashboardRefresh, inspectionMode, organizationId])
 
   const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -136,7 +142,7 @@ function App() {
     setToast('CSV export generated')
   }
 
-  if (!user) return <AuthScreen mode={authMode} email={authEmail} password={authPassword} message={authMessage} busy={authBusy} onModeChange={setAuthMode} onEmailChange={setAuthEmail} onPasswordChange={setAuthPassword} onSubmit={submitAuth} />
+  if (!user && !inspectionMode) return <AuthScreen mode={authMode} email={authEmail} password={authPassword} message={authMessage} busy={authBusy} onModeChange={setAuthMode} onEmailChange={setAuthEmail} onPasswordChange={setAuthPassword} onSubmit={submitAuth} />
   if (organizationLoading) return <main className="auth-shell"><section className="auth-card"><div className="brand auth-brand"><span className="brand-mark">S</span><span>SARAFI<small>Exchange OS</small></span></div><p className="auth-subtitle">Loading your business workspace...</p></section></main>
   if (!organizationId) return <OnboardingScreen language={language} businessName={businessName} busy={organizationLoading} onLanguageChange={setLanguage} onBusinessNameChange={setBusinessName} onSubmit={submitOnboarding} />
 
@@ -149,7 +155,7 @@ function App() {
         <nav>{['Dashboard', 'Trade', 'Transactions', 'Cash & Accounts', 'People', 'Debts', 'Rates', 'Reports'].map((item) => <button className={activeNav === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => { setActiveNav(item); if (item === 'Trade') setShowTrade(true) }}><span className="nav-icon">{['◫', '+', '≡', '▣', '♙', '↔', '↗', '▤'][['Dashboard', 'Trade', 'Transactions', 'Cash & Accounts', 'People', 'Debts', 'Rates', 'Reports'].indexOf(item)]}</span>{item}{item === 'Transactions' && <em>12</em>}</button>)}</nav>
         <p className="nav-label bottom-label">Administration</p>
         <nav><button className="nav-item"><span className="nav-icon">◉</span>Team & Devices</button><button className="nav-item"><span className="nav-icon">⚙</span>Settings</button></nav>
-        <div className="sidebar-footer"><div className="avatar">MA</div><span><b>{user.email ?? 'Authenticated owner'}</b><small>Owner · Online</small></span><button aria-label="Sign out" onClick={() => void signOut()}>↪</button></div>
+        <div className="sidebar-footer"><div className="avatar">{inspectionMode ? 'AI' : 'MA'}</div><span><b>{user?.email ?? 'Read-only inspection'}</b><small>{inspectionMode ? 'Development preview' : 'Owner · Online'}</small></span><button aria-label="Sign out" onClick={() => void signOut()}>↪</button></div>
       </aside>
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>{t('workspace')}</span><b>/</b><strong>{activeNav}</strong></div><div className="top-actions"><button className="icon-button" onClick={() => setPrivacy(!privacy)} aria-label="Toggle privacy mode">{privacy ? '◉' : '◌'}</button><button className="lang-button" onClick={() => setLanguage(language === 'en' ? 'fa-AF' : language === 'fa-AF' ? 'ps-AF' : 'en')}>{language === 'en' ? 'EN' : language === 'fa-AF' ? 'دری' : 'PS'} <span>⌄</span></button><button className="help-button">?</button></div></header>
