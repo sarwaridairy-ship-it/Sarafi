@@ -13,14 +13,14 @@
 - PASS: Stages 4-7 domain workflows and owner dashboard slice.
 - PASS: 3 browser E2E checks: trade posting, Dari/RTL, mobile width.
 - PASS: Stage 7 report/reconciliation/notification unit coverage.
-- PARTIAL: Full operation forms and all reports are not yet connected to live RPCs.
+- PARTIAL: The authenticated trade adapter is connected to `record_fx_trade`; the remaining operation screens are not yet all connected to live RPCs.
 
 ### Financial
 
 - PASS: Decimal.js money/rate/cost calculations.
 - PASS: 50-run randomized ledger balance/replay tests.
 - PASS: Weighted-average cost, partial sale, opening balance, debt settlement, reversal tests.
-- PASS: Live migrations through `202608240011` and Supabase schema lint.
+- PASS: Live migrations through `202608240013` and Supabase schema lint.
 - PARTIAL: Authenticated live RPC/concurrency/reconciliation datasets not executed.
 
 ### Security
@@ -40,7 +40,7 @@
 ### Reliability
 
 - PASS: Offline sequence/limit/conflict tests and PWA shell artifacts.
-- PASS: Migration list shows `202608240001` through `202608240009` applied remotely.
+- PASS: Migration list shows `202608240001` through `202608240013` applied remotely.
 - PARTIAL: Provider backup/PITR confirmation and staging restore drill are not evidenced.
 - PARTIAL: Realtime reconnect and push delivery require live authenticated devices.
 
@@ -60,7 +60,7 @@
 - `npm run lint`: passing.
 - `npm audit --omit=dev`: 0 vulnerabilities.
 - `npx supabase db lint --linked`: no schema errors.
-- `npx supabase migration list --linked`: migrations 001-011 match remote.
+- `npx supabase migration list --linked`: migrations 001-013 match remote.
 - `npx supabase db lint --local`: not run successfully because Docker/local Postgres is not running at `127.0.0.1:54322`.
 - Bounded secret scan: no credentials found; the sole match is the intentional `SUPABASE_SERVICE_ROLE_KEY` name in a negative security test, and `.env.local` is Git-ignored.
 
