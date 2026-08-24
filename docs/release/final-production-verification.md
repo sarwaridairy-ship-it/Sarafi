@@ -20,9 +20,10 @@
 - PASS: Decimal.js money/rate/cost calculations.
 - PASS: 50-run randomized ledger balance/replay tests.
 - PASS: Weighted-average cost, partial sale, opening balance, debt settlement, reversal tests.
-- PASS: Live migrations through `202608240013` and Supabase schema lint.
+- PASS: Live migrations through `202608240014` and Supabase schema lint.
 - PASS: Anonymous financial access is blocked by the Supabase Auth gate; authenticated posting now resolves real organization branch/cashbox IDs.
 - PARTIAL: Authenticated live RPC/concurrency/reconciliation datasets not executed.
+- PASS: Live anonymous organization/RPC security regression checks reject unauthorized access.
 - BLOCKED: Controlled multi-user live authorization/concurrency tests require provisioned test identities and a safe test organization dataset.
 
 ### Security
@@ -57,13 +58,13 @@
 
 ## Commands and results
 
-- `npm test`: 44 tests passing.
+- `npm test`: 49 tests passing.
 - `npm run e2e`: 3 tests passing.
 - `npm run build`: passing.
 - `npm run lint`: passing.
 - `npm audit --omit=dev`: 0 vulnerabilities.
 - `npx supabase db lint --linked`: no schema errors.
-- `npx supabase migration list --linked`: migrations 001-013 match remote.
+- `npx supabase migration list --linked`: migrations 001-014 match remote.
 - `npx supabase db lint --local`: not run successfully because Docker/local Postgres is not running at `127.0.0.1:54322`.
 - Bounded secret scan: no credentials found; the sole match is the intentional `SUPABASE_SERVICE_ROLE_KEY` name in a negative security test, and `.env.local` is Git-ignored.
 

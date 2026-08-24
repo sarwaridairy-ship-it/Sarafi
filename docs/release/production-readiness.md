@@ -154,3 +154,13 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Migrations `202608240010` and `202608240011` applied to linked Supabase
 - [x] Live Supabase schema lint passes after inventory deployment
 - [ ] Dedicated UI routes and authenticated live forms for every inventory capability
+
+## Live integration closure
+
+- [x] Owner dashboard read model deployed as `get_owner_dashboard` and wired to the authenticated client
+- [x] Dashboard refreshes from authoritative Supabase state after successful posting
+- [x] Placeholder branch/cashbox IDs removed from financial posting
+- [x] Anonymous live organization/RPC security regression tests pass
+- [x] Production vendor chunk split reduced initial bundle to approximately 312 KB
+- [ ] Provision controlled multi-user identities for authenticated RLS/concurrency evidence
+- [ ] Complete full operation-form live adapters and authenticated dashboard smoke journey
