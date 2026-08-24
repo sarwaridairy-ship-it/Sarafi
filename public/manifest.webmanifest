@@ -1,0 +1,12 @@
+{
+  "name": "SARAFI Exchange OS",
+  "short_name": "SARAFI",
+  "description": "Secure currency exchange operations for Afghanistan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#20332e",
+  "lang": "en",
+  "dir": "ltr",
+  "icons": []
+}

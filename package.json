@@ -1,0 +1,37 @@
+{
+  "name": "sarafi-exchange-os",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "test": "vitest run src",
+    "e2e": "playwright test",
+    "typecheck": "tsc -b --pretty false",
+    "smoke": "npm run typecheck && npm run lint && npm test && npm run e2e",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
+    "decimal.js": "^10.6.0",
+    "jspdf": "^4.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "fast-check": "^4.9.0",
+    "oxlint": "^1.79.0",
+    "supabase": "^2.115.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}
