@@ -34,6 +34,8 @@ function App() {
   const [authMessage, setAuthMessage] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
+  const [branchId, setBranchId] = useState<string | null>(null)
+  const [cashboxId, setCashboxId] = useState<string | null>(null)
   const [organizationLoading, setOrganizationLoading] = useState(true)
   const [businessName, setBusinessName] = useState('')
   const hidden = privacy ? '••••••' : ''
@@ -63,6 +65,17 @@ function App() {
     void client.from('organization_memberships').select('organization_id').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle().then(({ data }) => { setOrganizationId(data?.organization_id ?? null); setOrganizationLoading(false) })
   }, [user])
 
+  useEffect(() => {
+    if (!organizationId) return
+    const client = getSupabaseClient()
+    if (!client) return
+    void client.from('branches').select('id').eq('organization_id', organizationId).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data: branch }) => {
+      setBranchId(branch?.id ?? null)
+      if (!branch) return
+      void client.from('cashboxes').select('id').eq('organization_id', organizationId).eq('branch_id', branch.id).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data: cashbox }) => setCashboxId(cashbox?.id ?? null))
+    })
+  }, [organizationId])
+
   const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setAuthBusy(true)
@@ -86,9 +99,10 @@ function App() {
     event.preventDefault()
     if (!amount) return
     const sold = new Decimal(amount)
+    if (!organizationId || !branchId || !cashboxId) { setToast('Trade not posted: complete business setup first'); return }
     let sessionCheck
     try {
-      sessionCheck = await postFxTrade({ organization_id: '00000000-0000-0000-0000-000000000000', branch_id: '00000000-0000-0000-0000-000000000000', cashbox_id: '00000000-0000-0000-0000-000000000000', client_command_id: crypto.randomUUID(), side: 'SELL_FX', sold_currency: 'USD', sold_amount: amount, bought_currency: 'AFN', bought_amount: sold.mul('70.25').toFixed(12), base_currency: 'AFN', sold_base_value: sold.mul('70').toFixed(12), bought_base_value: sold.mul('70.25').toFixed(12) })
+      sessionCheck = await postFxTrade({ organization_id: organizationId, branch_id: branchId, cashbox_id: cashboxId, client_command_id: crypto.randomUUID(), side: 'SELL_FX', sold_currency: 'USD', sold_amount: amount, bought_currency: 'AFN', bought_amount: sold.mul('70.25').toFixed(12), base_currency: 'AFN', sold_base_value: sold.mul('70').toFixed(12), bought_base_value: sold.mul('70.25').toFixed(12) })
     } catch (error) {
       setToast(`Trade not posted: ${error instanceof Error ? error.message : 'Invalid trade command'}`)
       return

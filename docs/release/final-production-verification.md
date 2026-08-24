@@ -21,7 +21,9 @@
 - PASS: 50-run randomized ledger balance/replay tests.
 - PASS: Weighted-average cost, partial sale, opening balance, debt settlement, reversal tests.
 - PASS: Live migrations through `202608240013` and Supabase schema lint.
+- PASS: Anonymous financial access is blocked by the Supabase Auth gate; authenticated posting now resolves real organization branch/cashbox IDs.
 - PARTIAL: Authenticated live RPC/concurrency/reconciliation datasets not executed.
+- BLOCKED: Controlled multi-user live authorization/concurrency tests require provisioned test identities and a safe test organization dataset.
 
 ### Security
 
@@ -42,6 +44,7 @@
 - PASS: Offline sequence/limit/conflict tests and PWA shell artifacts.
 - PASS: Migration list shows `202608240001` through `202608240013` applied remotely.
 - PARTIAL: Provider backup/PITR confirmation and staging restore drill are not evidenced.
+- BLOCKED: Linked schema dump/restore could not run because Docker Desktop is not available for the Supabase CLI backup path.
 - PARTIAL: Realtime reconnect and push delivery require live authenticated devices.
 
 ### Release
