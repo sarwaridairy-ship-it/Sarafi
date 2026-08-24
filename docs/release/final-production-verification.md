@@ -6,6 +6,8 @@
 **Web URL verified:** `http://localhost:5173/`  
 **Release status:** NOT RELEASED TO PUBLIC PRODUCTION
 
+Preview builds may set `VITE_AUTH_GATE_DISABLED=true` to expose the read-only shell while authentication is being finalized. This flag does not create a session; financial RPC adapters still require an authenticated Supabase session.
+
 ## Evidence
 
 ### Functional

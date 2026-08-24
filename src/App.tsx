@@ -15,7 +15,7 @@ type Trade = { id: string | number; customer: string; direction: string; amount:
 
 function App() {
   validateClientEnvironment()
-  const inspectionMode = import.meta.env.DEV && import.meta.env.VITE_AUTH_GATE_DISABLED === 'true'
+  const inspectionMode = import.meta.env.VITE_AUTH_GATE_DISABLED === 'true'
   const supabaseConfigured = Boolean(readPublicSupabaseConfig())
   const [activeNav, setActiveNav] = useState('Dashboard')
   const [showTrade, setShowTrade] = useState(false)
