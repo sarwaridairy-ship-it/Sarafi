@@ -52,4 +52,14 @@ test.describe('workspace controls', () => {
     await page.getByRole('button', { name: 'Change language' }).click()
     await expect(page.locator('html')).toHaveAttribute('lang', 'ps-AF')
   })
+
+  test('debts section exposes receivable and payable posting fields', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Debts/ }).click()
+    await expect(page.getByRole('heading', { name: 'Debts', exact: true })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Direction' })).toBeVisible()
+    await page.getByRole('combobox', { name: 'Direction' }).selectOption('payable')
+    await expect(page.getByRole('combobox', { name: 'Direction' })).toHaveValue('payable')
+    await expect(page.getByRole('button', { name: /Post debt/ })).toBeVisible()
+  })
 })

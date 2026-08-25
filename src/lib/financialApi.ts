@@ -23,6 +23,24 @@ export async function recordOperation(command: Record<string, unknown>): Promise
   return { data: result.data, error: result.error?.message ?? null }
 }
 
+export async function recordDebt(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('record_debt', { command })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function settleDebt(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('settle_debt', { command })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
 export async function getOwnerDashboard(organizationId: string): Promise<RpcResult<DashboardSnapshot>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }

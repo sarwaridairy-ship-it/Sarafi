@@ -6,7 +6,7 @@ import { readPublicSupabaseConfig } from './lib/supabase'
 import { calculateCounterAmount } from './domain/valuation'
 import { buildCsvReport } from './domain/reporting'
 import { isRtl, translate, type Language } from './lib/i18n'
-import { getOwnerDashboard, postFxTrade, recordOperation, type DashboardSnapshot } from './lib/financialApi'
+import { getOwnerDashboard, postFxTrade, recordDebt, recordOperation, type DashboardSnapshot } from './lib/financialApi'
 import { getSupabaseClient } from './lib/supabase'
 import { createBusiness } from './lib/onboarding'
 import { downloadPdf, printReport } from './lib/exports'
@@ -165,7 +165,7 @@ function App() {
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>{t('workspace')}</span><b>/</b><strong>{activeNav}</strong></div><div className="top-actions"><button className="icon-button" onClick={() => setPrivacy(!privacy)} aria-label={privacy ? 'Show amounts' : 'Hide amounts'}>{privacy ? '◉' : '◌'}</button><button className="lang-button" onClick={() => setLanguage(language === 'en' ? 'fa-AF' : language === 'fa-AF' ? 'ps-AF' : 'en')} aria-label="Change language">{language === 'en' ? 'EN' : language === 'fa-AF' ? 'دری' : 'PS'} <span>⌄</span></button><button className="help-button" onClick={() => setShowHelp(true)} aria-label="Open help">?</button></div></header>
         <div className="content-wrap">
-          {!dashboardView && <WorkspaceView section={activeNav} trades={trades} onDashboard={() => openSection('Dashboard')} onToast={setToast} />}
+          {!dashboardView && <WorkspaceView section={activeNav} trades={trades} organizationId={organizationId} branchId={branchId} onDashboard={() => openSection('Dashboard')} onToast={setToast} />}
           {dashboardView && <>
           <section className="welcome"><div><p className="kicker">MONDAY, 24 AUGUST 2026 · 10:45 AM</p><h1>{t('goodMorning')}</h1><p className="subtitle">{t('businessStand')}</p></div><div className="action-wrap"><button className="primary-action" onClick={() => setShowTrade(true)}><span>+</span> {t('newTrade')} <kbd>⌘ K</kbd></button><button className="secondary-action" onClick={() => setShowActions(!showActions)} aria-expanded={showActions}>More actions <span>⌄</span></button>{showActions && <div className="action-menu">{(['Receive money', 'Pay money', 'Transfer cash', 'Expense', 'Owner capital', 'Bank movement'] as const).map((action) => { const kinds: Record<typeof action, OperationKind> = { 'Receive money': 'RECEIVE_MONEY', 'Pay money': 'PAY_MONEY', 'Transfer cash': 'TRANSFER_CASH', Expense: 'RECORD_EXPENSE', 'Owner capital': 'OWNER_INVESTMENT', 'Bank movement': 'BANK_DEPOSIT' }; return <button key={action} onClick={() => openOperation(kinds[action])}>{action}<span>→</span></button> })}<button onClick={() => setShowTrade(true)}>{t('buy')} / {t('sell')} / {t('exchange')} <span>→</span></button><button onClick={() => openSection('Debts')}>{t('debtCredit')} <span>→</span></button><button className="optional-action" onClick={() => { setShowActions(false); setToast('Hawala is disabled for this organization') }}>{t('hawala')} <small>{t('optionalModule')}</small><span>→</span></button></div>}</div></section>
           <div className="notice"><span className={`sync-dot ${online ? 'online' : 'offline'}`} /><span><b>{online ? t('online') : t('stillOffline')}</b> · {supabaseConfigured ? 'Supabase credentials loaded' : t('localWorkspace')} · {online ? `${t('lastSync')}: just now` : `${t('pendingSync')}: 0`}</span><button onClick={() => setToast(online ? 'Authoritative sync is ready after migrations are applied' : 'Offline commands will remain pending until reconnect')}>{online ? 'Connected' : 'Offline mode'}</button></div>
@@ -185,9 +185,10 @@ function App() {
   )
 }
 
-function WorkspaceView({ section, trades, onDashboard, onToast }: { section: string; trades: Trade[]; onDashboard: () => void; onToast: (message: string) => void }) {
+function WorkspaceView({ section, trades, organizationId, branchId, onDashboard, onToast }: { section: string; trades: Trade[]; organizationId: string | null; branchId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {
   if (section === 'Rates') return <RatesView onDashboard={onDashboard} />
   if (section === 'Reports') return <ReportsView trades={trades} onDashboard={onDashboard} onToast={onToast} />
+  if (section === 'Debts') return <DebtsView organizationId={organizationId} branchId={branchId} onDashboard={onDashboard} onToast={onToast} />
   const descriptions: Record<string, string> = {
     Transactions: 'Review posted ledger activity and transaction history.',
     'Cash & Accounts': 'Review balances, branches, cashboxes, and money locations.',
@@ -208,6 +209,24 @@ function RatesView({ onDashboard }: { onDashboard: () => void }) {
 function ReportsView({ trades, onDashboard, onToast }: { trades: Trade[]; onDashboard: () => void; onToast: (message: string) => void }) {
   const rows = trades.map((trade) => ({ entryId: `trade_${trade.id}`, occurredAt: trade.time, type: trade.direction, branchId: 'Kabul Central', status: trade.status.toLowerCase(), realizedProfit: '0' }))
   return <section className="panel"><div className="panel-header"><div><p className="kicker">REPORT CENTER</p><h1>Reports</h1><p>Generate reports from the currently loaded ledger activity.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><div className="activity-actions"><button className="export-button" onClick={() => { downloadPdf(rows, 'Kabul Central Exchange', 'Recent Activity'); onToast('PDF report generated') }}>Export PDF</button><button className="export-button" onClick={printReport}>Print report</button></div><div className="empty-live">{trades.length ? `${trades.length} ledger activities are ready for export.` : 'No live ledger activity is available for reporting yet.'}</div></section>
+}
+
+function DebtsView({ organizationId, branchId, onDashboard, onToast }: { organizationId: string | null; branchId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {
+  const [direction, setDirection] = useState<'receivable' | 'payable'>('receivable')
+  const [counterpartyId, setCounterpartyId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState('AFN')
+  const [busy, setBusy] = useState(false)
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!organizationId || !branchId) { onToast('Debt not posted: an authenticated branch is required'); return }
+    setBusy(true)
+    const result = await recordDebt({ organization_id: organizationId, branch_id: branchId, counterparty_id: counterpartyId, direction, currency, amount, location: 'Main Counter', client_command_id: crypto.randomUUID() })
+    setBusy(false)
+    onToast(result.error ? `Debt not posted: ${result.error}` : 'Debt posted to Supabase')
+    if (!result.error) { setCounterpartyId(''); setAmount('') }
+  }
+  return <section className="panel"><div className="panel-header"><div><p className="kicker">DEBT & CREDIT</p><h1>Debts</h1><p>Record receivables and payables with an immutable ledger entry.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><form className="trade-modal" onSubmit={submit}><label>Direction<select value={direction} onChange={(event) => setDirection(event.target.value as typeof direction)}><option value="receivable">They owe us</option><option value="payable">We owe them</option></select></label><label>Counterparty ID<input required value={counterpartyId} onChange={(event) => setCounterpartyId(event.target.value)} placeholder="UUID from People" /></label><div className="form-grid"><label>Amount<input required min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label><label>Currency<select value={currency} onChange={(event) => setCurrency(event.target.value)}><option>AFN</option><option>USD</option><option>EUR</option></select></label></div><button className="primary-action full" type="submit" disabled={busy}>{busy ? 'Posting...' : 'Post debt'} <span>→</span></button></form><div className="empty-live">Settlements remain linked to the original debt and reduce its outstanding amount; they never delete history.</div></section>
 }
 
 function OnboardingScreen({ language, businessName, busy, onLanguageChange, onBusinessNameChange, onSubmit }: { language: Language; businessName: string; busy: boolean; onLanguageChange: (language: Language) => void; onBusinessNameChange: (value: string) => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void> }) {
