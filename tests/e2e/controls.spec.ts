@@ -65,7 +65,7 @@ test.describe('workspace controls', () => {
 
   test('reconciliation section exposes cash count and variance reason fields', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: 'Reconciliation', exact: true }).click()
+    await page.getByRole('button', { name: /Reconciliation/ }).click()
     await expect(page.getByRole('heading', { name: 'Reconciliation', exact: true })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Counted AFN' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Counted USD' })).toBeVisible()
