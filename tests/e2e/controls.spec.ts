@@ -62,4 +62,13 @@ test.describe('workspace controls', () => {
     await expect(page.getByRole('combobox', { name: 'Direction' })).toHaveValue('payable')
     await expect(page.getByRole('button', { name: /Post debt/ })).toBeVisible()
   })
+
+  test('reconciliation section exposes cash count and variance reason fields', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Reconciliation', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Reconciliation', exact: true })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Counted AFN' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Counted USD' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Variance reason' })).toBeVisible()
+  })
 })

@@ -41,6 +41,24 @@ export async function settleDebt(command: Record<string, unknown>): Promise<RpcR
   return { data: result.data, error: result.error?.message ?? null }
 }
 
+export async function recordCashboxClose(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('record_cashbox_close', { command })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function approveCashboxClose(closeId: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('approve_cashbox_close', { target_id: closeId })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
 export async function getOwnerDashboard(organizationId: string): Promise<RpcResult<DashboardSnapshot>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
