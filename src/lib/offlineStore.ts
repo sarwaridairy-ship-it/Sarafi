@@ -1,4 +1,4 @@
-import type { OfflineCommand } from './offline'
+import type { OfflineCommand, OfflineCommandStore } from './offline'
 
 const databaseName = 'sarafi-offline'
 const storeName = 'outbox'
@@ -24,6 +24,11 @@ async function withStore<T>(mode: IDBTransactionMode, action: (store: IDBObjectS
 export async function saveOfflineCommand(command: OfflineCommand): Promise<void> { await withStore('readwrite', (store) => store.put(command)) }
 export async function listOfflineCommands(): Promise<OfflineCommand[]> { return (await withStore('readonly', (store) => store.getAll())) as OfflineCommand[] }
 export async function removeOfflineCommand(clientCommandId: string): Promise<void> { await withStore('readwrite', (store) => store.delete(clientCommandId)) }
+
+export const indexedDbOfflineStore: OfflineCommandStore = {
+  save: saveOfflineCommand,
+  list: listOfflineCommands,
+}
 
 export async function encryptOfflinePayload(payload: string, key: CryptoKey): Promise<{ iv: string; data: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12))

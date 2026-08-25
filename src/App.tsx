@@ -6,11 +6,13 @@ import { readPublicSupabaseConfig } from './lib/supabase'
 import { calculateCounterAmount } from './domain/valuation'
 import { buildCsvReport } from './domain/reporting'
 import { isRtl, translate, type Language } from './lib/i18n'
-import { getOwnerDashboard, postFxTrade, type DashboardSnapshot } from './lib/financialApi'
+import { getOwnerDashboard, postFxTrade, recordOperation, type DashboardSnapshot } from './lib/financialApi'
 import { getSupabaseClient } from './lib/supabase'
 import { createBusiness } from './lib/onboarding'
+import { downloadPdf, printReport } from './lib/exports'
 
 type Trade = { id: string | number; customer: string; direction: string; amount: string; rate: string; time: string; status: string }
+type OperationKind = 'RECEIVE_MONEY' | 'PAY_MONEY' | 'TRANSFER_CASH' | 'RECORD_EXPENSE' | 'RECORD_INCOME' | 'OWNER_INVESTMENT' | 'OWNER_WITHDRAWAL' | 'BANK_DEPOSIT' | 'BANK_WITHDRAWAL'
 
 function App() {
   validateClientEnvironment()
@@ -21,6 +23,11 @@ function App() {
   const [showActions, setShowActions] = useState(false)
   const [showBranchMenu, setShowBranchMenu] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [operationKind, setOperationKind] = useState<OperationKind | null>(null)
+  const [operationAmount, setOperationAmount] = useState('')
+  const [operationCurrency, setOperationCurrency] = useState('AFN')
+  const [operationLocation, setOperationLocation] = useState('Main Counter')
+  const [operationMemo, setOperationMemo] = useState('')
   const [activityFilter, setActivityFilter] = useState('Today')
   const [privacy, setPrivacy] = useState(false)
   const [language, setLanguage] = useState<Language>('en')
@@ -43,12 +50,11 @@ function App() {
   useEffect(() => {
     document.documentElement.dir = isRtl(language) ? 'rtl' : 'ltr'
     document.documentElement.lang = language
-    if (inspectionMode) return
     const updateConnection = () => setOnline(navigator.onLine)
     window.addEventListener('online', updateConnection)
     window.addEventListener('offline', updateConnection)
     return () => { window.removeEventListener('online', updateConnection); window.removeEventListener('offline', updateConnection) }
-  }, [inspectionMode, language])
+  }, [language])
 
   useEffect(() => {
     if (inspectionMode) return
@@ -111,6 +117,24 @@ function App() {
     setToast('CSV export generated')
   }
 
+  const openOperation = (kind: OperationKind) => {
+    setOperationKind(kind)
+    setOperationAmount('')
+    setOperationMemo('')
+    setShowActions(false)
+  }
+
+  const submitOperation = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!operationKind || !organizationId) return
+    if (!branchId) { setToast('Operation not posted: no active branch is available'); return }
+    const result = await recordOperation({ organization_id: organizationId, branch_id: branchId, operation: operationKind, currency: operationCurrency, amount: operationAmount, location: operationLocation, memo: operationMemo, client_command_id: crypto.randomUUID() })
+    if (result.error) { setToast(`Operation not posted: ${result.error}`); return }
+    setOperationKind(null)
+    setDashboardRefresh((value) => value + 1)
+    setToast('Operation posted to Supabase')
+  }
+
   const openSection = (section: string) => {
     setActiveNav(section)
     setShowActions(false)
@@ -137,9 +161,9 @@ function App() {
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>{t('workspace')}</span><b>/</b><strong>{activeNav}</strong></div><div className="top-actions"><button className="icon-button" onClick={() => setPrivacy(!privacy)} aria-label={privacy ? 'Show amounts' : 'Hide amounts'}>{privacy ? '◉' : '◌'}</button><button className="lang-button" onClick={() => setLanguage(language === 'en' ? 'fa-AF' : language === 'fa-AF' ? 'ps-AF' : 'en')} aria-label="Change language">{language === 'en' ? 'EN' : language === 'fa-AF' ? 'دری' : 'PS'} <span>⌄</span></button><button className="help-button" onClick={() => setShowHelp(true)} aria-label="Open help">?</button></div></header>
         <div className="content-wrap">
-          {!dashboardView && <WorkspaceView section={activeNav} onDashboard={() => openSection('Dashboard')} />}
+          {!dashboardView && <WorkspaceView section={activeNav} trades={trades} onDashboard={() => openSection('Dashboard')} onToast={setToast} />}
           {dashboardView && <>
-          <section className="welcome"><div><p className="kicker">MONDAY, 24 AUGUST 2026 · 10:45 AM</p><h1>Good morning, Mohammad.</h1><p className="subtitle">Here is where your business stands today.</p></div><div className="action-wrap"><button className="primary-action" onClick={() => setShowTrade(true)}><span>+</span> New trade <kbd>⌘ K</kbd></button><button className="secondary-action" onClick={() => setShowActions(!showActions)} aria-expanded={showActions}>More actions <span>⌄</span></button>{showActions && <div className="action-menu">{['Buy currency', 'Sell currency', 'Exchange currency', 'Receive money', 'Pay money', 'Debt / Credit', 'Transfer cash', 'Expense', 'Owner capital', 'Bank movement'].map((action) => <button key={action} onClick={() => { setShowActions(false); setToast(`${action} workflow is ready for ledger posting`) }}>{action}<span>→</span></button>)}<button className="optional-action" onClick={() => { setShowActions(false); setToast('Hawala is disabled for this organization') }}>Hawala <small>Optional module</small><span>→</span></button></div>}</div></section>
+          <section className="welcome"><div><p className="kicker">MONDAY, 24 AUGUST 2026 · 10:45 AM</p><h1>Good morning, Mohammad.</h1><p className="subtitle">Here is where your business stands today.</p></div><div className="action-wrap"><button className="primary-action" onClick={() => setShowTrade(true)}><span>+</span> New trade <kbd>⌘ K</kbd></button><button className="secondary-action" onClick={() => setShowActions(!showActions)} aria-expanded={showActions}>More actions <span>⌄</span></button>{showActions && <div className="action-menu">{(['Receive money', 'Pay money', 'Transfer cash', 'Expense', 'Owner capital', 'Bank movement'] as const).map((action) => { const kinds: Record<typeof action, OperationKind> = { 'Receive money': 'RECEIVE_MONEY', 'Pay money': 'PAY_MONEY', 'Transfer cash': 'TRANSFER_CASH', Expense: 'RECORD_EXPENSE', 'Owner capital': 'OWNER_INVESTMENT', 'Bank movement': 'BANK_DEPOSIT' }; return <button key={action} onClick={() => openOperation(kinds[action])}>{action}<span>→</span></button> })}<button onClick={() => setShowTrade(true)}>Buy / sell / exchange <span>→</span></button><button onClick={() => openSection('Debts')}>Debt / Credit <span>→</span></button><button className="optional-action" onClick={() => { setShowActions(false); setToast('Hawala is disabled for this organization') }}>Hawala <small>Optional module</small><span>→</span></button></div>}</div></section>
           <div className="notice"><span className={`sync-dot ${online ? 'online' : 'offline'}`} /><span><b>{online ? t('online') : t('stillOffline')}</b> · {supabaseConfigured ? 'Supabase credentials loaded' : t('localWorkspace')} · {online ? `${t('lastSync')}: just now` : `${t('pendingSync')}: 0`}</span><button onClick={() => setToast(online ? 'Authoritative sync is ready after migrations are applied' : 'Offline commands will remain pending until reconnect')}>{online ? 'Connected' : 'Offline mode'}</button></div>
           <section className="rate-strip"><div className="rate-title"><span className="rate-live" /> <div><b>{t('rates')}</b><small>Retail · Kabul Central · AFN per USD</small></div></div><label>{t('buy')}<input value={rate} onChange={(event) => setRate(event.target.value)} /></label><label>{t('sell')}<input value="70.35" readOnly /></label><div className="calculator"><input value={calculatorAmount} onChange={(event) => setCalculatorAmount(event.target.value)} /><span>USD</span><b>=</b><strong>{calculateCounterAmount(calculatorAmount || '0', rate || '1', 'AFN_PER_UNIT', 2)}</strong><span>AFN</span></div><button className="text-button" onClick={() => openSection('Rates')}>{t('history')} →</button></section>
           <section className="metric-grid"><article className="metric-card hero-metric"><div className="card-head"><span>Total position</span><button aria-label="Hide amount" onClick={() => setPrivacy(!privacy)}>◌</button></div><strong>{hidden || '—'}</strong><div className="metric-foot"><span>{dashboard ? `${dashboard.positions.length} currencies from ledger` : 'Awaiting live ledger data'}</span></div><div className="sparkline">{Array.from({ length: 12 }, (_, index) => <i key={index} />)}</div></article><article className="metric-card"><div className="card-head"><span>Today&apos;s volume</span><span className="card-symbol">↗</span></div><strong>{hidden || dashboard?.volume_base || '—'}</strong><div className="metric-foot"><span>{dashboard ? `${dashboard.transaction_count} posted entries` : 'Awaiting live ledger data'}</span></div></article><article className="metric-card"><div className="card-head"><span>Realized profit</span><span className="card-symbol profit">✦</span></div><strong className="profit-text">{hidden || dashboard?.realized_profit || '—'}</strong><div className="metric-foot"><span>Ledger-derived AFN equivalent</span></div></article></section>
@@ -150,13 +174,16 @@ function App() {
         </div>
       </main>
       {showTrade && <div className="modal-backdrop" onClick={() => setShowTrade(false)}><form className="trade-modal" onSubmit={addTrade} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">NEW TRANSACTION</p><h2>Record a trade</h2></div><button type="button" className="close" onClick={() => setShowTrade(false)} aria-label="Close trade">×</button></div><label>Customer or counterparty<input placeholder="Search people or enter walk-in" /></label><div className="form-grid"><label>Sell<input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" autoFocus /><small>USD · United States Dollar</small></label><label>Buy<input placeholder="0.00" /><small>AFN · Afghan Afghani</small></label></div><div className="rate-box"><span>Exchange rate</span><b>1 USD = 70.25 AFN</b><span className="positive">Market rate</span></div><button className="primary-action full" type="submit">Post trade <span>→</span></button><p className="modal-note">Posting requires an authenticated user, active organization, branch, cashbox, and enabled currencies.</p></form></div>}
+      {operationKind && <div className="modal-backdrop" onClick={() => setOperationKind(null)}><form className="trade-modal" onSubmit={submitOperation} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">LEDGER OPERATION</p><h2>{operationKind.replaceAll('_', ' ')}</h2></div><button type="button" className="close" onClick={() => setOperationKind(null)} aria-label="Close operation">×</button></div><label>Amount<input required min="0.01" step="0.01" inputMode="decimal" value={operationAmount} onChange={(event) => setOperationAmount(event.target.value)} placeholder="0.00" autoFocus /></label><label>Currency<select value={operationCurrency} onChange={(event) => setOperationCurrency(event.target.value)}><option>AFN</option><option>USD</option><option>EUR</option></select></label><label>Location<input required value={operationLocation} onChange={(event) => setOperationLocation(event.target.value)} /></label><label>Note<input value={operationMemo} onChange={(event) => setOperationMemo(event.target.value)} placeholder="Reason or reference" /></label><button className="primary-action full" type="submit">Post operation <span>→</span></button><p className="modal-note">The server validates authorization, tenant scope, and ledger posting before accepting this operation.</p></form></div>}
       {showHelp && <div className="modal-backdrop" onClick={() => setShowHelp(false)}><section className="trade-modal" role="dialog" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">SARAFI SUPPORT</p><h2 id="help-title">Help & support</h2></div><button type="button" className="close" onClick={() => setShowHelp(false)} aria-label="Close help">×</button></div><p className="modal-note">Use the sidebar to move between workspace sections. This public preview is read-only; posting requires an authenticated Supabase session.</p><button className="primary-action full" onClick={() => setShowHelp(false)}>Close help</button></section></div>}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
 
-function WorkspaceView({ section, onDashboard }: { section: string; onDashboard: () => void }) {
+function WorkspaceView({ section, trades, onDashboard, onToast }: { section: string; trades: Trade[]; onDashboard: () => void; onToast: (message: string) => void }) {
+  if (section === 'Rates') return <RatesView onDashboard={onDashboard} />
+  if (section === 'Reports') return <ReportsView trades={trades} onDashboard={onDashboard} onToast={onToast} />
   const descriptions: Record<string, string> = {
     Transactions: 'Review posted ledger activity and transaction history.',
     'Cash & Accounts': 'Review balances, branches, cashboxes, and money locations.',
@@ -168,6 +195,15 @@ function WorkspaceView({ section, onDashboard }: { section: string; onDashboard:
     Settings: 'Configure language, currencies, and organization preferences.',
   }
   return <section className="panel"><div className="panel-header"><div><p className="kicker">WORKSPACE</p><h1>{section}</h1><p>{descriptions[section] ?? 'Workspace section'}</p></div></div><div className="empty-live"><p>This section is available in the workspace navigation.</p><button className="primary-action" onClick={onDashboard}>Back to dashboard <span>→</span></button></div></section>
+}
+
+function RatesView({ onDashboard }: { onDashboard: () => void }) {
+  return <section className="panel"><div className="panel-header"><div><p className="kicker">RATE BOARD</p><h1>Rates</h1><p>Current retail rates for Kabul Central.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><div className="rate-strip"><div className="rate-title"><span className="rate-live" /><div><b>USD / AFN</b><small>Local preview rate</small></div></div><label>Buy rate<input defaultValue="70.25" inputMode="decimal" /></label><label>Sell rate<input defaultValue="70.35" inputMode="decimal" /></label></div><div className="empty-live">Rate changes require an authenticated owner or manager session and are recorded with an effective timestamp.</div></section>
+}
+
+function ReportsView({ trades, onDashboard, onToast }: { trades: Trade[]; onDashboard: () => void; onToast: (message: string) => void }) {
+  const rows = trades.map((trade) => ({ entryId: `trade_${trade.id}`, occurredAt: trade.time, type: trade.direction, branchId: 'Kabul Central', status: trade.status.toLowerCase(), realizedProfit: '0' }))
+  return <section className="panel"><div className="panel-header"><div><p className="kicker">REPORT CENTER</p><h1>Reports</h1><p>Generate reports from the currently loaded ledger activity.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><div className="activity-actions"><button className="export-button" onClick={() => { downloadPdf(rows, 'Kabul Central Exchange', 'Recent Activity'); onToast('PDF report generated') }}>Export PDF</button><button className="export-button" onClick={printReport}>Print report</button></div><div className="empty-live">{trades.length ? `${trades.length} ledger activities are ready for export.` : 'No live ledger activity is available for reporting yet.'}</div></section>
 }
 
 function OnboardingScreen({ language, businessName, busy, onLanguageChange, onBusinessNameChange, onSubmit }: { language: Language; businessName: string; busy: boolean; onLanguageChange: (language: Language) => void; onBusinessNameChange: (value: string) => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void> }) {

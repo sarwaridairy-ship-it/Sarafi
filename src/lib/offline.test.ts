@@ -27,4 +27,16 @@ describe('offline command safety', () => {
     expect(() => outbox.enqueue({ cashboxId: 'cash-1', amount: '1', currency: 'USD', kind: 'SELL_FX' })).toThrow('permitted')
     expect(() => outbox.enqueue({ cashboxId: 'cash-1', amount: '1001', currency: 'USD', kind: 'BUY_FX' })).toThrow('limit')
   })
+
+  it('hydrates pending and previously resolved commands from durable storage', async () => {
+    const stored = new Map<string, ReturnType<OfflineOutbox['all']>[number]>()
+    const store = { save: async (command: ReturnType<OfflineOutbox['all']>[number]) => { stored.set(command.clientCommandId, { ...command }) }, list: async () => [...stored.values()] }
+    const first = new OfflineOutbox({ cashboxId: 'cash-1', maxAmountBase: '1000', allowKinds: ['BUY_FX'] }, store)
+    const command = first.enqueue({ cashboxId: 'cash-1', amount: '100', currency: 'USD', kind: 'BUY_FX' })
+    await first.sync(async () => ({ serverEntryId: 'je-1' }))
+    const second = new OfflineOutbox({ cashboxId: 'cash-1', maxAmountBase: '1000', allowKinds: ['BUY_FX'] }, store)
+    await second.hydrate()
+    expect(second.all()).toMatchObject([{ clientCommandId: command.clientCommandId, status: 'synced', serverEntryId: 'je-1' }])
+    expect(second.enqueue({ cashboxId: 'cash-1', amount: '100', currency: 'USD', kind: 'BUY_FX' }).localSequence).toBe(2)
+  })
 })

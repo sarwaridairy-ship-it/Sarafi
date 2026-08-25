@@ -29,4 +29,15 @@ test.describe('workspace controls', () => {
     await page.getByRole('button', { name: 'Close trade' }).click()
     await expect(page.getByRole('heading', { name: 'Record a trade' })).not.toBeVisible()
   })
+
+  test('more actions opens a validated operation form', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /More actions/ }).click()
+    await page.getByRole('button', { name: 'Expense' }).click()
+    await expect(page.getByRole('heading', { name: 'RECORD EXPENSE' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Amount' })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Currency' })).toBeVisible()
+    await page.getByRole('button', { name: 'Close operation' }).click()
+    await expect(page.getByRole('heading', { name: 'RECORD EXPENSE' })).not.toBeVisible()
+  })
 })
