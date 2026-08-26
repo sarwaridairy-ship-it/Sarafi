@@ -6,14 +6,14 @@ Reviewed: 2026-08-26
 
 | Area | Evidence | Status |
 | --- | --- | --- |
-| Git | `main` and `origin/main` at `7d9066e95f050fb85fdd6618494e6492b8181206` | PASS |
+| Git | `main` and `origin/main` at `7ff0d1d22ec464d9e8dad5ca1a3a4cd04bffc2f8` | PASS |
 | Working tree | `git status` reports clean | PASS |
 | Web deployment | Vercel production deployment is Ready; alias `https://sarafi-swart.vercel.app` | PASS |
 | Supabase migrations | Local and remote migrations `202608240001` through `202608240026` match | PASS |
 | Supabase schema lint | `npx supabase db lint --linked` reports no schema errors | PASS |
 | Unit tests | `50 passed` across 17 files | PASS |
-| Browser tests | `10 passed`, 2 authenticated tests skipped without opt-in secrets | PARTIAL |
-| Typecheck/lint/build | All pass; build reports a non-blocking large chunk warning | PARTIAL |
+| Browser tests | `10 passed`, 2 authenticated tests intentionally skipped without opt-in secrets | PASS with documented exception |
+| Typecheck/lint/build | All pass; build reports a non-blocking large chunk warning | PASS with non-blocking warning |
 | Authentication gate | Public inspection mode is intentional per product-owner exception | EXCEPTION |
 
 ## Route and Capability Matrix
