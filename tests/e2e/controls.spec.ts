@@ -71,4 +71,14 @@ test.describe('workspace controls', () => {
     await expect(page.getByRole('textbox', { name: 'Counted USD' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Variance reason' })).toBeVisible()
   })
+
+  test('Hawala section exposes traceability fields', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /More actions/ }).click()
+    await page.getByRole('button', { name: 'Hawala' }).click()
+    await expect(page.getByRole('heading', { name: 'Hawala', exact: true })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Beneficiary' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Destination' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Reference code' })).toBeVisible()
+  })
 })
