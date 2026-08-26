@@ -10,13 +10,14 @@ import { getOwnerDashboard, listCounterparties, listDebts, listHawalaTransfers, 
 import { getSupabaseClient } from './lib/supabase'
 import { createBusiness } from './lib/onboarding'
 import { downloadPdf, printReport } from './lib/exports'
+import { sendPasswordReset, signInWithPassword, signUpWithPassword } from './lib/auth'
 
 type Trade = { id: string | number; customer: string; direction: string; amount: string; rate: string; time: string; status: string }
 type OperationKind = 'RECEIVE_MONEY' | 'PAY_MONEY' | 'TRANSFER_CASH' | 'RECORD_EXPENSE' | 'RECORD_INCOME' | 'OWNER_INVESTMENT' | 'OWNER_WITHDRAWAL' | 'BANK_DEPOSIT' | 'BANK_WITHDRAWAL'
 
 function App() {
   validateClientEnvironment()
-  const inspectionMode = true
+  const inspectionMode = import.meta.env.MODE === 'e2e' || (import.meta.env.DEV && import.meta.env.VITE_AUTH_GATE_DISABLED === 'true')
   const supabaseConfigured = Boolean(readPublicSupabaseConfig())
   const [activeNav, setActiveNav] = useState('Dashboard')
   const [showTrade, setShowTrade] = useState(false)
@@ -50,6 +51,12 @@ function App() {
   const [cashboxId, setCashboxId] = useState<string | null>(null)
   const [organizationLoading, setOrganizationLoading] = useState(!inspectionMode)
   const [businessName, setBusinessName] = useState('')
+  const [user, setUser] = useState<import('@supabase/supabase-js').User | null>(null)
+  const [authMode, setAuthMode] = useState<'signIn' | 'signUp' | 'reset'>('signIn')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authMessage, setAuthMessage] = useState('')
+  const [authBusy, setAuthBusy] = useState(false)
   const hidden = privacy ? '••••••' : ''
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key)
   const sectionLabel = (section: string) => ({ Dashboard: t('dashboard'), Trade: t('trade'), Transactions: t('transactions'), 'Cash & Accounts': t('cashAccounts'), People: t('people'), Debts: t('debts'), Rates: t('rates'), Reports: t('reports'), Reconciliation: t('reconciliation'), 'Team & Devices': t('teamDevices'), Settings: t('settings') }[section] ?? section)
@@ -63,6 +70,22 @@ function App() {
     window.addEventListener('offline', updateConnection)
     return () => { window.removeEventListener('online', updateConnection); window.removeEventListener('offline', updateConnection) }
   }, [language])
+
+  useEffect(() => {
+    if (inspectionMode) return
+    const client = getSupabaseClient()
+    if (!client) return
+    void client.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
+    const listener = client.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
+    return () => listener.data.subscription.unsubscribe()
+  }, [inspectionMode])
+
+  useEffect(() => {
+    if (inspectionMode || !user) return
+    const client = getSupabaseClient()
+    if (!client) return
+    void client.from('organization_memberships').select('organization_id').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle().then(({ data }) => { setOrganizationId(data?.organization_id ?? null); setOrganizationLoading(false) })
+  }, [inspectionMode, user])
 
   useEffect(() => {
     if (inspectionMode) return
@@ -85,6 +108,16 @@ function App() {
       setTrades((result.data?.activity ?? []).map((item) => ({ id: item.id, customer: item.reference, direction: item.type, amount: 'Recorded', rate: '-', time: new Date(item.occurred_at).toLocaleTimeString(), status: item.status })))
     })
   }, [dashboardRefresh, inspectionMode, organizationId])
+
+  const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAuthBusy(true)
+    setAuthMessage('')
+    const result = authMode === 'signIn' ? await signInWithPassword(authEmail, authPassword) : authMode === 'signUp' ? await signUpWithPassword(authEmail, authPassword) : { user: null, error: await sendPasswordReset(authEmail, window.location.origin) }
+    setAuthBusy(false)
+    if (result.user) setUser(result.user)
+    setAuthMessage(result.error ?? (authMode === 'reset' ? 'Password reset email requested.' : authMode === 'signUp' ? 'Check your email to verify your account.' : 'Signed in.'))
+  }
 
   const submitOnboarding = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -156,6 +189,7 @@ function App() {
 
   const dashboardView = activeNav === 'Dashboard' || activeNav === 'Trade'
 
+  if (!user && !inspectionMode) return <AuthScreen mode={authMode} email={authEmail} password={authPassword} message={authMessage} busy={authBusy} onModeChange={setAuthMode} onEmailChange={setAuthEmail} onPasswordChange={setAuthPassword} onSubmit={submitAuth} />
   if (organizationLoading) return <main className="auth-shell"><section className="auth-card"><div className="brand auth-brand"><span className="brand-mark">S</span><span>SARAFI<small>Exchange OS</small></span></div><p className="auth-subtitle">Loading your business workspace...</p></section></main>
   if (!organizationId) return <OnboardingScreen language={language} businessName={businessName} busy={organizationLoading} onLanguageChange={setLanguage} onBusinessNameChange={setBusinessName} onSubmit={submitOnboarding} />
 
@@ -169,7 +203,7 @@ function App() {
         <nav>{(['Dashboard', 'Trade', 'Transactions', 'Cash & Accounts', 'People', 'Debts', 'Rates', 'Reports', 'Reconciliation'] as const).map((item) => { const labels = { Dashboard: t('dashboard'), Trade: t('trade'), Transactions: t('transactions'), 'Cash & Accounts': t('cashAccounts'), People: t('people'), Debts: t('debts'), Rates: t('rates'), Reports: t('reports'), Reconciliation: 'Reconciliation' }; return <button className={activeNav === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => { openSection(item); if (item === 'Trade') setShowTrade(true) }}><span className="nav-icon">{['◫', '+', '≡', '▣', '♙', '↔', '↗', '▤', '✓'][['Dashboard', 'Trade', 'Transactions', 'Cash & Accounts', 'People', 'Debts', 'Rates', 'Reports', 'Reconciliation'].indexOf(item)]}</span>{labels[item]}{item === 'Transactions' && <em>12</em>}</button> })}</nav>
         <p className="nav-label bottom-label">{t('administration')}</p>
         <nav><button className={activeNav === 'Team & Devices' ? 'nav-item active' : 'nav-item'} onClick={() => openSection('Team & Devices')}><span className="nav-icon">◉</span>{t('teamDevices')}</button><button className={activeNav === 'Settings' ? 'nav-item active' : 'nav-item'} onClick={() => openSection('Settings')}><span className="nav-icon">⚙</span>{t('settings')}</button></nav>
-        <div className="sidebar-footer"><div className="avatar">AI</div><span><b>{t('readOnlyInspection')}</b><small>{t('publicPreview')}</small></span></div>
+        <div className="sidebar-footer"><div className="avatar">{inspectionMode ? 'AI' : 'MA'}</div><span><b>{user?.email ?? t('readOnlyInspection')}</b><small>{inspectionMode ? t('publicPreview') : 'Authenticated workspace'}</small></span></div>
       </aside>
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>{t('workspace')}</span><b>/</b><strong>{sectionLabel(activeNav)}</strong></div><div className="top-actions"><button className="icon-button" onClick={() => setPrivacy(!privacy)} aria-label={privacy ? 'Show amounts' : 'Hide amounts'}>{privacy ? '◉' : '◌'}</button><button className="lang-button" onClick={() => setLanguage(language === 'en' ? 'fa-AF' : language === 'fa-AF' ? 'ps-AF' : 'en')} aria-label="Change language">{language === 'en' ? 'EN' : language === 'fa-AF' ? 'دری' : 'PS'} <span>⌄</span></button><button className="help-button" onClick={() => setShowHelp(true)} aria-label="Open help">?</button></div></header>
@@ -307,3 +341,8 @@ function OnboardingScreen({ language, businessName, busy, onLanguageChange, onBu
 }
 
 export default App
+
+function AuthScreen({ mode, email, password, message, busy, onModeChange, onEmailChange, onPasswordChange, onSubmit }: { mode: 'signIn' | 'signUp' | 'reset'; email: string; password: string; message: string; busy: boolean; onModeChange: (mode: 'signIn' | 'signUp' | 'reset') => void; onEmailChange: (value: string) => void; onPasswordChange: (value: string) => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void> }) {
+  const reset = mode === 'reset'
+  return <main className="auth-shell"><section className="auth-card"><div className="brand auth-brand"><span className="brand-mark">S</span><span>SARAFI<small>Exchange OS</small></span></div><p className="kicker">SECURE ACCESS</p><h1>{reset ? 'Reset your password' : mode === 'signUp' ? 'Create your owner account' : 'Welcome back'}</h1><p className="auth-subtitle">Sign in to access your protected business workspace.</p><form onSubmit={onSubmit}><label>Email address<input type="email" required value={email} onChange={(event) => onEmailChange(event.target.value)} autoComplete="email" /></label>{!reset && <label>Password<input type="password" required minLength={8} value={password} onChange={(event) => onPasswordChange(event.target.value)} autoComplete={mode === 'signUp' ? 'new-password' : 'current-password'} /></label>}<button className="primary-action full" type="submit" disabled={busy}>{busy ? 'Working...' : reset ? 'Send reset link' : mode === 'signUp' ? 'Create account' : 'Sign in'} <span>→</span></button></form>{message && <p className="auth-message" role="status">{message}</p>}<div className="auth-links">{!reset && <button type="button" onClick={() => onModeChange(mode === 'signIn' ? 'signUp' : 'signIn')}>{mode === 'signIn' ? 'Create an account' : 'Back to sign in'}</button>}{mode === 'signIn' && <button type="button" onClick={() => onModeChange('reset')}>Forgot password?</button>}{reset && <button type="button" onClick={() => onModeChange('signIn')}>Back to sign in</button>}</div></section></main>
+}
