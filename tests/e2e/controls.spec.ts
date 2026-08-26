@@ -5,7 +5,7 @@ test.describe('workspace controls', () => {
     await page.goto('/')
     for (const section of ['Transactions', 'Cash & Accounts', 'People', 'Debts', 'Rates', 'Reports', 'Team & Devices', 'Settings']) {
       await page.getByRole('button', { name: section, exact: false }).click()
-      await expect(page.getByRole('heading', { name: section === 'Transactions' ? 'Transaction history' : section, exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: section === 'Transactions' ? 'Transaction history' : section === 'Cash & Accounts' ? 'Where is my money?' : section, exact: true })).toBeVisible()
     }
   })
 
@@ -22,7 +22,7 @@ test.describe('workspace controls', () => {
     await expect(page.getByRole('heading', { name: 'Rates', exact: true })).toBeVisible()
     await page.getByRole('button', { name: /Back to dashboard/ }).click()
     await page.getByRole('button', { name: /View all/ }).click()
-    await expect(page.getByRole('heading', { name: 'Cash & Accounts', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Where is my money?', exact: true })).toBeVisible()
     await page.getByRole('button', { name: /Back to dashboard/ }).click()
     await page.getByRole('button', { name: 'Sell currency', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Record a trade' })).toBeVisible()
@@ -111,6 +111,24 @@ test.describe('workspace controls', () => {
     await expect(page.getByRole('button', { name: /Reconciliation/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Buy currency/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Pay money/ })).toBeVisible()
+  })
+
+  test('Money Location supports currency and location views with evidence drill-down', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Cash & Accounts/ }).click()
+    await expect(page.getByRole('heading', { name: 'Where is my money?' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Currency first' })).toBeVisible()
+    await page.getByRole('button', { name: 'Location first' }).click()
+    await expect(page.getByRole('button', { name: 'Location first' })).toHaveClass(/active/)
+    await expect(page.getByText('Ledger lines available')).toBeVisible()
+  })
+
+  test('People supports search and statement views', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /People/ }).click()
+    await expect(page.getByRole('heading', { name: 'People', exact: true })).toBeVisible()
+    await page.getByRole('textbox', { name: 'Search people' }).fill('no-match')
+    await expect(page.getByText('No counterparties match this search.')).toBeVisible()
   })
 
   test('Buy, Sell, and Exchange open distinct FX forms', async ({ page }) => {

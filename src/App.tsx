@@ -6,7 +6,7 @@ import { readPublicSupabaseConfig } from './lib/supabase'
 import { calculateCounterAmount } from './domain/valuation'
 import { buildCsvReport } from './domain/reporting'
 import { isRtl, translate, type Language } from './lib/i18n'
-import { getCurrentRates, getOwnerDashboard, listCounterparties, listDebts, listHawalaTransfers, listJournalEntries, postFxTrade, recordCashboxClose, recordDebt, recordHawalaSend, recordOpeningBalance, recordOperation, recordReportExport, requestReversal, settleDebt, type DashboardSnapshot, type CounterpartyRecord, type DebtRecord, type HawalaTransferRecord, type JournalRecord } from './lib/financialApi'
+import { getCurrentRates, getOwnerDashboard, listCounterparties, listDebts, listHawalaTransfers, listJournalEntries, listLocationEvidence, postFxTrade, recordCashboxClose, recordDebt, recordHawalaSend, recordOpeningBalance, recordOperation, recordReportExport, requestReversal, settleDebt, type DashboardSnapshot, type CounterpartyRecord, type DebtRecord, type HawalaTransferRecord, type JournalRecord, type LocationEvidenceRecord } from './lib/financialApi'
 import { getSupabaseClient } from './lib/supabase'
 import { createBusiness } from './lib/onboarding'
 import { downloadPdf, printReport } from './lib/exports'
@@ -301,6 +301,8 @@ function App() {
 
 function WorkspaceView({ section, trades, organizationId, branchId, cashboxId, onDashboard, onToast }: { section: string; trades: Trade[]; organizationId: string | null; branchId: string | null; cashboxId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {
   if (section === 'Transactions') return <TransactionsView organizationId={organizationId} onDashboard={onDashboard} onToast={onToast} />
+  if (section === 'Cash & Accounts') return <MoneyLocationView organizationId={organizationId} onDashboard={onDashboard} onToast={onToast} />
+  if (section === 'People') return <PeopleView organizationId={organizationId} onDashboard={onDashboard} onToast={onToast} />
   if (section === 'Rates') return <RatesView onDashboard={onDashboard} />
   if (section === 'Reports') return <ReportsView trades={trades} onDashboard={onDashboard} onToast={onToast} />
   if (section === 'Debts') return <DebtsView organizationId={organizationId} branchId={branchId} onDashboard={onDashboard} onToast={onToast} />
@@ -317,6 +319,52 @@ function WorkspaceView({ section, trades, organizationId, branchId, cashboxId, o
     Settings: 'Configure language, currencies, and organization preferences.',
   }
   return <section className="panel"><div className="panel-header"><div><p className="kicker">WORKSPACE</p><h1>{section}</h1><p>{descriptions[section] ?? 'Workspace section'}</p></div></div><div className="empty-live"><p>This section is available in the workspace navigation.</p><button className="primary-action" onClick={onDashboard}>Back to dashboard <span>→</span></button></div></section>
+}
+
+function MoneyLocationView({ organizationId, onDashboard, onToast }: { organizationId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
+  const [evidence, setEvidence] = useState<LocationEvidenceRecord[]>([])
+  const [view, setView] = useState<'currency' | 'location'>('currency')
+  const [currency, setCurrency] = useState('ALL')
+  const [selectedLocation, setSelectedLocation] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!organizationId) return
+    void Promise.all([getOwnerDashboard(organizationId), listLocationEvidence(organizationId)]).then(([dashboardResult, evidenceResult]) => {
+      if (dashboardResult.data) setSnapshot(dashboardResult.data)
+      if (evidenceResult.data) setEvidence(evidenceResult.data)
+      if (dashboardResult.error || evidenceResult.error) onToast(`Money workspace incomplete: ${dashboardResult.error ?? evidenceResult.error}`)
+      setLoading(false)
+    })
+  }, [onToast, organizationId])
+
+  const currencies = Array.from(new Set([...(snapshot?.positions ?? []).map((item) => item.currency), ...evidence.map((item) => item.currency_code)])).sort()
+  const visibleLocations = (snapshot?.locations ?? []).filter((item) => currency === 'ALL' || item.currency === currency)
+  const filteredEvidence = evidence.filter((item) => (currency === 'ALL' || item.currency_code === currency) && (!selectedLocation || item.account_code === selectedLocation))
+  const exposure = (direction: 'receivable' | 'payable') => evidence.filter((item) => item.account_code.startsWith(`${direction}:`) && (currency === 'ALL' || item.currency_code === currency)).reduce((total, row) => total.plus(new Decimal(row.native_debit).minus(row.native_credit)), new Decimal(0)).toFixed(2)
+  const locationLabel = (value: string) => value.replace(/^location:/, '').replace(/:[A-Z]{3}$/, '').replace(/^cashbox:/, 'Cashbox ')
+  const rows = view === 'currency' ? currencies.map((item) => ({ key: item, label: item, amount: snapshot?.positions.find((position) => position.currency === item)?.quantity ?? '0', currency: item })) : visibleLocations.map((item) => ({ key: `${item.location}:${item.currency}`, label: locationLabel(item.location), amount: item.quantity, currency: item.currency }))
+  return <section className="panel money-workspace"><div className="panel-header"><div><p className="kicker">OWNER CONTROL</p><h1>Where is my money?</h1><p>Native currency positions, location balances, and ledger evidence in one view.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><div className="rate-strip"><label>Currency<select value={currency} onChange={(event) => { setCurrency(event.target.value); setSelectedLocation(null) }}><option value="ALL">All currencies</option>{currencies.map((item) => <option key={item}>{item}</option>)}</select></label><div className="segmented-control"><button className={view === 'currency' ? 'active' : ''} onClick={() => setView('currency')}>Currency first</button><button className={view === 'location' ? 'active' : ''} onClick={() => setView('location')}>Location first</button></div><button className="export-button" onClick={() => window.print()}>Print snapshot</button></div><div className="metric-grid"><article className="metric-card"><span>Receivable · they owe us</span><strong>{exposure('receivable')} {currency === 'ALL' ? 'native' : currency}</strong></article><article className="metric-card"><span>Payable · we owe them</span><strong>{exposure('payable')} {currency === 'ALL' ? 'native' : currency}</strong></article><article className="metric-card"><span>Ledger lines available</span><strong>{evidence.length}</strong></article></div>{loading ? <div className="empty-live">Loading the authoritative ledger snapshot...</div> : <div className="money-columns"><div className="balance-list">{rows.length ? rows.map((row) => <button className="balance-row" key={row.key} onClick={() => setSelectedLocation(view === 'location' ? row.key.split(':').slice(0, -1).join(':') : null)}><span className="currency-badge usd">{row.currency}</span><span className="balance-name"><b>{row.label}</b><small>{view === 'currency' ? 'Total native position' : 'Posted asset location · select for evidence'}</small></span><strong>{row.amount} {row.currency}</strong></button>) : <div className="empty-live">No posted native-currency balances are available.</div>}</div><div className="panel evidence-panel"><div className="panel-header"><div><h2>{selectedLocation ? `Evidence · ${locationLabel(selectedLocation)}` : 'Contributing ledger lines'}</h2><p>Every amount traces back to a posted journal entry.</p></div></div>{filteredEvidence.length ? <div className="balance-list">{filteredEvidence.slice(0, 80).map((line) => <div className="balance-row" key={line.id}><span className="currency-badge usd">{line.currency_code}</span><span className="balance-name"><b>{line.memo || line.account_name || 'Ledger line'}</b><small>{new Date(line.occurred_at).toLocaleString()} · {line.journal_entry_id.slice(0, 8)}</small></span><strong>{Number(line.native_debit) - Number(line.native_credit) >= 0 ? '+' : ''}{(Number(line.native_debit) - Number(line.native_credit)).toFixed(2)}</strong></div>)}</div> : <div className="empty-live">Select a location to inspect its posted ledger evidence.</div>}</div></div>}</section>
+}
+
+function PeopleView({ organizationId, onDashboard, onToast }: { organizationId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {
+  const [people, setPeople] = useState<CounterpartyRecord[]>([])
+  const [debts, setDebts] = useState<DebtRecord[]>([])
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<CounterpartyRecord | null>(null)
+  useEffect(() => {
+    if (!organizationId) return
+    void Promise.all([listCounterparties(organizationId), listDebts(organizationId)]).then(([peopleResult, debtResult]) => {
+      if (peopleResult.error || debtResult.error) onToast(`People not loaded: ${peopleResult.error ?? debtResult.error}`)
+      if (peopleResult.data) setPeople(peopleResult.data)
+      if (debtResult.data) setDebts(debtResult.data)
+    })
+  }, [onToast, organizationId])
+  const filtered = people.filter((person) => person.display_name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  const personDebts = selected ? debts.filter((debt) => debt.counterparty_id === selected.id) : []
+  const total = (direction: DebtRecord['direction'], currency: string) => personDebts.filter((debt) => debt.direction === direction && debt.currency_code === currency).reduce((sum, debt) => sum.plus(debt.outstanding_amount), new Decimal(0)).toFixed(2)
+  const currencies = Array.from(new Set(personDebts.map((debt) => debt.currency_code)))
+  return <section className="panel"><div className="panel-header"><div><p className="kicker">PEOPLE & STATEMENTS</p><h1>People</h1><p>Search counterparties and reconstruct what each person owes by currency.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><label>Search people<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name or counterparty" /></label><div className="balance-list">{filtered.length ? filtered.map((person) => <button className="balance-row" key={person.id} onClick={() => setSelected(person)}><span className="currency-badge usd">{person.display_name.slice(0, 1).toUpperCase()}</span><span className="balance-name"><b>{person.display_name}</b><small>{person.counterparty_type} · {person.risk_status}</small></span><strong>View statement →</strong></button>) : <div className="empty-live">No counterparties match this search.</div>}</div>{selected && <section className="panel statement-panel"><div className="panel-header"><div><p className="kicker">STATEMENT</p><h2>{selected.display_name}</h2><p>Native balances remain separate; no forced conversion.</p></div><button className="text-button" onClick={() => setSelected(null)}>Close statement</button></div>{currencies.length ? currencies.map((item) => <div className="balance-row" key={item}><span className="currency-badge usd">{item}</span><span className="balance-name"><b>{item} balances</b><small>Reconstructed from outstanding debt records</small></span><strong>Owes us {total('receivable', item)} · We owe {total('payable', item)}</strong></div>) : <div className="empty-live">No outstanding balances for this counterparty.</div>}{personDebts.map((debt) => <div className="empty-live" key={debt.id}>{debt.direction === 'receivable' ? 'Receivable' : 'Payable'} · {debt.outstanding_amount} {debt.currency_code}{debt.due_at ? ` · Due ${new Date(debt.due_at).toLocaleDateString()}` : ''}</div>)}</section>}</section>
 }
 
 function TransactionsView({ organizationId, onDashboard, onToast }: { organizationId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {

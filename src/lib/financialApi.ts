@@ -7,6 +7,7 @@ export type DebtRecord = { id: string; counterparty_id: string; direction: 'rece
 export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string }
 export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string }
+export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; account_code: string; account_name: string }
 
 export async function postFxTrade(command: unknown): Promise<RpcResult<Record<string, unknown>>> {
   const parsed: FxTradeCommand = parseFxTradeCommand(command)
@@ -125,6 +126,18 @@ export async function listJournalEntries(organizationId: string): Promise<RpcRes
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.from('journal_entries').select('id,status,memo,occurred_at,branch_id').eq('organization_id', organizationId).order('occurred_at', { ascending: false }).limit(100)
   return { data: result.data as JournalRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function listLocationEvidence(organizationId: string): Promise<RpcResult<LocationEvidenceRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.from('journal_lines').select('id,journal_entry_id,currency_code,native_debit,native_credit,journal_entries!inner(occurred_at,memo,status,organization_id),ledger_accounts!inner(code,name,category)').eq('organization_id', organizationId).eq('journal_entries.organization_id', organizationId).eq('journal_entries.status', 'posted').eq('ledger_accounts.category', 'asset').order('id', { ascending: false }).limit(500)
+  const rows = (result.data ?? []).map((row) => {
+    const entry = Array.isArray(row.journal_entries) ? row.journal_entries[0] : row.journal_entries
+    const account = Array.isArray(row.ledger_accounts) ? row.ledger_accounts[0] : row.ledger_accounts
+    return { id: row.id, journal_entry_id: row.journal_entry_id, currency_code: row.currency_code, native_debit: row.native_debit, native_credit: row.native_credit, occurred_at: entry?.occurred_at ?? '', memo: entry?.memo ?? null, account_code: account?.code ?? '', account_name: account?.name ?? '' }
+  }) as LocationEvidenceRecord[]
+  return { data: rows, error: result.error?.message ?? null }
 }
 
 export async function getOwnerDashboard(organizationId: string, targetDay?: string): Promise<RpcResult<DashboardSnapshot>> {
