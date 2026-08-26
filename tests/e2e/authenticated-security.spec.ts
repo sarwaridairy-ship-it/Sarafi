@@ -16,7 +16,7 @@ test.describe('authenticated security journeys', () => {
     expect(signedIn.error).toBeNull()
     expect(signedIn.data.user).not.toBeNull()
 
-    const assurance = await client.auth.getAuthenticatorAssuranceLevel()
+    const assurance = await client.auth.mfa.getAuthenticatorAssuranceLevel()
     expect(assurance.error).toBeNull()
     expect(['aal1', 'aal2']).toContain(assurance.data.currentLevel)
 
