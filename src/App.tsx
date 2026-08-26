@@ -45,6 +45,11 @@ function App() {
   const [dashboardRefresh, setDashboardRefresh] = useState(0)
   const [amount, setAmount] = useState('')
   const [tradeSide, setTradeSide] = useState<'BUY_FX' | 'SELL_FX' | 'EXCHANGE_FX'>('SELL_FX')
+  const [tradeCurrency, setTradeCurrency] = useState<'AFN' | 'USD' | 'EUR'>('USD')
+  const [tradeFee, setTradeFee] = useState('')
+  const [tradeNote, setTradeNote] = useState('')
+  const [tradeCounterparty, setTradeCounterparty] = useState('')
+  const [tradeBusy, setTradeBusy] = useState(false)
   const [calculatorAmount, setCalculatorAmount] = useState('1000')
   const [rate, setRate] = useState('70.25')
   const [toast, setToast] = useState('')
@@ -143,19 +148,29 @@ function App() {
 
   const addTrade = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!amount) return
+    if (tradeBusy) return
+    if (!amount || !new Decimal(amount).isFinite() || new Decimal(amount).lte(0)) { setToast('Trade not posted: enter an amount greater than zero'); return }
     const sold = new Decimal(amount)
     if (!organizationId || !branchId || !cashboxId) { setToast('Trade not posted: complete business setup first'); return }
+    setTradeBusy(true)
     let sessionCheck
     try {
-      sessionCheck = await postFxTrade({ organization_id: organizationId, branch_id: branchId, cashbox_id: cashboxId, client_command_id: crypto.randomUUID(), side: tradeSide, sold_currency: 'USD', sold_amount: amount, bought_currency: 'AFN', bought_amount: sold.mul(rate || '0').toFixed(12), base_currency: 'AFN', sold_base_value: sold.mul('70').toFixed(12), bought_base_value: sold.mul(rate || '0').toFixed(12) })
+      const soldCurrency = tradeSide === 'BUY_FX' ? 'AFN' : tradeCurrency
+      const boughtCurrency = tradeSide === 'BUY_FX' ? tradeCurrency : 'AFN'
+      const boughtAmount = tradeSide === 'BUY_FX' ? sold.div(rate || '1').toFixed(12) : sold.mul(rate || '0').toFixed(12)
+      sessionCheck = await postFxTrade({ organization_id: organizationId, branch_id: branchId, cashbox_id: cashboxId, client_command_id: crypto.randomUUID(), side: tradeSide, sold_currency: soldCurrency, sold_amount: amount, bought_currency: boughtCurrency, bought_amount: boughtAmount, base_currency: 'AFN', sold_base_value: tradeSide === 'BUY_FX' ? sold.toFixed(12) : sold.mul('70').toFixed(12), bought_base_value: tradeSide === 'BUY_FX' ? sold.toFixed(12) : boughtAmount, customer_rate: rate, fee_amount: tradeFee || undefined, fee_currency: 'AFN', counterparty_id: tradeCounterparty || undefined, memo: tradeNote || undefined })
     } catch (error) {
       setToast(`Trade not posted: ${error instanceof Error ? error.message : 'Invalid trade command'}`)
+      setTradeBusy(false)
       return
     }
-    if (sessionCheck.error) { setToast(`Trade not posted: ${sessionCheck.error}`); return }
+    if (sessionCheck.error) { setToast(`Trade not posted: ${sessionCheck.error}`); setTradeBusy(false); return }
     setDashboardRefresh((value) => value + 1)
     setAmount('')
+    setTradeFee('')
+    setTradeNote('')
+    setTradeCounterparty('')
+    setTradeBusy(false)
     setShowTrade(false)
     setToast('Trade posted to Supabase')
     window.setTimeout(() => setToast(''), 2800)
@@ -244,7 +259,7 @@ function App() {
           </>}
         </div>
       </main>
-      {showTrade && <div className="modal-backdrop" onClick={() => setShowTrade(false)}><form className="trade-modal" onSubmit={addTrade} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">NEW TRANSACTION</p><h2>{tradeSide.replace('_FX', '').replace('_', ' ')} · {t('recordTrade')}</h2></div><button type="button" className="close" onClick={() => setShowTrade(false)} aria-label="Close trade">×</button></div><label>{t('customer')}<input placeholder={t('customer')} /></label><div className="form-grid"><label>{t('sellAmount')}<input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" autoFocus /><small>USD · United States Dollar</small></label><label>{t('buyAmount')}<input value={amount ? new Decimal(amount).mul(rate || '0').toFixed(2) : ''} readOnly placeholder="0.00" /><small>AFN · Afghan Afghani</small></label></div><div className="rate-box"><span>{t('exchangeRate')}</span><b>1 USD = {rate} AFN</b><span className="positive">{t('marketRate')}</span></div><button className="primary-action full" type="submit">{t('postTrade')} <span>→</span></button><p className="modal-note">Posting requires an authenticated user, active organization, branch, cashbox, and enabled currencies.</p></form></div>}
+      {showTrade && <div className="modal-backdrop" onClick={() => { if (!tradeBusy) setShowTrade(false) }}><form className="trade-modal" onSubmit={addTrade} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">NEW TRANSACTION</p><h2>{tradeSide.replace('_FX', '').replace('_', ' ')} · {t('recordTrade')}</h2></div><button type="button" className="close" onClick={() => setShowTrade(false)} aria-label="Close trade">×</button></div><label>{t('customer')}<select value={tradeCounterparty} onChange={(event) => setTradeCounterparty(event.target.value)}><option value="">Walk-in customer</option></select></label><div className="form-grid"><label>{t('sellAmount')}<input required min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" autoFocus /><select value={tradeSide === 'BUY_FX' ? 'AFN' : tradeCurrency} onChange={(event) => setTradeCurrency(event.target.value as typeof tradeCurrency)}><option>AFN</option><option>USD</option><option>EUR</option></select></label><label>{t('buyAmount')}<input value={amount ? (tradeSide === 'BUY_FX' ? new Decimal(amount).div(rate || '1') : new Decimal(amount).mul(rate || '0')).toFixed(2) : ''} readOnly placeholder="0.00" /><select value={tradeSide === 'BUY_FX' ? tradeCurrency : 'AFN'} onChange={(event) => setTradeCurrency(event.target.value as typeof tradeCurrency)}><option>AFN</option><option>USD</option><option>EUR</option></select></label></div><div className="form-grid"><label>Fee<input min="0" step="0.01" value={tradeFee} onChange={(event) => setTradeFee(event.target.value)} placeholder="0.00" /></label><label>Note<input value={tradeNote} onChange={(event) => setTradeNote(event.target.value)} placeholder="Optional note" /></label></div><div className="rate-box"><span>{t('exchangeRate')}</span><b>1 {tradeCurrency} = {rate} AFN</b><span className="positive">{t('marketRate')}</span></div><button className="primary-action full" type="submit" disabled={tradeBusy}>{tradeBusy ? 'Posting...' : t('postTrade')} <span>→</span></button><p className="modal-note">The server validates the currency pair, rate, inventory, authorization, and duplicate command before posting.</p></form></div>}
       {operationKind && <div className="modal-backdrop" onClick={() => setOperationKind(null)}><form className="trade-modal" onSubmit={submitOperation} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">LEDGER OPERATION</p><h2>{operationKind.replaceAll('_', ' ')}</h2></div><button type="button" className="close" onClick={() => setOperationKind(null)} aria-label="Close operation">×</button></div><label>Amount<input required min="0.01" step="0.01" inputMode="decimal" value={operationAmount} onChange={(event) => setOperationAmount(event.target.value)} placeholder="0.00" autoFocus /></label><label>Currency<select value={operationCurrency} onChange={(event) => setOperationCurrency(event.target.value)}><option>AFN</option><option>USD</option><option>EUR</option></select></label>{operationKind === 'RECORD_EXPENSE' && <label>Expense category<select value={operationCategory} onChange={(event) => setOperationCategory(event.target.value)}><option>Rent</option><option>Salary</option><option>Utilities</option><option>Internet</option><option>Transport</option><option>Other</option></select></label>}{operationKind === 'TRANSFER_CASH' || operationKind === 'BANK_DEPOSIT' || operationKind === 'BANK_WITHDRAWAL' ? <div className="form-grid"><label>From location<input required value={operationFromLocation} onChange={(event) => setOperationFromLocation(event.target.value)} /></label><label>To location<input required value={operationToLocation} onChange={(event) => setOperationToLocation(event.target.value)} /></label></div> : <label>Location<input required value={operationLocation} onChange={(event) => setOperationLocation(event.target.value)} /></label>}<label>Note<input value={operationMemo} onChange={(event) => setOperationMemo(event.target.value)} placeholder="Reason or reference" /></label><button className="primary-action full" type="submit">Post operation <span>→</span></button><p className="modal-note">The server validates authorization, tenant scope, and ledger posting before accepting this operation.</p></form></div>}
       {showHelp && <div className="modal-backdrop" onClick={() => setShowHelp(false)}><section className="trade-modal" role="dialog" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">SARAFI SUPPORT</p><h2 id="help-title">Help & support</h2></div><button type="button" className="close" onClick={() => setShowHelp(false)} aria-label="Close help">×</button></div><p className="modal-note">Use the sidebar to move between workspace sections. This public preview is read-only; posting requires an authenticated Supabase session.</p><button className="primary-action full" onClick={() => setShowHelp(false)}>Close help</button></section></div>}
       {toast && <div className="toast">{toast}</div>}

@@ -103,4 +103,24 @@ test.describe('workspace controls', () => {
     await expect(page.getByRole('button', { name: /Buy currency/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Pay money/ })).toBeVisible()
   })
+
+  test('Buy, Sell, and Exchange open distinct FX forms', async ({ page }) => {
+    await page.goto('/')
+    for (const action of ['Buy currency', 'Sell currency', 'Exchange currency']) {
+      await page.getByRole('button', { name: action, exact: true }).click()
+      await expect(page.getByRole('heading', { name: new RegExp(action.split(' ')[0].toUpperCase()) })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: 'Fee' })).toBeVisible()
+      await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible()
+      await page.getByRole('button', { name: 'Close trade' }).click()
+    }
+  })
+
+  test('FX form blocks zero amounts before an authoritative post', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Sell currency', exact: true }).click()
+    await page.locator('.trade-modal').getByRole('textbox', { name: /Sell USD/ }).fill('0')
+    await page.locator('.trade-modal').getByRole('button', { name: 'Post trade' }).click()
+    await expect(page.getByRole('heading', { name: /SELL/ })).toBeVisible()
+    await expect(page.getByText('Trade not posted: enter an amount greater than zero')).toBeVisible()
+  })
 })

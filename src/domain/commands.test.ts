@@ -11,4 +11,12 @@ describe('financial command validation', () => {
     expect(() => parseFxTradeCommand({ ...validCommand, organization_id: 'not-a-uuid' })).toThrow()
     expect(() => parseFxTradeCommand({ ...validCommand, sold_amount: '0' })).toThrow('greater than zero')
   })
+  it('accepts fee, counterparty, and customer-rate metadata', () => {
+    const parsed = parseFxTradeCommand({ ...validCommand, fee_amount: '100', fee_currency: 'AFN', customer_rate: '70', counterparty_id: '44444444-4444-4444-8444-444444444444' })
+    expect(parsed.fee_amount).toBe('100')
+    expect(parsed.customer_rate).toBe('70')
+  })
+  it('rejects a fee currency outside the trade currencies', () => {
+    expect(() => parseFxTradeCommand({ ...validCommand, fee_amount: '100', fee_currency: 'EUR' })).toThrow('Fee currency')
+  })
 })
