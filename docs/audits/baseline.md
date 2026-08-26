@@ -6,7 +6,7 @@ Reviewed: 2026-08-26
 
 | Area | Evidence | Status |
 | --- | --- | --- |
-| Git | `main` and `origin/main` at `fb7df07e7103c4342511d639774a7eea62627bd4` | PASS |
+| Git | `git rev-parse HEAD` equals `git rev-parse origin/main` on `main` | PASS |
 | Working tree | `git status` reports clean | PASS |
 | Web deployment | Vercel production deployment is Ready; alias `https://sarafi-swart.vercel.app` | PASS |
 | Supabase migrations | Local and remote migrations `202608240001` through `202608240026` match | PASS |
