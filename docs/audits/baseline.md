@@ -6,7 +6,7 @@ Reviewed: 2026-08-26
 
 | Area | Evidence | Status |
 | --- | --- | --- |
-| Git | `main` and `origin/main` at `7ff0d1d22ec464d9e8dad5ca1a3a4cd04bffc2f8` | PASS |
+| Git | `main` and `origin/main` at `fb7df07e7103c4342511d639774a7eea62627bd4` | PASS |
 | Working tree | `git status` reports clean | PASS |
 | Web deployment | Vercel production deployment is Ready; alias `https://sarafi-swart.vercel.app` | PASS |
 | Supabase migrations | Local and remote migrations `202608240001` through `202608240026` match | PASS |
