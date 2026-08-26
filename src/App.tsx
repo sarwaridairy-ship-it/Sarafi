@@ -27,6 +27,9 @@ function App() {
   const [operationAmount, setOperationAmount] = useState('')
   const [operationCurrency, setOperationCurrency] = useState('AFN')
   const [operationLocation, setOperationLocation] = useState('Main Counter')
+  const [operationFromLocation, setOperationFromLocation] = useState('Main Counter')
+  const [operationToLocation, setOperationToLocation] = useState('Main Safe')
+  const [operationCategory, setOperationCategory] = useState('Other')
   const [operationMemo, setOperationMemo] = useState('')
   const [activityFilter, setActivityFilter] = useState('Today')
   const [privacy, setPrivacy] = useState(false)
@@ -125,6 +128,9 @@ function App() {
     setOperationKind(kind)
     setOperationAmount('')
     setOperationMemo('')
+    setOperationCategory('Other')
+    setOperationFromLocation('Main Counter')
+    setOperationToLocation('Main Safe')
     setShowActions(false)
   }
 
@@ -132,7 +138,7 @@ function App() {
     event.preventDefault()
     if (!operationKind || !organizationId) return
     if (!branchId) { setToast('Operation not posted: no active branch is available'); return }
-    const result = await recordOperation({ organization_id: organizationId, branch_id: branchId, operation: operationKind, currency: operationCurrency, amount: operationAmount, location: operationLocation, memo: operationMemo, client_command_id: crypto.randomUUID() })
+    const result = await recordOperation({ organization_id: organizationId, branch_id: branchId, operation: operationKind, currency: operationCurrency, amount: operationAmount, location: operationLocation, from_location: operationFromLocation, to_location: operationToLocation, category: operationCategory, memo: operationMemo, client_command_id: crypto.randomUUID() })
     if (result.error) { setToast(`Operation not posted: ${result.error}`); return }
     setOperationKind(null)
     setDashboardRefresh((value) => value + 1)
@@ -178,7 +184,7 @@ function App() {
         </div>
       </main>
       {showTrade && <div className="modal-backdrop" onClick={() => setShowTrade(false)}><form className="trade-modal" onSubmit={addTrade} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">NEW TRANSACTION</p><h2>{t('recordTrade')}</h2></div><button type="button" className="close" onClick={() => setShowTrade(false)} aria-label="Close trade">×</button></div><label>{t('customer')}<input placeholder={t('customer')} /></label><div className="form-grid"><label>{t('sellAmount')}<input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" autoFocus /><small>USD · United States Dollar</small></label><label>{t('buyAmount')}<input value={amount ? new Decimal(amount).mul(rate || '0').toFixed(2) : ''} readOnly placeholder="0.00" /><small>AFN · Afghan Afghani</small></label></div><div className="rate-box"><span>{t('exchangeRate')}</span><b>1 USD = {rate} AFN</b><span className="positive">{t('marketRate')}</span></div><button className="primary-action full" type="submit">{t('postTrade')} <span>→</span></button><p className="modal-note">Posting requires an authenticated user, active organization, branch, cashbox, and enabled currencies.</p></form></div>}
-      {operationKind && <div className="modal-backdrop" onClick={() => setOperationKind(null)}><form className="trade-modal" onSubmit={submitOperation} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">LEDGER OPERATION</p><h2>{operationKind.replaceAll('_', ' ')}</h2></div><button type="button" className="close" onClick={() => setOperationKind(null)} aria-label="Close operation">×</button></div><label>Amount<input required min="0.01" step="0.01" inputMode="decimal" value={operationAmount} onChange={(event) => setOperationAmount(event.target.value)} placeholder="0.00" autoFocus /></label><label>Currency<select value={operationCurrency} onChange={(event) => setOperationCurrency(event.target.value)}><option>AFN</option><option>USD</option><option>EUR</option></select></label><label>Location<input required value={operationLocation} onChange={(event) => setOperationLocation(event.target.value)} /></label><label>Note<input value={operationMemo} onChange={(event) => setOperationMemo(event.target.value)} placeholder="Reason or reference" /></label><button className="primary-action full" type="submit">Post operation <span>→</span></button><p className="modal-note">The server validates authorization, tenant scope, and ledger posting before accepting this operation.</p></form></div>}
+      {operationKind && <div className="modal-backdrop" onClick={() => setOperationKind(null)}><form className="trade-modal" onSubmit={submitOperation} onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">LEDGER OPERATION</p><h2>{operationKind.replaceAll('_', ' ')}</h2></div><button type="button" className="close" onClick={() => setOperationKind(null)} aria-label="Close operation">×</button></div><label>Amount<input required min="0.01" step="0.01" inputMode="decimal" value={operationAmount} onChange={(event) => setOperationAmount(event.target.value)} placeholder="0.00" autoFocus /></label><label>Currency<select value={operationCurrency} onChange={(event) => setOperationCurrency(event.target.value)}><option>AFN</option><option>USD</option><option>EUR</option></select></label>{operationKind === 'RECORD_EXPENSE' && <label>Expense category<select value={operationCategory} onChange={(event) => setOperationCategory(event.target.value)}><option>Rent</option><option>Salary</option><option>Utilities</option><option>Internet</option><option>Transport</option><option>Other</option></select></label>}{operationKind === 'TRANSFER_CASH' || operationKind === 'BANK_DEPOSIT' || operationKind === 'BANK_WITHDRAWAL' ? <div className="form-grid"><label>From location<input required value={operationFromLocation} onChange={(event) => setOperationFromLocation(event.target.value)} /></label><label>To location<input required value={operationToLocation} onChange={(event) => setOperationToLocation(event.target.value)} /></label></div> : <label>Location<input required value={operationLocation} onChange={(event) => setOperationLocation(event.target.value)} /></label>}<label>Note<input value={operationMemo} onChange={(event) => setOperationMemo(event.target.value)} placeholder="Reason or reference" /></label><button className="primary-action full" type="submit">Post operation <span>→</span></button><p className="modal-note">The server validates authorization, tenant scope, and ledger posting before accepting this operation.</p></form></div>}
       {showHelp && <div className="modal-backdrop" onClick={() => setShowHelp(false)}><section className="trade-modal" role="dialog" aria-labelledby="help-title" onClick={(event) => event.stopPropagation()}><div className="modal-head"><div><p className="kicker">SARAFI SUPPORT</p><h2 id="help-title">Help & support</h2></div><button type="button" className="close" onClick={() => setShowHelp(false)} aria-label="Close help">×</button></div><p className="modal-note">Use the sidebar to move between workspace sections. This public preview is read-only; posting requires an authenticated Supabase session.</p><button className="primary-action full" onClick={() => setShowHelp(false)}>Close help</button></section></div>}
       {toast && <div className="toast">{toast}</div>}
     </div>
