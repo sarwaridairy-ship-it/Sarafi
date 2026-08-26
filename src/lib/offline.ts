@@ -49,3 +49,9 @@ export class OfflineOutbox {
     return this.all()
   }
 }
+
+export function bindOfflineReconnect(outbox: OfflineOutbox, post: (command: OfflineCommand) => Promise<{ serverEntryId: string }>): () => void {
+  const syncWhenOnline = () => { void outbox.sync(post) }
+  window.addEventListener('online', syncWhenOnline)
+  return () => window.removeEventListener('online', syncWhenOnline)
+}
