@@ -10,7 +10,7 @@ import { getOwnerDashboard, listCounterparties, listDebts, listHawalaTransfers, 
 import { getSupabaseClient } from './lib/supabase'
 import { createBusiness } from './lib/onboarding'
 import { downloadPdf, printReport } from './lib/exports'
-import { sendPasswordReset, signInWithPassword, signUpWithPassword } from './lib/auth'
+import { sendPasswordReset, signInWithPassword, signOut, signUpWithPassword } from './lib/auth'
 
 type Trade = { id: string | number; customer: string; direction: string; amount: string; rate: string; time: string; status: string }
 type OperationKind = 'RECEIVE_MONEY' | 'PAY_MONEY' | 'TRANSFER_CASH' | 'RECORD_EXPENSE' | 'RECORD_INCOME' | 'OWNER_INVESTMENT' | 'OWNER_WITHDRAWAL' | 'BANK_DEPOSIT' | 'BANK_WITHDRAWAL'
@@ -47,7 +47,9 @@ function App() {
   const [rate, setRate] = useState('70.25')
   const [toast, setToast] = useState('')
   const [organizationId, setOrganizationId] = useState<string | null>(inspectionMode ? 'inspection' : null)
+  const [organizationName, setOrganizationName] = useState(inspectionMode ? 'Kabul Central Exchange' : 'Your business')
   const [branchId, setBranchId] = useState<string | null>(null)
+  const [branchName, setBranchName] = useState(inspectionMode ? 'Main branch' : 'Assigned branch')
   const [cashboxId, setCashboxId] = useState<string | null>(null)
   const [organizationLoading, setOrganizationLoading] = useState(!inspectionMode)
   const [businessName, setBusinessName] = useState('')
@@ -84,7 +86,13 @@ function App() {
     if (inspectionMode || !user) return
     const client = getSupabaseClient()
     if (!client) return
-    void client.from('organization_memberships').select('organization_id').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle().then(({ data }) => { setOrganizationId(data?.organization_id ?? null); setOrganizationLoading(false) })
+    void client.from('organization_memberships').select('organization_id').eq('user_id', user.id).eq('active', true).limit(1).maybeSingle().then(async ({ data }) => {
+      setOrganizationId(data?.organization_id ?? null)
+      if (!data?.organization_id) { setOrganizationLoading(false); return }
+      const organization = await client.from('organizations').select('display_name').eq('id', data.organization_id).maybeSingle()
+      setOrganizationName(organization.data?.display_name ?? 'Your business')
+      setOrganizationLoading(false)
+    })
   }, [inspectionMode, user])
 
   useEffect(() => {
@@ -92,8 +100,9 @@ function App() {
     if (!organizationId) return
     const client = getSupabaseClient()
     if (!client) return
-    void client.from('branches').select('id').eq('organization_id', organizationId).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data: branch }) => {
+    void client.from('branches').select('id,name').eq('organization_id', organizationId).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data: branch }) => {
       setBranchId(branch?.id ?? null)
+      setBranchName(branch?.name ?? 'Assigned branch')
       if (!branch) return
       void client.from('cashboxes').select('id').eq('organization_id', organizationId).eq('branch_id', branch.id).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle().then(({ data: cashbox }) => setCashboxId(cashbox?.id ?? null))
     })
@@ -187,6 +196,15 @@ function App() {
     setShowBranchMenu(false)
   }
 
+  const handleSignOut = async () => {
+    const error = await signOut()
+    if (error) { setToast(`Sign out failed: ${error}`); return }
+    setUser(null)
+    setOrganizationId(null)
+    setBranchId(null)
+    setCashboxId(null)
+  }
+
   const dashboardView = activeNav === 'Dashboard' || activeNav === 'Trade'
 
   if (!user && !inspectionMode) return <AuthScreen mode={authMode} email={authEmail} password={authPassword} message={authMessage} busy={authBusy} onModeChange={setAuthMode} onEmailChange={setAuthEmail} onPasswordChange={setAuthPassword} onSubmit={submitAuth} />
@@ -197,20 +215,20 @@ function App() {
     <div className={`app-shell ${isRtl(language) ? 'rtl' : ''}`}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">S</span><span>SARAFI<small>Exchange OS</small></span></div>
-        <button className="branch-switch" onClick={() => setShowBranchMenu(!showBranchMenu)} aria-expanded={showBranchMenu}><span className="status-dot" /><span><b>Kabul Central</b><small>Main branch</small></span><span className="chevron">⌄</span></button>
-        {showBranchMenu && <div className="action-menu branch-menu"><button onClick={() => { setShowBranchMenu(false); setToast('Kabul Central is the only available branch') }}>Kabul Central <small>Active branch</small><span>✓</span></button></div>}
+        <button className="branch-switch" onClick={() => setShowBranchMenu(!showBranchMenu)} aria-expanded={showBranchMenu}><span className="status-dot" /><span><b>{organizationName}</b><small>{branchName}</small></span><span className="chevron">⌄</span></button>
+        {showBranchMenu && <div className="action-menu branch-menu"><button onClick={() => { setShowBranchMenu(false); setToast(`${branchName} is the active branch`) }}>{branchName} <small>Active branch</small><span>✓</span></button></div>}
         <p className="nav-label">{t('workspace')}</p>
         <nav>{(['Dashboard', 'Trade', 'Transactions', 'Cash & Accounts', 'People', 'Debts', 'Rates', 'Reports', 'Reconciliation'] as const).map((item) => { const labels = { Dashboard: t('dashboard'), Trade: t('trade'), Transactions: t('transactions'), 'Cash & Accounts': t('cashAccounts'), People: t('people'), Debts: t('debts'), Rates: t('rates'), Reports: t('reports'), Reconciliation: 'Reconciliation' }; return <button className={activeNav === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => { openSection(item); if (item === 'Trade') setShowTrade(true) }}><span className="nav-icon">{['◫', '+', '≡', '▣', '♙', '↔', '↗', '▤', '✓'][['Dashboard', 'Trade', 'Transactions', 'Cash & Accounts', 'People', 'Debts', 'Rates', 'Reports', 'Reconciliation'].indexOf(item)]}</span>{labels[item]}{item === 'Transactions' && <em>12</em>}</button> })}</nav>
         <p className="nav-label bottom-label">{t('administration')}</p>
         <nav><button className={activeNav === 'Team & Devices' ? 'nav-item active' : 'nav-item'} onClick={() => openSection('Team & Devices')}><span className="nav-icon">◉</span>{t('teamDevices')}</button><button className={activeNav === 'Settings' ? 'nav-item active' : 'nav-item'} onClick={() => openSection('Settings')}><span className="nav-icon">⚙</span>{t('settings')}</button></nav>
-        <div className="sidebar-footer"><div className="avatar">{inspectionMode ? 'AI' : 'MA'}</div><span><b>{user?.email ?? t('readOnlyInspection')}</b><small>{inspectionMode ? t('publicPreview') : 'Authenticated workspace'}</small></span></div>
+        <div className="sidebar-footer"><div className="avatar">{inspectionMode ? 'AI' : (user?.email?.slice(0, 2).toUpperCase() ?? 'MA')}</div><span><b>{user?.email ?? t('readOnlyInspection')}</b><small>{inspectionMode ? t('publicPreview') : 'Authenticated workspace'}</small></span>{!inspectionMode && <button aria-label="Sign out" onClick={() => void handleSignOut()}>↪</button>}</div>
       </aside>
       <main className="main-content">
         <header className="topbar"><div className="breadcrumb"><span>{t('workspace')}</span><b>/</b><strong>{sectionLabel(activeNav)}</strong></div><div className="top-actions"><button className="icon-button" onClick={() => setPrivacy(!privacy)} aria-label={privacy ? 'Show amounts' : 'Hide amounts'}>{privacy ? '◉' : '◌'}</button><button className="lang-button" onClick={() => setLanguage(language === 'en' ? 'fa-AF' : language === 'fa-AF' ? 'ps-AF' : 'en')} aria-label="Change language">{language === 'en' ? 'EN' : language === 'fa-AF' ? 'دری' : 'PS'} <span>⌄</span></button><button className="help-button" onClick={() => setShowHelp(true)} aria-label="Open help">?</button></div></header>
         <div className="content-wrap">
           {!dashboardView && <WorkspaceView section={activeNav} trades={trades} organizationId={organizationId} branchId={branchId} cashboxId={cashboxId} onDashboard={() => openSection('Dashboard')} onToast={setToast} />}
           {dashboardView && <>
-          <section className="welcome"><div><p className="kicker">MONDAY, 24 AUGUST 2026 · 10:45 AM</p><h1>{t('goodMorning')}</h1><p className="subtitle">{t('businessStand')}</p></div><div className="action-wrap"><button className="primary-action" onClick={() => setShowTrade(true)}><span>+</span> {t('newTrade')} <kbd>⌘ K</kbd></button><button className="secondary-action" onClick={() => setShowActions(!showActions)} aria-expanded={showActions}>{t('moreActions')} <span>⌄</span></button>{showActions && <div className="action-menu">{(['Receive money', 'Pay money', 'Transfer cash', 'Expense', 'Owner capital', 'Bank movement'] as const).map((action) => { const kinds: Record<typeof action, OperationKind> = { 'Receive money': 'RECEIVE_MONEY', 'Pay money': 'PAY_MONEY', 'Transfer cash': 'TRANSFER_CASH', Expense: 'RECORD_EXPENSE', 'Owner capital': 'OWNER_INVESTMENT', 'Bank movement': 'BANK_DEPOSIT' }; const labels: Record<typeof action, string> = { 'Receive money': t('receive'), 'Pay money': t('pay'), 'Transfer cash': t('transfer'), Expense: t('expense'), 'Owner capital': t('ownerCapital'), 'Bank movement': t('bankMovement') }; return <button key={action} onClick={() => openOperation(kinds[action])}>{labels[action]}<span>→</span></button> })}<button onClick={() => setShowTrade(true)}>{t('buy')} / {t('sell')} / {t('exchange')} <span>→</span></button><button onClick={() => openSection('Debts')}>{t('debtCredit')} <span>→</span></button><button onClick={() => openSection('Hawala')}>{t('hawala')} <span>→</span></button></div>}</div></section>
+          <section className="welcome"><div><p className="kicker">MONDAY, 24 AUGUST 2026 · 10:45 AM</p><h1>{user ? `${t('goodMorning').split(',')[0]}, ${user.email?.split('@')[0] ?? 'there'}.` : t('goodMorning')}</h1><p className="subtitle">{t('businessStand')}</p></div><div className="action-wrap"><button className="primary-action" onClick={() => setShowTrade(true)}><span>+</span> {t('newTrade')} <kbd>⌘ K</kbd></button><button className="secondary-action" onClick={() => setShowActions(!showActions)} aria-expanded={showActions}>{t('moreActions')} <span>⌄</span></button>{showActions && <div className="action-menu">{(['Receive money', 'Pay money', 'Transfer cash', 'Expense', 'Owner capital', 'Bank movement'] as const).map((action) => { const kinds: Record<typeof action, OperationKind> = { 'Receive money': 'RECEIVE_MONEY', 'Pay money': 'PAY_MONEY', 'Transfer cash': 'TRANSFER_CASH', Expense: 'RECORD_EXPENSE', 'Owner capital': 'OWNER_INVESTMENT', 'Bank movement': 'BANK_DEPOSIT' }; const labels: Record<typeof action, string> = { 'Receive money': t('receive'), 'Pay money': t('pay'), 'Transfer cash': t('transfer'), Expense: t('expense'), 'Owner capital': t('ownerCapital'), 'Bank movement': t('bankMovement') }; return <button key={action} onClick={() => openOperation(kinds[action])}>{labels[action]}<span>→</span></button> })}<button onClick={() => setShowTrade(true)}>{t('buy')} / {t('sell')} / {t('exchange')} <span>→</span></button><button onClick={() => openSection('Debts')}>{t('debtCredit')} <span>→</span></button><button onClick={() => openSection('Hawala')}>{t('hawala')} <span>→</span></button></div>}</div></section>
           <div className="notice"><span className={`sync-dot ${online ? 'online' : 'offline'}`} /><span><b>{online ? t('online') : t('stillOffline')}</b> · {supabaseConfigured ? t('supabaseLoaded') : t('localWorkspace')} · {online ? `${t('lastSync')}: ${t('justNow')}` : `${t('pendingSync')}: 0`}</span><button onClick={() => setToast(online ? t('connected') : t('offlineMode'))}>{online ? t('connected') : t('offlineMode')}</button></div>
           <section className="rate-strip"><div className="rate-title"><span className="rate-live" /> <div><b>{t('rates')}</b><small>{t('retailRateContext')}</small></div></div><label>{t('buy')}<input value={rate} onChange={(event) => setRate(event.target.value)} /></label><label>{t('sell')}<input value="70.35" readOnly /></label><div className="calculator"><input value={calculatorAmount} onChange={(event) => setCalculatorAmount(event.target.value)} /><span>USD</span><b>=</b><strong>{calculateCounterAmount(calculatorAmount || '0', rate || '1', 'AFN_PER_UNIT', 2)}</strong><span>AFN</span></div><button className="text-button" onClick={() => openSection('Rates')}>{t('history')} →</button></section>
           <section className="metric-grid"><article className="metric-card hero-metric"><div className="card-head"><span>{t('totalPosition')}</span><button aria-label={privacy ? 'Show amounts' : 'Hide amounts'} onClick={() => setPrivacy(!privacy)}>◌</button></div><strong>{hidden || '—'}</strong><div className="metric-foot"><span>{dashboard ? `${dashboard.positions.length} currencies from ledger` : 'Awaiting live ledger data'}</span></div><div className="sparkline">{Array.from({ length: 12 }, (_, index) => <i key={index} />)}</div></article><article className="metric-card"><div className="card-head"><span>{t('todayVolume')}</span><span className="card-symbol">↗</span></div><strong>{hidden || dashboard?.volume_base || '—'}</strong><div className="metric-foot"><span>{dashboard ? `${dashboard.transaction_count} posted entries` : 'Awaiting live ledger data'}</span></div></article><article className="metric-card"><div className="card-head"><span>{t('realizedProfit')}</span><span className="card-symbol profit">✦</span></div><strong className="profit-text">{hidden || dashboard?.realized_profit || '—'}</strong><div className="metric-foot"><span>Ledger-derived AFN equivalent</span></div></article></section>
