@@ -6,6 +6,7 @@ export type DashboardSnapshot = { transaction_count: number; volume_base: string
 export type DebtRecord = { id: string; counterparty_id: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null }
 export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string }
+export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string }
 
 export async function postFxTrade(command: unknown): Promise<RpcResult<Record<string, unknown>>> {
   const parsed: FxTradeCommand = parseFxTradeCommand(command)
@@ -99,6 +100,31 @@ export async function approveCashboxClose(closeId: string): Promise<RpcResult<Re
   if (!session.data.session) return { data: null, error: 'Authentication required' }
   const result = await client.rpc('approve_cashbox_close', { target_id: closeId })
   return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function recordOpeningBalance(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('record_opening_balance', { command })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function requestReversal(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('request_reversal', { command })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function listJournalEntries(organizationId: string): Promise<RpcResult<JournalRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.from('journal_entries').select('id,status,memo,occurred_at,branch_id').eq('organization_id', organizationId).order('occurred_at', { ascending: false }).limit(100)
+  return { data: result.data as JournalRecord[] | null, error: result.error?.message ?? null }
 }
 
 export async function getOwnerDashboard(organizationId: string): Promise<RpcResult<DashboardSnapshot>> {

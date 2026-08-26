@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bankMovement, buyCurrency, createDebt, createOperationsState, hawalaSend, ownerInvestment, recordExpense, sellCurrency, settleDebt, transferCash } from './operations'
+import { bankMovement, buyCurrency, createDebt, createOperationsState, hawalaSend, ownerInvestment, recordExpense, reverseOperation, sellCurrency, settleDebt, transferCash } from './operations'
 
 const ids = { organizationId: 'org-a', branchId: 'branch-a', cashboxId: 'cash-a' }
 
@@ -34,5 +34,16 @@ describe('daily Sarafi operations', () => {
     const input = { senderId: 'person-1', beneficiaryName: 'A. Khan', origin: 'Kabul', destination: 'Herat', partnerId: 'partner-1', currency: 'USD', amount: '100', fee: '2', reference: 'H-001' }
     expect(() => hawalaSend(state, { ...input, enabled: false })).toThrow('disabled')
     expect(hawalaSend(state, { ...input, enabled: true }).status).toBe('created')
+  })
+
+  it('reverses a posted entry without deleting its history or profit effect', () => {
+    const state = createOperationsState()
+    const bought = buyCurrency(state, { ...ids, receivedCurrency: 'USD', receivedAmount: '10000', paidCurrency: 'AFN', paidAmount: '690000', receivedBaseValue: '690000', paidBaseValue: '690000', clientCommandId: 'buy-1' })
+    const sold = sellCurrency(state, { ...ids, givenCurrency: 'USD', givenAmount: '10000', receivedCurrency: 'AFN', receivedAmount: '700000', givenBaseValue: '690000', receivedBaseValue: '700000', clientCommandId: 'sell-1' })
+    const reversal = reverseOperation(state, sold.entry.id, 'Entered against the wrong customer')
+    expect(state.entries).toHaveLength(3)
+    expect(state.entries.find((entry) => entry.id === sold.entry.id)?.status).toBe('reversed')
+    expect(reversal.realizedProfit).toBe('-10000.000000000000')
+    expect(bought.receipt.entryId).not.toBe(reversal.id)
   })
 })
