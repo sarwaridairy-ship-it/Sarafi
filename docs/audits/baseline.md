@@ -36,6 +36,20 @@ Reviewed: 2026-08-26
 | Offline | Encrypted durable outbox | `offline.ts`, `offlineStore.ts` | PARTIAL: storage and reconnect helper exist; production sync adapter and conflict UI remain |
 | Compliance | Rules/KYC/screening boundary | compliance migrations; fail-closed provider function | PARTIAL: no approved provider or legal sign-off |
 
+## Capability Owners
+
+| Capability group | Owner |
+| --- | --- |
+| Dashboard, Trade, Transactions, Cash & Accounts | Web product engineering |
+| More actions, Debts, Reconciliation, Hawala | Financial domain engineering |
+| Rates, Reports, exports | Reporting and valuation engineering |
+| Offline storage and synchronization | Client platform engineering |
+| Roles, devices, MFA, RLS, privileged RPCs | Security and database engineering |
+| Compliance rules, KYC, sanctions boundary | Compliance engineering plus regulated-business reviewer |
+| CI, Vercel, Supabase migrations, release evidence | Release engineering |
+| Dari/Pashto terminology and UAT | Localization lead plus named Afghan reviewers |
+| Native Android/iOS delivery | Mobile release owner |
+
 ## Privileged Database Surface
 
 Authoritative functions include `record_fx_trade`, `record_operation`, `record_debt`,
