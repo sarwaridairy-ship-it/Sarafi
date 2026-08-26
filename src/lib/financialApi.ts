@@ -2,7 +2,7 @@ import { getSupabaseClient } from './supabase'
 import { parseFxTradeCommand, type FxTradeCommand } from '../domain/commands'
 
 export type RpcResult<T> = { data: T | null; error: string | null }
-export type DashboardSnapshot = { transaction_count: number; volume_base: string; realized_profit: string; expenses: string; pending_approvals: number; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location: string; currency: string; quantity: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
+export type DashboardSnapshot = { transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location: string; currency: string; quantity: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
 export type DebtRecord = { id: string; counterparty_id: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null }
 export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string }
@@ -127,11 +127,18 @@ export async function listJournalEntries(organizationId: string): Promise<RpcRes
   return { data: result.data as JournalRecord[] | null, error: result.error?.message ?? null }
 }
 
-export async function getOwnerDashboard(organizationId: string): Promise<RpcResult<DashboardSnapshot>> {
+export async function getOwnerDashboard(organizationId: string, targetDay?: string): Promise<RpcResult<DashboardSnapshot>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('get_owner_dashboard', { target_org: organizationId })
+  const result = await client.rpc('get_owner_dashboard', { target_org: organizationId, target_day: targetDay })
   return { data: result.data as DashboardSnapshot | null, error: result.error?.message ?? null }
+}
+
+export async function getCurrentRates(organizationId: string, branchId?: string): Promise<RpcResult<{ buy_rate: string; sell_rate: string; from_currency: string; to_currency: string }[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.from('rate_board_entries').select('buy_rate,sell_rate,from_currency,to_currency').eq('organization_id', organizationId).eq('from_currency', 'USD').eq('to_currency', 'AFN').eq('active', true).or(`branch_id.is.null,branch_id.eq.${branchId ?? '00000000-0000-0000-0000-000000000000'}`).order('effective_from', { ascending: false }).limit(1)
+  return { data: result.data as { buy_rate: string; sell_rate: string; from_currency: string; to_currency: string }[] | null, error: result.error?.message ?? null }
 }
