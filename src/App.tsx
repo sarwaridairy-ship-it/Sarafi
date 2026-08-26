@@ -6,7 +6,7 @@ import { readPublicSupabaseConfig } from './lib/supabase'
 import { calculateCounterAmount } from './domain/valuation'
 import { buildCsvReport } from './domain/reporting'
 import { isRtl, translate, type Language } from './lib/i18n'
-import { getOwnerDashboard, postFxTrade, recordCashboxClose, recordDebt, recordOperation, type DashboardSnapshot } from './lib/financialApi'
+import { getOwnerDashboard, listCounterparties, listDebts, postFxTrade, recordCashboxClose, recordDebt, recordOperation, settleDebt, type DashboardSnapshot, type CounterpartyRecord, type DebtRecord } from './lib/financialApi'
 import { getSupabaseClient } from './lib/supabase'
 import { createBusiness } from './lib/onboarding'
 import { downloadPdf, printReport } from './lib/exports'
@@ -213,21 +213,41 @@ function ReportsView({ trades, onDashboard, onToast }: { trades: Trade[]; onDash
 }
 
 function DebtsView({ organizationId, branchId, onDashboard, onToast }: { organizationId: string | null; branchId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {
+  const [debts, setDebts] = useState<DebtRecord[]>([])
+  const [people, setPeople] = useState<CounterpartyRecord[]>([])
   const [direction, setDirection] = useState<'receivable' | 'payable'>('receivable')
   const [counterpartyId, setCounterpartyId] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('AFN')
+  const [selectedDebt, setSelectedDebt] = useState<DebtRecord | null>(null)
+  const [settlementAmount, setSettlementAmount] = useState('')
   const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!organizationId) return
+    void Promise.all([listDebts(organizationId), listCounterparties(organizationId)]).then(([debtResult, peopleResult]) => {
+      if (debtResult.data) setDebts(debtResult.data)
+      if (peopleResult.data) setPeople(peopleResult.data)
+    })
+  }, [organizationId])
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!organizationId || !branchId) { onToast('Debt not posted: an authenticated branch is required'); return }
+    if (!organizationId || !branchId || !counterpartyId) { onToast('Debt not posted: choose an authenticated organization, branch, and counterparty'); return }
     setBusy(true)
     const result = await recordDebt({ organization_id: organizationId, branch_id: branchId, counterparty_id: counterpartyId, direction, currency, amount, location: 'Main Counter', client_command_id: crypto.randomUUID() })
     setBusy(false)
     onToast(result.error ? `Debt not posted: ${result.error}` : 'Debt posted to Supabase')
     if (!result.error) { setCounterpartyId(''); setAmount('') }
   }
-  return <section className="panel"><div className="panel-header"><div><p className="kicker">DEBT & CREDIT</p><h1>Debts</h1><p>Record receivables and payables with an immutable ledger entry.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><form className="trade-modal" onSubmit={submit}><label>Direction<select value={direction} onChange={(event) => setDirection(event.target.value as typeof direction)}><option value="receivable">They owe us</option><option value="payable">We owe them</option></select></label><label>Counterparty ID<input required value={counterpartyId} onChange={(event) => setCounterpartyId(event.target.value)} placeholder="UUID from People" /></label><div className="form-grid"><label>Amount<input required min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label><label>Currency<select value={currency} onChange={(event) => setCurrency(event.target.value)}><option>AFN</option><option>USD</option><option>EUR</option></select></label></div><button className="primary-action full" type="submit" disabled={busy}>{busy ? 'Posting...' : 'Post debt'} <span>→</span></button></form><div className="empty-live">Settlements remain linked to the original debt and reduce its outstanding amount; they never delete history.</div></section>
+  const settle = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selectedDebt) return
+    setBusy(true)
+    const result = await settleDebt({ debt_id: selectedDebt.id, amount: settlementAmount, location: 'Main Counter', client_command_id: crypto.randomUUID() })
+    setBusy(false)
+    onToast(result.error ? `Settlement not posted: ${result.error}` : 'Settlement posted to Supabase')
+    if (!result.error) { setSelectedDebt(null); setSettlementAmount(''); if (organizationId) { const refreshed = await listDebts(organizationId); if (refreshed.data) setDebts(refreshed.data) } }
+  }
+  return <section className="panel"><div className="panel-header"><div><p className="kicker">DEBT & CREDIT</p><h1>Debts</h1><p>Record receivables and payables with an immutable ledger entry.</p></div><button className="text-button" onClick={onDashboard}>Back to dashboard →</button></div><form className="trade-modal" onSubmit={submit}><label>Direction<select value={direction} onChange={(event) => setDirection(event.target.value as typeof direction)}><option value="receivable">They owe us</option><option value="payable">We owe them</option></select></label><label>Counterparty<select required value={counterpartyId} onChange={(event) => setCounterpartyId(event.target.value)}><option value="">Choose a counterparty</option>{people.map((person) => <option key={person.id} value={person.id}>{person.display_name} · {person.counterparty_type}</option>)}</select></label><div className="form-grid"><label>Amount<input required min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label><label>Currency<select value={currency} onChange={(event) => setCurrency(event.target.value)}><option>AFN</option><option>USD</option><option>EUR</option></select></label></div><button className="primary-action full" type="submit" disabled={busy}>{busy ? 'Posting...' : 'Post debt'} <span>→</span></button></form><div className="balance-list">{debts.length ? debts.map((debt) => <button className="balance-row" key={debt.id} onClick={() => { setSelectedDebt(debt); setSettlementAmount(debt.outstanding_amount) }}><span className="currency-badge usd">{debt.currency_code}</span><span className="balance-name"><b>{people.find((person) => person.id === debt.counterparty_id)?.display_name ?? 'Counterparty'}</b><small>{debt.direction === 'receivable' ? 'They owe us' : 'We owe them'}</small></span><strong>{debt.outstanding_amount}</strong></button>) : <div className="empty-live">No outstanding debts are available for this organization.</div>}</div>{selectedDebt && <form className="trade-modal" onSubmit={settle}><div className="modal-head"><div><p className="kicker">SETTLEMENT</p><h2>Settle debt</h2></div><button type="button" className="close" onClick={() => setSelectedDebt(null)} aria-label="Close settlement">×</button></div><p>Outstanding: {selectedDebt.outstanding_amount} {selectedDebt.currency_code}</p><label>Settlement amount<input required min="0.01" max={selectedDebt.outstanding_amount} step="0.01" value={settlementAmount} onChange={(event) => setSettlementAmount(event.target.value)} /></label><button className="primary-action full" type="submit" disabled={busy}>{busy ? 'Posting...' : 'Post settlement'} <span>→</span></button></form>}<div className="empty-live">Settlements remain linked to the original debt and reduce its outstanding amount; they never delete history.</div></section>
 }
 
 function ReconciliationView({ organizationId, branchId, cashboxId, onDashboard, onToast }: { organizationId: string | null; branchId: string | null; cashboxId: string | null; onDashboard: () => void; onToast: (message: string) => void }) {
