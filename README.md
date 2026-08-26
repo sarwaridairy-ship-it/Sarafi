@@ -13,6 +13,8 @@ npm run dev
 
 Validate with `npm run build` and `npm run lint`.
 
+Authenticated security journeys are opt-in and never use committed credentials. Set `SARAFI_E2E_EMAIL`, `SARAFI_E2E_PASSWORD`, and `SARAFI_E2E_ORGANIZATION_ID` in the test environment alongside the public Supabase variables, then run `npx playwright test tests/e2e/authenticated-security.spec.ts`.
+
 Copy `.env.example` to `.env.local` and add only the public Supabase URL and anon key when ready.
 
 ## Technical notes
