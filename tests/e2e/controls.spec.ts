@@ -24,7 +24,7 @@ test.describe('workspace controls', () => {
     await page.getByRole('button', { name: /View all/ }).click()
     await expect(page.getByRole('heading', { name: 'Cash & Accounts', exact: true })).toBeVisible()
     await page.getByRole('button', { name: /Back to dashboard/ }).click()
-    await page.getByRole('button', { name: 'New trade' }).click()
+    await page.getByRole('button', { name: 'Sell currency', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Record a trade' })).toBeVisible()
     await page.getByRole('button', { name: 'Close trade' }).click()
     await expect(page.getByRole('heading', { name: 'Record a trade' })).not.toBeVisible()
@@ -80,5 +80,27 @@ test.describe('workspace controls', () => {
     await expect(page.getByRole('textbox', { name: 'Beneficiary' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Destination' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Reference code' })).toBeVisible()
+  })
+
+  test('core cashier actions are visible without opening More actions', async ({ page }) => {
+    await page.goto('/')
+    for (const action of ['Buy currency', 'Sell currency', 'Exchange currency', 'Receive money', 'Pay money']) {
+      await expect(page.getByRole('button', { name: action, exact: true })).toBeVisible()
+    }
+    await page.getByRole('button', { name: 'Buy currency', exact: true }).click()
+    await expect(page.getByRole('heading', { name: /BUY/ })).toBeVisible()
+    await page.getByRole('button', { name: 'Close trade' }).click()
+    await page.getByRole('button', { name: 'Receive money', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'RECEIVE MONEY' })).toBeVisible()
+  })
+
+  test('owner surface exposes control-center sections without accounting terminology', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByText('Owner')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Debts/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Reports/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Reconciliation/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Buy currency/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Pay money/ })).toBeVisible()
   })
 })

@@ -14,7 +14,7 @@ Reviewed: 2026-08-26
 | Unit tests | `50 passed` across 17 files | PASS |
 | Browser tests | `10 passed`, 2 authenticated tests intentionally skipped without opt-in secrets | PASS with documented exception |
 | Typecheck/lint/build | All pass; build reports a non-blocking large chunk warning | PASS with non-blocking warning |
-| Authentication gate | Public inspection mode is intentional per product-owner exception | EXCEPTION |
+| Authentication gate | Production requires Supabase session; only `MODE=e2e` or explicit development flag enables inspection mode | PASS with documented exception |
 
 ## Route and Capability Matrix
 
@@ -64,7 +64,7 @@ functions with explicit authenticated grants. Remote schema lint is clean.
 - Backup/restore and monitoring require provider-level access and evidence.
 - Native Android/iOS projects require architecture, signing credentials, store accounts, and device testing.
 - Human Dari/Pashto terminology review and formal UAT require named reviewers.
-- The public authentication gate remains intentionally disabled by owner request.
+- The public authentication gate is active; `MODE=e2e` and the explicit development flag are the only inspection exceptions.
 
 This file is an evidence baseline, not a production-complete claim. Update the status and
 evidence when each capability passes its user-facing, authorization, accounting, and
