@@ -26,7 +26,7 @@ Reviewed: 2026-08-27
   `vbvwuqzqtcorassvotke`; project name is `sarwaridairy-ship-it's Project` in South Asia
   (Mumbai). Only the project reference and hostname were used for verification; no
   privileged key was printed.
-- Tracked migrations are present through `202608270001_step13_private_documents.sql`.
+- Tracked migrations are present through `202608270008_restore_rls_helper_grants.sql`.
 - `npx supabase db lint --linked`: passed, no schema errors.
 - `npm audit --omit=dev`: passed, 0 vulnerabilities.
 - Tracked-file secret scan: no credential material found; only intentional negative-test
@@ -56,10 +56,11 @@ Reviewed: 2026-08-27
   migrations were linted and applied remotely.
 - Owner A MFA assurance was observed at `aal1`; no real TOTP factor was enrolled, so AAL1
   versus AAL2 privileged-action certification remains pending.
-- Supabase advisors: `0` errors and `65` warnings: 4 mutable search-path warnings, 29
-  anonymous SECURITY DEFINER execution warnings, 29 authenticated SECURITY DEFINER
-  execution warnings, 1 leaked-password-protection warning, and 3 RLS init-plan warnings.
-  These warnings require review and prevent a no-critical/high-finding claim.
+- Supabase advisors after remediation: `0` errors and `33` warnings. Anonymous SECURITY
+  DEFINER exposure and mutable search-path findings were remediated. Remaining warnings
+  are authenticated SECURITY DEFINER review items, the two RLS helper grants required for
+  policy evaluation, leaked-password configuration, and performance init-plan warnings.
+  These are documented in the advisor remediation report.
 - The privileged provisioning secret was removed from the current terminal process after
   fixture setup. It was never written to the repository or emitted in test output.
 - Full Playwright matrix with Owner A configured: `69 passed`, `0 failed`, `3 skipped`.
@@ -67,6 +68,25 @@ Reviewed: 2026-08-27
   authenticated security tests ran in all three browser projects and did not skip.
 - Unit suite: `56 passed` across 18 test files. Typecheck, lint, and production build
   passed. Chromium focused regression: `23 passed`, `1 skipped`.
+- Closure run after device/membership/storage/Realtime implementation and grant
+  remediation: `66 passed`, `0 failed`, `0 unsupported` in the direct live matrix.
+- The final repeat run after RLS helper grant compatibility: `66 passed`, `0 failed`,
+  `0 unsupported`.
+- Final live matrix categories covered tenant reads/writes/RPC, role and branch/cashbox
+  enforcement, device revocation, membership suspension, storage isolation, Realtime,
+  anonymous denial, valid cashier posting, and idempotency.
+- Storage isolation passed for synthetic Business A upload/download versus Business B and
+  anonymous denial. Realtime passed for Business B event exclusion and Business A event
+  delivery after publishing `financial_events`.
+- Device registration/revocation and membership suspension were exercised through the live
+  RPC boundary. Offline queued-command rejection after revocation was not independently
+  executed against the server sync endpoint.
+- MFA remains partial: Owner A assurance was observed at `aal1`; no TOTP enrollment,
+  invalid-code, AAL1 denial, or AAL2 privileged-action proof was executed.
+- Approval security remains partial: the full requester/approver role matrix, stale-state,
+  retry, and economic-effect proof was not executed.
+- Step 15 therefore remains **PARTIAL**, despite the direct matrix having zero failed or
+  unsupported rows for the categories implemented by the harness.
 
 ## Security Controls Present
 
