@@ -82,24 +82,33 @@ test.describe('workspace controls', () => {
     await expect(page.getByRole('heading', { name: 'Approval inbox', exact: true })).toBeVisible()
   })
 
-  test('offline queue keeps raw IndexedDB payload encrypted and fails closed after corruption', async ({ page }) => {
+  test('offline drafts stay encrypted and never auto-post', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /Offline/ }).click()
     await page.getByRole('combobox', { name: 'Operation' }).selectOption('BUY_FX')
     await page.getByRole('textbox', { name: 'Amount' }).fill('12345.67')
-    await page.getByRole('button', { name: /Queue command/ }).click()
-    await expect(page.getByText(/it is not posted/)).toBeVisible()
-    const raw = await page.evaluate(async () => new Promise<unknown[]>((resolve, reject) => { const request = indexedDB.open('sarafi-offline', 2); request.onsuccess = () => { const read = request.result.transaction('outbox', 'readonly').objectStore('outbox').getAll(); read.onsuccess = () => resolve(read.result); read.onerror = () => reject(read.error) }; request.onerror = () => reject(request.error) }))
+    await page.getByRole('button', { name: /Save as Draft/ }).click()
+    await expect(page.getByText(/not posted and will not auto-submit/)).toBeVisible()
+    const raw = await page.evaluate(async () => new Promise<unknown[]>((resolve, reject) => { const request = indexedDB.open('sarafi-offline', 3); request.onsuccess = () => { const read = request.result.transaction('drafts', 'readonly').objectStore('drafts').getAll(); read.onsuccess = () => resolve(read.result); read.onerror = () => reject(read.error) }; request.onerror = () => reject(request.error) }))
     const serialized = JSON.stringify(raw)
     expect(serialized).not.toContain('12345.67')
     expect(serialized).not.toContain('BUY_FX')
     await page.reload()
     await page.getByRole('button', { name: /Offline/ }).click()
-    await expect(page.getByText(/BUY FX · pending/)).toBeVisible()
-    await page.evaluate(async () => new Promise<void>((resolve, reject) => { const request = indexedDB.open('sarafi-offline', 2); request.onsuccess = () => { const transaction = request.result.transaction('outbox', 'readwrite'); const store = transaction.objectStore('outbox'); const read = store.getAll(); read.onsuccess = () => { const record = read.result[0]; record.data = record.data.slice(0, -2) + 'AA'; store.put(record); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error) }; read.onerror = () => reject(read.error) }; request.onerror = () => reject(request.error) }))
+    await expect(page.getByText(/DRAFT — NOT POSTED/)).toBeVisible()
+    await page.evaluate(async () => new Promise<void>((resolve, reject) => { const request = indexedDB.open('sarafi-offline', 3); request.onsuccess = () => { const transaction = request.result.transaction('drafts', 'readwrite'); const store = transaction.objectStore('drafts'); const read = store.getAll(); read.onsuccess = () => { const record = read.result[0]; record.data = record.data.slice(0, -2) + 'AA'; store.put(record); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error) }; read.onerror = () => reject(read.error) }; request.onerror = () => reject(request.error) }))
     await page.reload()
     await page.getByRole('button', { name: /Offline/ }).click()
-    await expect(page.getByText(/Queue unavailable/)).toBeVisible()
+    await expect(page.getByText(/Draft storage unavailable/)).toBeVisible()
+  })
+
+  test('offline mode disables primary financial posting controls', async ({ page, context }) => {
+    await page.goto('/')
+    await context.setOffline(true)
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')))
+    for (const action of ['Buy currency', 'Sell currency', 'Exchange currency', 'Receive money', 'Pay money']) {
+      await expect(page.getByRole('button', { name: action, exact: true })).toBeDisabled()
+    }
   })
 
   test('More actions exposes an opening balance form', async ({ page }) => {

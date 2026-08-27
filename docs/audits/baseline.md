@@ -33,7 +33,7 @@ Reviewed: 2026-08-26
 | Hawala | Feature-gated send and list | `record_hawala_send`; `HawalaView` | PARTIAL: send workflow exists; enabled-provider and settlement journeys need authenticated validation |
 | Team & Devices | Device/team control | Supabase tables and local models | PARTIAL: no complete UI |
 | Settings | Organization configuration | Supabase settings tables | PARTIAL: no complete UI |
-| Offline | Encrypted durable outbox | `offline.ts`, `offlineStore.ts` | PARTIAL: storage and reconnect helper exist; production sync adapter and conflict UI remain |
+| Network resilience | Encrypted offline drafts | `offline.ts`, `offlineStore.ts` | Safe degraded mode: cached shell/read-only state and review-only drafts; no authoritative offline posting |
 | Compliance | Rules/KYC/screening boundary | compliance migrations; fail-closed provider function | PARTIAL: no approved provider or legal sign-off |
 
 ## Capability Owners
@@ -43,7 +43,7 @@ Reviewed: 2026-08-26
 | Dashboard, Trade, Transactions, Cash & Accounts | Web product engineering |
 | More actions, Debts, Reconciliation, Hawala | Financial domain engineering |
 | Rates, Reports, exports | Reporting and valuation engineering |
-| Offline storage and synchronization | Client platform engineering |
+| Offline degraded mode and draft privacy | Client platform engineering |
 | Roles, devices, MFA, RLS, privileged RPCs | Security and database engineering |
 | Compliance rules, KYC, sanctions boundary | Compliance engineering plus regulated-business reviewer |
 | CI, Vercel, Supabase migrations, release evidence | Release engineering |

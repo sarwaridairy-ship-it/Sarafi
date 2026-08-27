@@ -5,7 +5,8 @@
 - Web build/runtime errors with release identifier and correlation ID.
 - Supabase RPC failures, rejected commands, idempotency conflicts, and slow queries.
 - Realtime subscription failures and reconnect/refetch results.
-- Offline queue conflicts and revoked-device sync attempts.
+- Offline draft storage failures and attempts to post while disconnected. Authoritative
+	offline financial sync is retired; any replay attempt is a security incident signal.
 - Authentication abuse, failed MFA, refresh-token revocation, and rate-limit events.
 - Private document upload rejection/failure and compliance job failures.
 - Backup/PITR health and restore-test results.

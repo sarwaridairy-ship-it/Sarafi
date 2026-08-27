@@ -23,7 +23,7 @@ Use a staging Supabase project with synthetic data only. Create one owner, manag
 15. Owner reviews P&L, trial balance, currency position, and Where Is My Money.
 16. Owner exports CSV/PDF/print output and confirms business name, filters, timezone, generated time, and valuation basis.
 17. Repeat core flow in English, Dari, and Pashto; verify RTL, mixed currency codes, dates, and receipts.
-18. Disconnect the cashier device, create an allowed offline command, reconnect, and verify exactly one server posting.
+18. Disconnect the cashier device, verify financial posting controls are disabled, save an explicitly labelled draft if needed, reconnect, and verify the draft is not auto-submitted.
 19. Reconnect after an authoritative balance change and verify the command becomes Sync Conflict, never Posted.
 
 ## Acceptance evidence

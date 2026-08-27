@@ -42,7 +42,7 @@
 
 ### Reliability
 
-- PASS: Offline sequence/limit/conflict tests and PWA shell artifacts.
+- PASS: Offline draft encryption, stale legacy-queue handling, no-auto-replay tests, and PWA shell artifacts.
 - PASS: Migration list shows `202608240001` through `202608240013` applied remotely.
 - PARTIAL: Provider backup/PITR confirmation and staging restore drill are not evidenced.
 - BLOCKED: Linked schema dump/restore could not run because Docker Desktop is not available for the Supabase CLI backup path.

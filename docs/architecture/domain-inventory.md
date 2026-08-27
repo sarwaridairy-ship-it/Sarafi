@@ -13,7 +13,7 @@ This document maps the required production inventory to the deployed schema. Exi
 - Costing/position: fx_inventory_cost_state, currency_position_snapshots, valuation snapshots.
 - Reconciliation: shifts, cashbox_closes/cashbox_closures, cashbox_close_lines/cash_counts, cash_count_lines, cash_variances.
 - Workflow/control: approval_requests, notifications, notification_preferences, security_audit_events, audit_checkpoints, organization_features.
-- Offline/sync: offline_policies, offline_command_receipts, client command IDs, conflict status, minimum-version policy remains a release configuration gate.
+- Network resilience: encrypted offline drafts and online-only authoritative command IDs; disconnected financial posting is outside launch scope.
 - Compliance: compliance_profiles, compliance_rule_sets, compliance_rules, kyc_profiles, kyc_documents, screening_runs, screening_matches, compliance_alerts, compliance_cases, regulatory_report_runs, regulatory_report_exports, compliance_audit_events.
 - Hawala: hawala_transfers, hawala_beneficiaries, hawala_partners, hawala_status_events, hawala_settlements.
 

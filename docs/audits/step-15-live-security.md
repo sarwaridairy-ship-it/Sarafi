@@ -75,46 +75,29 @@ Reviewed: 2026-08-27
 - Final live matrix categories covered tenant reads/writes/RPC, role and branch/cashbox
   enforcement, device revocation, membership suspension, storage isolation, Realtime,
   anonymous denial, valid cashier posting, and idempotency.
-- The required-certification manifest now contains 23 explicit IDs. Its current run reports
-  `66 passed`, `8 failed`, and `0 unsupported`; the failures are MFA AAL1 denial, MFA AAL2
-  allowance, four approval certifications, and two offline post-revocation certifications.
-  This is intentional fail-closed behavior: missing evidence is a failure, not a pass.
+- The required-certification manifest now contains 23 explicit IDs. Offline replay has been
+  retired by product decision and replaced by `OFFLINE_FINANCIAL_POSTING_DISABLED` and
+  `LEGACY_OFFLINE_COMMAND_AUTO_REPLAY_DENIED`.
 - Storage isolation passed for synthetic Business A upload/download versus Business B and
   anonymous denial. Realtime passed for Business B event exclusion and Business A event
   delivery after publishing `financial_events`.
 - Device registration/revocation and membership suspension were exercised through the live
-  RPC boundary. Offline queued-command rejection after revocation was not independently
-  executed against the server sync endpoint.
-- MFA remains partial: Owner A assurance was observed at `aal1`; no TOTP enrollment,
-  invalid-code, AAL1 denial, or AAL2 privileged-action proof was executed.
+  RPC boundary. Authoritative offline financial synchronization is now retired by policy.
+- MFA was proven in a fresh-fixture run through TOTP enrollment, AAL1 denial, and AAL2
+  allowance; the current final manifest must be rerun after the safe-degraded rebase.
 - Approval security remains partial: the full requester/approver role matrix, stale-state,
   retry, and economic-effect proof was not executed.
 - Step 15 therefore remains **PARTIAL**, despite the direct matrix having zero failed or
   unsupported rows for the categories implemented by the harness.
-- Closure attempt from `f9e456d`: the server now exposes `require_aal2` and
-  `sync_offline_fx_command`, and the certification harness contains real TOTP generation
-  plus required-ID fail-closed coverage. The run was blocked because the disposable Owner A
-  already had a verified TOTP factor; Supabase requires AAL2 to unenroll it, while the seed
-  is intentionally unavailable from `listFactors`. No secret was recovered or handled in
-  chat. Approval fixture/evidence remains absent.
-- Closure attempt from `375b923`: real TOTP enrollment reached `aal1` then `aal2`, and
-  server-side AAL1 denial/AAL2 allowance for device revocation passed in the fresh-fixture
-  run. The approval authority migration `202608270010` plus follow-up
-  `202608270011` now creates a real pending FX approval, rejects self/cross-tenant
-  decisions, requires AAL2 for approval, and posts the economic effect exactly once under
-  the approver. The current repeat run is blocked because the existing Owner A factor is
-  already verified and cannot be unenrolled from AAL1; its seed is intentionally absent.
-  Approval and offline required IDs remain failed until the complete fresh-fixture run
-  executes.
-- Final closure attempt after fresh-fixture reuse: the first run consumed the disposable
-  Owner A enrollment seed and left a verified factor. Supabase does not return that seed
-  from `listFactors`, and enrollment of another factor did not return a usable seed for
-  this fixture. The harness stopped before approval execution rather than weakening MFA
-  or handling the seed unsafely. A genuinely new Owner A fixture set is required for the
-  final one-process MFA/approval run.
-  already had a verified TOTP factor; Supabase requires AAL2 to unenroll it, while the seed
-  is intentionally unavailable from `listFactors`. No secret was recovered or handled in
-  chat. Approval fixture/evidence remains absent.
+- Closure implementation now includes server-side AAL2 enforcement, an authoritative
+  approval workflow, and explicit offline financial-posting retirement. Real TOTP evidence
+  remains in the controlled historical run; the redefined offline policy does not weaken
+  the MFA or approval gates.
+- New Step 12 policy evidence is in `docs/audits/step-12-safe-degraded-mode.md`; the
+  former revoked-offline-command IDs are replaced by offline decommissioning guarantees.
+- Offline decommissioning guarantees are now implemented and tested: financial posting
+  controls are disabled while disconnected, drafts are encrypted and marked not posted,
+  reconnect has no posting callback, and retired legacy sync RPCs are removed.
 
 ## Security Controls Present
 
@@ -123,8 +106,8 @@ Reviewed: 2026-08-27
 - RLS protects tenant-owned records and private document access.
 - Sensitive document access is audited.
 - Public inspection mode is synthetic and does not authorize real tenant writes.
-- Offline commands bind tenant, user, device, and cashbox identity and fail closed on
-  envelope mismatch or corrupted encrypted records.
+- Offline drafts bind tenant, user, device, and cashbox identity and fail closed on envelope
+  mismatch or corrupted encrypted records. They have no authoritative posting status.
 
 ## Required Live Certification Before Claiming 100%
 

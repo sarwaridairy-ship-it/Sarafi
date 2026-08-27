@@ -71,15 +71,15 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Translation key coverage tests for all shipped resource keys
 - [x] Document-level RTL direction switching for Dari and Pashto
 - [x] Decimal and direction-safe calculator preserved in the cashier surface
-- [x] Explicit online/offline and pending-sync status messaging
-- [x] Assigned-device/cashbox offline policy model with limits
-- [x] Deterministic offline command sequence and unique command IDs
+- [x] Explicit online/offline and stale/degraded-mode status messaging
+- [x] Encrypted identity-bound offline draft model
+- [x] No automatic offline financial replay
 - [x] Conflict preservation without false posted status
 - [x] Tenant and role-scoped global search model
-- [x] Offline policy/queue Supabase migration with RLS
+- [x] Offline draft storage with tenant/user/device binding
 - [x] 31 local tests and browser journey pass
 - [ ] Persist encrypted outbox in IndexedDB/mobile SQLite with OS-secure key storage
-- [ ] Wire authenticated offline sync to authoritative RPCs and test reconnect against Supabase
+- [x] Retire authoritative offline sync; online financial posting remains server-idempotent
 - [ ] Complete native speaker localization review and full-screen string extraction
 - [ ] Measure launch/network performance budgets on target Android hardware
 
@@ -119,7 +119,7 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 
 - [x] Unit, domain, permission, validation, costing, reporting, and localization tests
 - [x] Randomized accounting invariant and replay tests
-- [x] Offline sync/conflict tests
+- [x] Offline draft, legacy queue, encryption, and no-auto-replay tests
 - [x] Security regression tests for browser secret boundaries
 - [x] Browser E2E trade journey
 - [x] Browser RTL/Dari and mobile-width matrix

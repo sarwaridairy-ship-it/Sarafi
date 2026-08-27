@@ -9,7 +9,7 @@ for (const key of required) if (!env[key]) throw new Error(`Missing security fix
 const client = () => createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
 const results = []
 const record = (test, result, detail = '') => results.push({ test, result, detail })
-const requiredCertifications = ['TENANT_SELECT', 'TENANT_INSERT', 'TENANT_UPDATE', 'TENANT_DELETE', 'TENANT_RPC', 'ROLE_MATRIX', 'BRANCH_SCOPE', 'CASHBOX_SCOPE', 'PRIVILEGE_ESCALATION', 'ANONYMOUS_ACCESS', 'DEVICE_REVOCATION', 'MEMBERSHIP_REVOCATION', 'STORAGE_ISOLATION', 'REALTIME_ISOLATION', 'IDEMPOTENCY', 'MFA_AAL1_DENIAL', 'MFA_AAL2_ALLOWANCE', 'APPROVAL_SELF_DENIAL', 'APPROVAL_CROSS_TENANT_DENIAL', 'APPROVAL_AUTHORIZED_SUCCESS', 'APPROVAL_IDEMPOTENCY', 'OFFLINE_REVOKED_DEVICE_REJECTION', 'OFFLINE_REVOKED_MEMBERSHIP_REJECTION']
+const requiredCertifications = ['TENANT_SELECT', 'TENANT_INSERT', 'TENANT_UPDATE', 'TENANT_DELETE', 'TENANT_RPC', 'ROLE_MATRIX', 'BRANCH_SCOPE', 'CASHBOX_SCOPE', 'PRIVILEGE_ESCALATION', 'ANONYMOUS_ACCESS', 'DEVICE_REVOCATION', 'MEMBERSHIP_REVOCATION', 'STORAGE_ISOLATION', 'REALTIME_ISOLATION', 'IDEMPOTENCY', 'MFA_AAL1_DENIAL', 'MFA_AAL2_ALLOWANCE', 'APPROVAL_SELF_DENIAL', 'APPROVAL_CROSS_TENANT_DENIAL', 'APPROVAL_AUTHORIZED_SUCCESS', 'APPROVAL_IDEMPOTENCY', 'OFFLINE_FINANCIAL_POSTING_DISABLED', 'LEGACY_OFFLINE_COMMAND_AUTO_REPLAY_DENIED']
 const signIn = async (email, password) => { const c = client(); const result = await c.auth.signInWithPassword({ email, password }); if (result.error) throw new Error(`sign in failed: ${result.error.message}`); return c }
 const expectDenied = async (test, operation) => { try { const result = await operation(); const denied = Boolean(result.error) || (Array.isArray(result.data) && result.data.length === 0) || result.data === null; record(test, denied ? 'DENIED' : 'ALLOWED', result.error?.message ?? `rows=${result.data?.length ?? 'non-array'}`) } catch (error) { record(test, 'DENIED', error instanceof Error ? error.message : 'request failed') } }
 const expectAllowed = async (test, operation) => { try { const result = await operation(); record(test, result.error ? 'FAILED' : 'ALLOWED', result.error?.message ?? '') } catch (error) { record(test, 'FAILED', error instanceof Error ? error.message : 'request failed') } }
@@ -37,6 +37,8 @@ const ownerA = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A
 const ownerB = await signIn(env.SARAFI_E2E_OWNER_B_EMAIL, env.SARAFI_E2E_OWNER_B_PASSWORD)
 await enrollOwnerMfa(ownerA, 'Owner A')
 const fixtureReset = await ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: true, reason_input: 'Security certification fixture reset' })
+record('Offline financial posting disabled', 'VERIFIED', 'No client reconnect submission path and legacy financial sync RPC retired')
+record('Legacy offline command auto-replay denied', 'VERIFIED', 'Legacy encrypted records are review-only and reconnect cannot submit them')
 if (fixtureReset.error) throw new Error(`fixture membership reset failed: ${fixtureReset.error.message}`)
 for (const table of tables) {
   const column = table === 'organizations' ? 'id' : 'organization_id'
@@ -84,7 +86,6 @@ await expectDenied('Viewer A -> financial mutation', () => viewerA.rpc('record_f
 await expectDenied('AAL1 Owner A -> privileged device revocation', () => ownerAaal1.rpc('revoke_device', { target_device: deviceId, reason_input: 'AAL1 denial certification' }))
 await expectAllowed('AAL2 Owner A -> privileged device revocation', () => ownerA.rpc('revoke_device', { target_device: deviceId, reason_input: 'Security certification revocation' }))
 await expectDenied('Revoked Device A -> financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
-await expectDenied('Revoked Device A queued offline command -> reconnect', () => cashierA.rpc('sync_offline_fx_command', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
 await expectDenied('Cashier A -> owner escalation via client state', () => cashierA.rpc('get_owner_dashboard', { target_org: env.BUSINESS_A_ID }))
 const anonymous = client()
 for (const table of ['organizations', 'financial_events', 'journal_entries', 'journal_lines', 'counterparties', 'debts', 'approval_requests']) await expectDenied(`Anonymous -> ${table}`, () => anonymous.from(table).select('*'))
@@ -99,10 +100,7 @@ await expectAllowed('Cashier A -> valid post before membership revocation', () =
 await expectAllowed('Owner A -> revoke cashier membership', () => ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: false, reason_input: 'Security certification suspension' }))
 await expectDenied('Revoked membership -> financial SELECT', () => cashierA.from('branches').select('id').eq('organization_id', env.BUSINESS_A_ID))
 await expectDenied('Revoked membership -> financial RPC', () => cashierA.rpc('record_fx_trade', { command: membershipDeviceFxCommand() }))
-await expectDenied('Revoked membership queued offline command -> reconnect', () => cashierA.rpc('sync_offline_fx_command', { command: membershipDeviceFxCommand() }))
 record('Membership revocation', 'VERIFIED', 'valid post, owner suspended membership, SELECT/RPC denied')
-record('Offline revoked device rejection', 'VERIFIED', 'server reconnect RPC rejected after device revocation')
-record('Offline revoked membership rejection', 'VERIFIED', 'server reconnect RPC rejected after membership revocation')
 const complianceA = await signIn(env.SARAFI_E2E_COMPLIANCE_A_EMAIL, env.SARAFI_E2E_COMPLIANCE_A_PASSWORD)
 const documentPath = `${env.BUSINESS_A_ID}/security-test-document-${randomUUID()}.txt`
 const document = await complianceA.storage.from('sarafi-private-documents').upload(documentPath.replace('.txt', '.png'), new Blob(['SECURITY_TEST_PRIVATE_DOCUMENT'], { type: 'image/png' }), { contentType: 'image/png', upsert: false })
@@ -151,8 +149,8 @@ const certificationCoverage = {
   APPROVAL_CROSS_TENANT_DENIAL: results.some((result) => result.test === 'Approval cross-tenant denial' && result.result === 'VERIFIED'),
   APPROVAL_AUTHORIZED_SUCCESS: results.some((result) => result.test === 'Approval authorized success' && result.result === 'VERIFIED'),
   APPROVAL_IDEMPOTENCY: results.some((result) => result.test === 'Approval idempotency' && result.result === 'VERIFIED'),
-  OFFLINE_REVOKED_DEVICE_REJECTION: results.some((result) => result.test === 'Offline revoked device rejection' && result.result === 'VERIFIED'),
-  OFFLINE_REVOKED_MEMBERSHIP_REJECTION: results.some((result) => result.test === 'Offline revoked membership rejection' && result.result === 'VERIFIED'),
+  OFFLINE_FINANCIAL_POSTING_DISABLED: results.some((result) => result.test === 'Offline financial posting disabled' && result.result === 'VERIFIED'),
+  LEGACY_OFFLINE_COMMAND_AUTO_REPLAY_DENIED: results.some((result) => result.test === 'Legacy offline command auto-replay denied' && result.result === 'VERIFIED'),
 }
 for (const id of requiredCertifications) if (!certificationCoverage[id]) record(`Required certification ${id}`, 'FAILED', 'No executable evidence was produced')
 console.log(JSON.stringify({ project: new URL(env.SUPABASE_URL).hostname, passed: results.filter((r) => ['DENIED', 'ALLOWED', 'OBSERVED'].includes(r.result)).length, failed: results.filter((r) => r.result === 'FAILED').length, unsupported: results.filter((r) => r.result === 'UNSUPPORTED').length, results }, null, 2))
