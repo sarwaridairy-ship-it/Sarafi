@@ -18,10 +18,6 @@ const totp = (secret, time = Date.now()) => { const counter = Math.floor(time / 
 const enrollOwnerMfa = async (client, label) => {
   const existing = await client.auth.mfa.listFactors()
   if (existing.error) throw new Error(`${label} MFA factor lookup failed: ${existing.error.message}`)
-  if (existing.data?.totp?.[0]?.id) {
-    const removed = await client.auth.mfa.unenroll({ factorId: existing.data.totp[0].id })
-    if (removed.error) throw new Error(`${label} existing MFA factor cleanup failed: ${removed.error.message}`)
-  }
   const factor = (await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SECURITY_TEST_${label}_TOTP` })).data
   if (!factor?.id || !factor.totp?.secret) throw new Error(`${label} MFA enrollment did not return a TOTP factor`)
   const before = await client.auth.mfa.getAuthenticatorAssuranceLevel()
@@ -72,11 +68,12 @@ if (approvalRequest.error || !approvalRequest.data) throw new Error(`approval fi
 const approvalId = approvalRequest.data.id
 await expectDenied('Cashier A -> self approve', () => cashierA.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Self approval attack' }))
 await expectDenied('Owner B -> Business A approval', () => ownerB.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Cross tenant approval attack' }))
-await expectAllowed('Owner A -> authorized approval', () => ownerA.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Security certification authorized approval' }))
+let authorizedApproval
+await expectAllowed('Owner A -> authorized approval', async () => { authorizedApproval = await ownerA.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Security certification authorized approval' }); return authorizedApproval })
 await expectDenied('Owner A -> approve same request twice', () => ownerA.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Approval replay attack' }))
 record('Approval self denial', 'VERIFIED', 'cashier requester remained unable to approve own request')
 record('Approval cross-tenant denial', 'VERIFIED', 'Business B owner could not decide Business A request')
-record('Approval authorized success', approvalRequest.data.status === 'pending' ? 'FAILED' : 'VERIFIED', `final_status=${approvalRequest.data.status}`)
+record('Approval authorized success', authorizedApproval?.error ? 'FAILED' : authorizedApproval?.data?.status === 'approved' ? 'VERIFIED' : 'FAILED', `final_status=${authorizedApproval?.data?.status ?? 'unknown'}`)
 record('Approval idempotency', 'VERIFIED', 'second decision rejected after finalization')
 const duplicateCommand = deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID)
 const duplicateResults = await Promise.all([cashierA.rpc('record_fx_trade', { command: duplicateCommand }), cashierA.rpc('record_fx_trade', { command: duplicateCommand })])

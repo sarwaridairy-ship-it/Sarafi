@@ -106,6 +106,12 @@ Reviewed: 2026-08-27
   already verified and cannot be unenrolled from AAL1; its seed is intentionally absent.
   Approval and offline required IDs remain failed until the complete fresh-fixture run
   executes.
+- Final closure attempt after fresh-fixture reuse: the first run consumed the disposable
+  Owner A enrollment seed and left a verified factor. Supabase does not return that seed
+  from `listFactors`, and enrollment of another factor did not return a usable seed for
+  this fixture. The harness stopped before approval execution rather than weakening MFA
+  or handling the seed unsafely. A genuinely new Owner A fixture set is required for the
+  final one-process MFA/approval run.
   already had a verified TOTP factor; Supabase requires AAL2 to unenroll it, while the seed
   is intentionally unavailable from `listFactors`. No secret was recovered or handled in
   chat. Approval fixture/evidence remains absent.
