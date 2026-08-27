@@ -75,6 +75,10 @@ Reviewed: 2026-08-27
 - Final live matrix categories covered tenant reads/writes/RPC, role and branch/cashbox
   enforcement, device revocation, membership suspension, storage isolation, Realtime,
   anonymous denial, valid cashier posting, and idempotency.
+- The required-certification manifest now contains 23 explicit IDs. Its current run reports
+  `66 passed`, `8 failed`, and `0 unsupported`; the failures are MFA AAL1 denial, MFA AAL2
+  allowance, four approval certifications, and two offline post-revocation certifications.
+  This is intentional fail-closed behavior: missing evidence is a failure, not a pass.
 - Storage isolation passed for synthetic Business A upload/download versus Business B and
   anonymous denial. Realtime passed for Business B event exclusion and Business A event
   delivery after publishing `financial_events`.

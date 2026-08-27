@@ -8,6 +8,7 @@ for (const key of required) if (!env[key]) throw new Error(`Missing security fix
 const client = () => createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
 const results = []
 const record = (test, result, detail = '') => results.push({ test, result, detail })
+const requiredCertifications = ['TENANT_SELECT', 'TENANT_INSERT', 'TENANT_UPDATE', 'TENANT_DELETE', 'TENANT_RPC', 'ROLE_MATRIX', 'BRANCH_SCOPE', 'CASHBOX_SCOPE', 'PRIVILEGE_ESCALATION', 'ANONYMOUS_ACCESS', 'DEVICE_REVOCATION', 'MEMBERSHIP_REVOCATION', 'STORAGE_ISOLATION', 'REALTIME_ISOLATION', 'IDEMPOTENCY', 'MFA_AAL1_DENIAL', 'MFA_AAL2_ALLOWANCE', 'APPROVAL_SELF_DENIAL', 'APPROVAL_CROSS_TENANT_DENIAL', 'APPROVAL_AUTHORIZED_SUCCESS', 'APPROVAL_IDEMPOTENCY', 'OFFLINE_REVOKED_DEVICE_REJECTION', 'OFFLINE_REVOKED_MEMBERSHIP_REJECTION']
 const signIn = async (email, password) => { const c = client(); const result = await c.auth.signInWithPassword({ email, password }); if (result.error) throw new Error(`sign in failed: ${result.error.message}`); return c }
 const expectDenied = async (test, operation) => { try { const result = await operation(); const denied = Boolean(result.error) || (Array.isArray(result.data) && result.data.length === 0) || result.data === null; record(test, denied ? 'DENIED' : 'ALLOWED', result.error?.message ?? `rows=${result.data?.length ?? 'non-array'}`) } catch (error) { record(test, 'DENIED', error instanceof Error ? error.message : 'request failed') } }
 const expectAllowed = async (test, operation) => { try { const result = await operation(); record(test, result.error ? 'FAILED' : 'ALLOWED', result.error?.message ?? '') } catch (error) { record(test, 'FAILED', error instanceof Error ? error.message : 'request failed') } }
@@ -42,6 +43,9 @@ if (device.error || !device.data) throw new Error(`device registration failed: $
 const deviceId = device.data.id
 const deviceFxCommand = (org, branch, cashbox) => ({ ...fxCommand(org, branch, cashbox), device_id: deviceId })
 await expectAllowed('Cashier A -> assigned A1 financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
+const duplicateCommand = deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID)
+const duplicateResults = await Promise.all([cashierA.rpc('record_fx_trade', { command: duplicateCommand }), cashierA.rpc('record_fx_trade', { command: duplicateCommand })])
+record('Idempotency -> concurrent duplicate command', duplicateResults.every((result) => !result.error) && duplicateResults[0].data?.id === duplicateResults[1].data?.id ? 'VERIFIED' : 'FAILED', duplicateResults[0].error?.message ?? '')
 await expectDenied('Cashier A -> A2 branch financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A2_ID, env.CASHBOX_A2_ID) }))
 await expectDenied('Cashier A -> B cashbox financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_B_ID, env.BRANCH_B1_ID, env.CASHBOX_B1_ID) }))
 await expectDenied('Viewer A -> financial mutation', () => viewerA.rpc('record_fx_trade', { command: fxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
@@ -88,5 +92,31 @@ else {
   await ownerA.removeChannel(realtimeChannel)
   record('Realtime tenant isolation', realtimeEvents.some((event) => event.new?.organization_id === env.BUSINESS_B_ID) ? 'FAILED' : 'VERIFIED', 'A-filtered Postgres Changes channel received no B payload')
 }
+const certificationCoverage = {
+  TENANT_SELECT: results.some((result) => result.test.includes('SELECT') && result.result === 'DENIED'),
+  TENANT_INSERT: results.some((result) => result.test.includes('INSERT') && result.result === 'DENIED'),
+  TENANT_UPDATE: results.some((result) => result.test.includes('UPDATE') && result.result === 'DENIED'),
+  TENANT_DELETE: results.some((result) => result.test.includes('DELETE') && result.result === 'DENIED'),
+  TENANT_RPC: results.some((result) => result.test.includes('direct financial RPC') && result.result === 'DENIED'),
+  ROLE_MATRIX: results.some((result) => result.test.includes('Viewer A') && result.result === 'DENIED') && results.some((result) => result.test.includes('assigned A1') && result.result === 'ALLOWED'),
+  BRANCH_SCOPE: results.some((result) => result.test.includes('A2 branch') && result.result === 'DENIED'),
+  CASHBOX_SCOPE: results.some((result) => result.test.includes('B cashbox') && result.result === 'DENIED'),
+  PRIVILEGE_ESCALATION: results.some((result) => result.test.includes('owner escalation') && result.result === 'DENIED'),
+  ANONYMOUS_ACCESS: results.some((result) => result.test.includes('Anonymous -> financial RPC') && result.result === 'DENIED'),
+  DEVICE_REVOCATION: results.some((result) => result.test === 'Device revocation' && result.result === 'VERIFIED'),
+  MEMBERSHIP_REVOCATION: results.some((result) => result.test === 'Membership revocation' && result.result === 'VERIFIED'),
+  STORAGE_ISOLATION: results.some((result) => result.test === 'Private storage isolation' && result.result === 'VERIFIED'),
+  REALTIME_ISOLATION: results.some((result) => result.test === 'Realtime tenant isolation' && result.result === 'VERIFIED'),
+  IDEMPOTENCY: results.some((result) => result.test.includes('Idempotency') && result.result === 'VERIFIED'),
+  MFA_AAL1_DENIAL: false,
+  MFA_AAL2_ALLOWANCE: false,
+  APPROVAL_SELF_DENIAL: false,
+  APPROVAL_CROSS_TENANT_DENIAL: false,
+  APPROVAL_AUTHORIZED_SUCCESS: false,
+  APPROVAL_IDEMPOTENCY: false,
+  OFFLINE_REVOKED_DEVICE_REJECTION: false,
+  OFFLINE_REVOKED_MEMBERSHIP_REJECTION: false,
+}
+for (const id of requiredCertifications) if (!certificationCoverage[id]) record(`Required certification ${id}`, 'FAILED', 'No executable evidence was produced')
 console.log(JSON.stringify({ project: new URL(env.SUPABASE_URL).hostname, passed: results.filter((r) => ['DENIED', 'ALLOWED', 'OBSERVED'].includes(r.result)).length, failed: results.filter((r) => r.result === 'FAILED').length, unsupported: results.filter((r) => r.result === 'UNSUPPORTED').length, results }, null, 2))
 if (results.some((r) => r.result === 'FAILED')) process.exitCode = 1
