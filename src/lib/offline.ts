@@ -1,8 +1,8 @@
 import Decimal from 'decimal.js'
 
-export type SyncStatus = 'pending' | 'synced' | 'conflict'
-export type OfflineCommand = { clientCommandId: string; localSequence: number; createdAt: string; cashboxId: string; amount: string; currency: string; kind: 'BUY_FX' | 'SELL_FX'; status: SyncStatus; serverEntryId?: string; conflictReason?: string }
-export type OfflinePolicy = { cashboxId: string; maxAmountBase: string; allowKinds: OfflineCommand['kind'][] }
+export type SyncStatus = 'pending' | 'syncing' | 'posted' | 'synced' | 'conflict' | 'rejected' | 'requires_review'
+export type OfflineCommand = { clientCommandId: string; localSequence: number; createdAt: string; tenantId: string; userId: string; deviceId: string; cashboxId: string; amount: string; currency: string; kind: 'BUY_FX' | 'SELL_FX'; status: SyncStatus; serverEntryId?: string; conflictReason?: string }
+export type OfflinePolicy = { tenantId: string; userId: string; deviceId: string; cashboxId: string; maxAmountBase: string; allowKinds: readonly OfflineCommand['kind'][] }
 export type OfflineCommandStore = { save(command: OfflineCommand): Promise<void>; list(): Promise<OfflineCommand[]> }
 
 export class OfflineOutbox {
@@ -10,6 +10,7 @@ export class OfflineOutbox {
   private nextSequence = 1
   private readonly policy: OfflinePolicy
   private readonly store?: OfflineCommandStore
+  private syncInFlight = false
 
   constructor(policy: OfflinePolicy, store?: OfflineCommandStore) { this.policy = policy; this.store = store }
 
@@ -21,6 +22,7 @@ export class OfflineOutbox {
   }
 
   enqueue(input: Omit<OfflineCommand, 'clientCommandId' | 'localSequence' | 'createdAt' | 'status'>): OfflineCommand {
+    if (input.tenantId !== this.policy.tenantId || input.userId !== this.policy.userId || input.deviceId !== this.policy.deviceId) throw new Error('Offline command identity binding is invalid')
     if (input.cashboxId !== this.policy.cashboxId) throw new Error('This device is not assigned to that cashbox')
     if (!this.policy.allowKinds.includes(input.kind)) throw new Error('This operation is not permitted offline')
     if (new Decimal(input.amount).gt(this.policy.maxAmountBase)) throw new Error('Offline amount limit exceeded')
@@ -34,17 +36,26 @@ export class OfflineOutbox {
   all(): OfflineCommand[] { return [...this.commands] }
 
   async sync(post: (command: OfflineCommand) => Promise<{ serverEntryId: string }>): Promise<OfflineCommand[]> {
-    for (const command of this.pending()) {
-      try {
-        const result = await post(command)
-        command.status = 'synced'
-        command.serverEntryId = result.serverEntryId
+    if (this.syncInFlight) return this.all()
+    this.syncInFlight = true
+    try {
+      for (const command of this.pending()) {
+        command.status = 'syncing'
         await this.store?.save(command)
-      } catch (error) {
-        command.status = 'conflict'
-        command.conflictReason = error instanceof Error ? error.message : 'Server rejected command'
-        await this.store?.save(command)
+        try {
+          const result = await post(command)
+          command.status = 'posted'
+          command.serverEntryId = result.serverEntryId
+          await this.store?.save(command)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Server rejected command'
+          command.status = /stale rate|revoked device|closed shift|insufficient inventory|already settled|duplicate/i.test(message) ? 'conflict' : 'rejected'
+          command.conflictReason = message
+          await this.store?.save(command)
+        }
       }
+    } finally {
+      this.syncInFlight = false
     }
     return this.all()
   }

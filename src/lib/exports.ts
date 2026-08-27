@@ -22,3 +22,15 @@ export function downloadPdf(rows: ReportRow[], businessName: string, reportName:
 }
 
 export function printReport(): void { window.print() }
+
+export function shareReportViaWhatsApp(input: { reportName: string; reference: string; businessName: string }): void {
+  const message = `${input.businessName} - ${input.reportName}\nReference: ${input.reference}`
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+}
+
+export function printThermalReceipt(input: { businessName: string; reference: string; type: string; amount: string; currency: string; rate?: string }, width: '58mm' | '80mm'): void {
+  const receipt = window.open('', '_blank', 'noopener,noreferrer')
+  if (!receipt) return
+  receipt.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>${input.reference}</title><style>@page{size:${width} auto;margin:0}body{width:${width};margin:0;padding:4mm;box-sizing:border-box;font:12px monospace;color:#000}h1{font-size:16px;text-align:center;margin:0 0 8px}p{margin:5px 0;border-bottom:1px dashed #000;padding-bottom:4px}.value{font-weight:bold;font-size:14px}</style></head><body><h1>${input.businessName}</h1><p>${input.type}<br>${input.reference}</p><p>Amount: <span class="value">${input.amount} ${input.currency}</span></p>${input.rate ? `<p>Rate: ${input.rate}</p>` : ''}<p>${new Date().toLocaleString()}</p><script>window.print();window.close();</script></body></html>`)
+  receipt.document.close()
+}
