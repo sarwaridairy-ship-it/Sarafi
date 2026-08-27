@@ -91,6 +91,12 @@ Reviewed: 2026-08-27
   retry, and economic-effect proof was not executed.
 - Step 15 therefore remains **PARTIAL**, despite the direct matrix having zero failed or
   unsupported rows for the categories implemented by the harness.
+- Closure attempt from `f9e456d`: the server now exposes `require_aal2` and
+  `sync_offline_fx_command`, and the certification harness contains real TOTP generation
+  plus required-ID fail-closed coverage. The run was blocked because the disposable Owner A
+  already had a verified TOTP factor; Supabase requires AAL2 to unenroll it, while the seed
+  is intentionally unavailable from `listFactors`. No secret was recovered or handled in
+  chat. Approval fixture/evidence remains absent.
 
 ## Security Controls Present
 

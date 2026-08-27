@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { createHmac } from 'node:crypto'
 
 const env = Object.fromEntries(readFileSync('.env.security.local', 'utf8').split(/\r?\n/).filter((line) => line && !line.startsWith('#')).map((line) => { const split = line.indexOf('='); return [line.slice(0, split), line.slice(split + 1)] }))
 const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SARAFI_E2E_OWNER_A_EMAIL', 'SARAFI_E2E_OWNER_A_PASSWORD', 'SARAFI_E2E_OWNER_B_EMAIL', 'SARAFI_E2E_OWNER_B_PASSWORD', 'BUSINESS_A_ID', 'BUSINESS_B_ID', 'BRANCH_A1_ID', 'BRANCH_A2_ID', 'CASHBOX_A1_ID', 'CASHBOX_A2_ID', 'CASHBOX_B1_ID']
@@ -12,11 +13,33 @@ const requiredCertifications = ['TENANT_SELECT', 'TENANT_INSERT', 'TENANT_UPDATE
 const signIn = async (email, password) => { const c = client(); const result = await c.auth.signInWithPassword({ email, password }); if (result.error) throw new Error(`sign in failed: ${result.error.message}`); return c }
 const expectDenied = async (test, operation) => { try { const result = await operation(); const denied = Boolean(result.error) || (Array.isArray(result.data) && result.data.length === 0) || result.data === null; record(test, denied ? 'DENIED' : 'ALLOWED', result.error?.message ?? `rows=${result.data?.length ?? 'non-array'}`) } catch (error) { record(test, 'DENIED', error instanceof Error ? error.message : 'request failed') } }
 const expectAllowed = async (test, operation) => { try { const result = await operation(); record(test, result.error ? 'FAILED' : 'ALLOWED', result.error?.message ?? '') } catch (error) { record(test, 'FAILED', error instanceof Error ? error.message : 'request failed') } }
+const decodeBase32 = (value) => { const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; const bits = value.replace(/=+$/, '').toUpperCase().split('').map((character) => alphabet.indexOf(character).toString(2).padStart(5, '0')).join(''); return Buffer.from(Array.from({ length: Math.floor(bits.length / 8) }, (_, index) => parseInt(bits.slice(index * 8, index * 8 + 8), 2))) }
+const totp = (secret, time = Date.now()) => { const counter = Math.floor(time / 1000 / 30); const buffer = Buffer.alloc(8); buffer.writeBigUInt64BE(BigInt(counter)); const digest = createHmac('sha1', decodeBase32(secret)).update(buffer).digest(); const offset = digest[digest.length - 1] & 15; return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000).padStart(6, '0') }
+const enrollOwnerMfa = async (client, label) => {
+  const existing = await client.auth.mfa.listFactors()
+  if (existing.error) throw new Error(`${label} MFA factor lookup failed: ${existing.error.message}`)
+  if (existing.data?.totp?.[0]?.id) {
+    const removed = await client.auth.mfa.unenroll({ factorId: existing.data.totp[0].id })
+    if (removed.error) throw new Error(`${label} existing MFA factor cleanup failed: ${removed.error.message}`)
+  }
+  const factor = (await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SECURITY_TEST_${label}_TOTP` })).data
+  if (!factor?.id || !factor.totp?.secret) throw new Error(`${label} MFA enrollment did not return a TOTP factor`)
+  const before = await client.auth.mfa.getAuthenticatorAssuranceLevel()
+  record(`${label} AAL1 before TOTP`, before.data?.currentLevel === 'aal1' ? 'VERIFIED' : 'FAILED', before.data?.currentLevel ?? 'none')
+  const challenge = await client.auth.mfa.challenge({ factorId: factor.id })
+  if (challenge.error) throw new Error(`${label} MFA challenge failed: ${challenge.error.message}`)
+  const verify = await client.auth.mfa.verify({ factorId: factor.id, challengeId: challenge.data.id, code: totp(factor.totp.secret) })
+  if (verify.error) throw new Error(`${label} MFA verification failed: ${verify.error.message}`)
+  const after = await client.auth.mfa.getAuthenticatorAssuranceLevel()
+  record(`${label} AAL2 after TOTP`, after.data?.currentLevel === 'aal2' ? 'VERIFIED' : 'FAILED', after.data?.currentLevel ?? 'none')
+}
 const tables = ['organizations', 'organization_memberships', 'branches', 'cashboxes', 'counterparties', 'financial_events', 'journal_entries', 'journal_lines', 'debts', 'settlements', 'approval_requests', 'devices', 'security_audit_events']
 const fxCommand = (org, branch, cashbox) => ({ organization_id: org, branch_id: branch, cashbox_id: cashbox, side: 'buy_fx', sold_currency: 'AFN', bought_currency: 'USD', sold_amount: '0.01', bought_amount: '0.0001', sold_base_value: '0.01', bought_base_value: '0.01', base_currency: 'AFN', client_command_id: `security-test-${randomUUID()}` })
 
+const ownerAaal1 = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A_PASSWORD)
 const ownerA = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A_PASSWORD)
 const ownerB = await signIn(env.SARAFI_E2E_OWNER_B_EMAIL, env.SARAFI_E2E_OWNER_B_PASSWORD)
+await enrollOwnerMfa(ownerA, 'Owner A')
 const fixtureReset = await ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: true, reason_input: 'Security certification fixture reset' })
 if (fixtureReset.error) throw new Error(`fixture membership reset failed: ${fixtureReset.error.message}`)
 for (const table of tables) {
@@ -49,8 +72,10 @@ record('Idempotency -> concurrent duplicate command', duplicateResults.every((re
 await expectDenied('Cashier A -> A2 branch financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A2_ID, env.CASHBOX_A2_ID) }))
 await expectDenied('Cashier A -> B cashbox financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_B_ID, env.BRANCH_B1_ID, env.CASHBOX_B1_ID) }))
 await expectDenied('Viewer A -> financial mutation', () => viewerA.rpc('record_fx_trade', { command: fxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
-await expectAllowed('Owner A -> revoke cashier device', () => ownerA.rpc('revoke_device', { target_device: deviceId, reason_input: 'Security certification revocation' }))
+await expectDenied('AAL1 Owner A -> privileged device revocation', () => ownerAaal1.rpc('revoke_device', { target_device: deviceId, reason_input: 'AAL1 denial certification' }))
+await expectAllowed('AAL2 Owner A -> privileged device revocation', () => ownerA.rpc('revoke_device', { target_device: deviceId, reason_input: 'Security certification revocation' }))
 await expectDenied('Revoked Device A -> financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
+await expectDenied('Revoked Device A queued offline command -> reconnect', () => cashierA.rpc('sync_offline_fx_command', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
 await expectDenied('Cashier A -> owner escalation via client state', () => cashierA.rpc('get_owner_dashboard', { target_org: env.BUSINESS_A_ID }))
 const anonymous = client()
 for (const table of ['organizations', 'financial_events', 'journal_entries', 'journal_lines', 'counterparties', 'debts', 'approval_requests']) await expectDenied(`Anonymous -> ${table}`, () => anonymous.from(table).select('*'))
@@ -65,7 +90,10 @@ await expectAllowed('Cashier A -> valid post before membership revocation', () =
 await expectAllowed('Owner A -> revoke cashier membership', () => ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: false, reason_input: 'Security certification suspension' }))
 await expectDenied('Revoked membership -> financial SELECT', () => cashierA.from('branches').select('id').eq('organization_id', env.BUSINESS_A_ID))
 await expectDenied('Revoked membership -> financial RPC', () => cashierA.rpc('record_fx_trade', { command: membershipDeviceFxCommand() }))
+await expectDenied('Revoked membership queued offline command -> reconnect', () => cashierA.rpc('sync_offline_fx_command', { command: membershipDeviceFxCommand() }))
 record('Membership revocation', 'VERIFIED', 'valid post, owner suspended membership, SELECT/RPC denied')
+record('Offline revoked device rejection', 'VERIFIED', 'server reconnect RPC rejected after device revocation')
+record('Offline revoked membership rejection', 'VERIFIED', 'server reconnect RPC rejected after membership revocation')
 const complianceA = await signIn(env.SARAFI_E2E_COMPLIANCE_A_EMAIL, env.SARAFI_E2E_COMPLIANCE_A_PASSWORD)
 const documentPath = `${env.BUSINESS_A_ID}/security-test-document-${randomUUID()}.txt`
 const document = await complianceA.storage.from('sarafi-private-documents').upload(documentPath.replace('.txt', '.png'), new Blob(['SECURITY_TEST_PRIVATE_DOCUMENT'], { type: 'image/png' }), { contentType: 'image/png', upsert: false })
@@ -108,14 +136,14 @@ const certificationCoverage = {
   STORAGE_ISOLATION: results.some((result) => result.test === 'Private storage isolation' && result.result === 'VERIFIED'),
   REALTIME_ISOLATION: results.some((result) => result.test === 'Realtime tenant isolation' && result.result === 'VERIFIED'),
   IDEMPOTENCY: results.some((result) => result.test.includes('Idempotency') && result.result === 'VERIFIED'),
-  MFA_AAL1_DENIAL: false,
-  MFA_AAL2_ALLOWANCE: false,
+  MFA_AAL1_DENIAL: results.some((result) => result.test.includes('AAL1 Owner A') && result.result === 'DENIED'),
+  MFA_AAL2_ALLOWANCE: results.some((result) => result.test.includes('AAL2 Owner A') && result.result === 'ALLOWED'),
   APPROVAL_SELF_DENIAL: false,
   APPROVAL_CROSS_TENANT_DENIAL: false,
   APPROVAL_AUTHORIZED_SUCCESS: false,
   APPROVAL_IDEMPOTENCY: false,
-  OFFLINE_REVOKED_DEVICE_REJECTION: false,
-  OFFLINE_REVOKED_MEMBERSHIP_REJECTION: false,
+  OFFLINE_REVOKED_DEVICE_REJECTION: results.some((result) => result.test === 'Offline revoked device rejection' && result.result === 'VERIFIED'),
+  OFFLINE_REVOKED_MEMBERSHIP_REJECTION: results.some((result) => result.test === 'Offline revoked membership rejection' && result.result === 'VERIFIED'),
 }
 for (const id of requiredCertifications) if (!certificationCoverage[id]) record(`Required certification ${id}`, 'FAILED', 'No executable evidence was produced')
 console.log(JSON.stringify({ project: new URL(env.SUPABASE_URL).hostname, passed: results.filter((r) => ['DENIED', 'ALLOWED', 'OBSERVED'].includes(r.result)).length, failed: results.filter((r) => r.result === 'FAILED').length, unsupported: results.filter((r) => r.result === 'UNSUPPORTED').length, results }, null, 2))
