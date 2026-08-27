@@ -22,6 +22,10 @@ Reviewed: 2026-08-27
 - `origin/main` matches HEAD; worktree was clean before this evidence update.
 - Production alias: `https://sarafi-swart.vercel.app`.
 - Supabase project reference: `vbvwuqzqtcorassvotke`.
+- Supabase CLI project verification: linked project reference exactly matched
+  `vbvwuqzqtcorassvotke`; project name is `sarwaridairy-ship-it's Project` in South Asia
+  (Mumbai). Only the project reference and hostname were used for verification; no
+  privileged key was printed.
 - Tracked migrations are present through `202608270001_step13_private_documents.sql`.
 - `npx supabase db lint --linked`: passed, no schema errors.
 - `npm audit --omit=dev`: passed, 0 vulnerabilities.
@@ -65,3 +69,9 @@ include credentials.
 
 Current certification result: **PARTIAL / BLOCKED ON CONTROLLED LIVE IDENTITIES**. No
 production data was created, modified, revoked, or deleted during this run.
+
+Provisioning blocker: the trusted local environment exposes only `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY`. No Supabase Auth Admin credential or Dashboard provisioning
+session is available to this agent. Auth users must be created through the Admin API or
+Dashboard; they cannot be created by inserting into `auth.users`, and the anon key cannot
+provision users or tenants.
