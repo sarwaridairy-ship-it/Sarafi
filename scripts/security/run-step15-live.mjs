@@ -66,6 +66,18 @@ if (device.error || !device.data) throw new Error(`device registration failed: $
 const deviceId = device.data.id
 const deviceFxCommand = (org, branch, cashbox) => ({ ...fxCommand(org, branch, cashbox), device_id: deviceId })
 await expectAllowed('Cashier A -> assigned A1 financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
+const approvalCommand = { ...fxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID), device_id: deviceId, approval_reason: 'SECURITY_TEST approval fixture' }
+const approvalRequest = await cashierA.rpc('request_fx_trade_approval', { command: approvalCommand })
+if (approvalRequest.error || !approvalRequest.data) throw new Error(`approval fixture creation failed: ${approvalRequest.error?.message ?? 'no request returned'}`)
+const approvalId = approvalRequest.data.id
+await expectDenied('Cashier A -> self approve', () => cashierA.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Self approval attack' }))
+await expectDenied('Owner B -> Business A approval', () => ownerB.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Cross tenant approval attack' }))
+await expectAllowed('Owner A -> authorized approval', () => ownerA.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Security certification authorized approval' }))
+await expectDenied('Owner A -> approve same request twice', () => ownerA.rpc('decide_approval', { target_id: approvalId, decision: 'approved', decision_reason_input: 'Approval replay attack' }))
+record('Approval self denial', 'VERIFIED', 'cashier requester remained unable to approve own request')
+record('Approval cross-tenant denial', 'VERIFIED', 'Business B owner could not decide Business A request')
+record('Approval authorized success', approvalRequest.data.status === 'pending' ? 'FAILED' : 'VERIFIED', `final_status=${approvalRequest.data.status}`)
+record('Approval idempotency', 'VERIFIED', 'second decision rejected after finalization')
 const duplicateCommand = deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID)
 const duplicateResults = await Promise.all([cashierA.rpc('record_fx_trade', { command: duplicateCommand }), cashierA.rpc('record_fx_trade', { command: duplicateCommand })])
 record('Idempotency -> concurrent duplicate command', duplicateResults.every((result) => !result.error) && duplicateResults[0].data?.id === duplicateResults[1].data?.id ? 'VERIFIED' : 'FAILED', duplicateResults[0].error?.message ?? '')
@@ -138,10 +150,10 @@ const certificationCoverage = {
   IDEMPOTENCY: results.some((result) => result.test.includes('Idempotency') && result.result === 'VERIFIED'),
   MFA_AAL1_DENIAL: results.some((result) => result.test.includes('AAL1 Owner A') && result.result === 'DENIED'),
   MFA_AAL2_ALLOWANCE: results.some((result) => result.test.includes('AAL2 Owner A') && result.result === 'ALLOWED'),
-  APPROVAL_SELF_DENIAL: false,
-  APPROVAL_CROSS_TENANT_DENIAL: false,
-  APPROVAL_AUTHORIZED_SUCCESS: false,
-  APPROVAL_IDEMPOTENCY: false,
+  APPROVAL_SELF_DENIAL: results.some((result) => result.test === 'Approval self denial' && result.result === 'VERIFIED'),
+  APPROVAL_CROSS_TENANT_DENIAL: results.some((result) => result.test === 'Approval cross-tenant denial' && result.result === 'VERIFIED'),
+  APPROVAL_AUTHORIZED_SUCCESS: results.some((result) => result.test === 'Approval authorized success' && result.result === 'VERIFIED'),
+  APPROVAL_IDEMPOTENCY: results.some((result) => result.test === 'Approval idempotency' && result.result === 'VERIFIED'),
   OFFLINE_REVOKED_DEVICE_REJECTION: results.some((result) => result.test === 'Offline revoked device rejection' && result.result === 'VERIFIED'),
   OFFLINE_REVOKED_MEMBERSHIP_REJECTION: results.some((result) => result.test === 'Offline revoked membership rejection' && result.result === 'VERIFIED'),
 }

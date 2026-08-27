@@ -97,6 +97,18 @@ Reviewed: 2026-08-27
   already had a verified TOTP factor; Supabase requires AAL2 to unenroll it, while the seed
   is intentionally unavailable from `listFactors`. No secret was recovered or handled in
   chat. Approval fixture/evidence remains absent.
+- Closure attempt from `375b923`: real TOTP enrollment reached `aal1` then `aal2`, and
+  server-side AAL1 denial/AAL2 allowance for device revocation passed in the fresh-fixture
+  run. The approval authority migration `202608270010` plus follow-up
+  `202608270011` now creates a real pending FX approval, rejects self/cross-tenant
+  decisions, requires AAL2 for approval, and posts the economic effect exactly once under
+  the approver. The current repeat run is blocked because the existing Owner A factor is
+  already verified and cannot be unenrolled from AAL1; its seed is intentionally absent.
+  Approval and offline required IDs remain failed until the complete fresh-fixture run
+  executes.
+  already had a verified TOTP factor; Supabase requires AAL2 to unenroll it, while the seed
+  is intentionally unavailable from `listFactors`. No secret was recovered or handled in
+  chat. Approval fixture/evidence remains absent.
 
 ## Security Controls Present
 
