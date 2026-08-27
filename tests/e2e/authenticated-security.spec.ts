@@ -6,9 +6,14 @@ const anonKey = process.env.VITE_SUPABASE_ANON_KEY
 const email = process.env.SARAFI_E2E_EMAIL
 const password = process.env.SARAFI_E2E_PASSWORD
 const organizationId = process.env.SARAFI_E2E_ORGANIZATION_ID
+const certificationMode = process.env.STEP15_CERTIFICATION === 'true'
+const missingConfiguration = !url || !anonKey || !email || !password || !organizationId
 
 test.describe('authenticated security journeys', () => {
-  test.skip(!url || !anonKey || !email || !password || !organizationId, 'Set Supabase URL, anon key, test credentials, and organization ID to run authenticated journeys')
+  test.beforeEach(async () => {
+    if (certificationMode) expect(missingConfiguration, 'Step 15 certification requires complete live identity configuration').toBe(false)
+    else test.skip(missingConfiguration, 'Set Supabase URL, anon key, test credentials, and organization ID to run authenticated journeys')
+  })
 
   test('signs in, checks MFA state, and respects tenant scope', async () => {
     const client = createClient(url!, anonKey!, { auth: { persistSession: false, autoRefreshToken: false } })
