@@ -16,6 +16,22 @@ Reviewed: 2026-08-27
   branch/cashbox checks, RLS, immutable posted journal entries, and idempotent command IDs.
 - No service-role key is shipped to the browser.
 
+## Certification Run: 2026-08-27
+
+- Git: `main`, HEAD `38c1acc6bd36cc7ab7d58145a367918de886106e`.
+- `origin/main` matches HEAD; worktree was clean before this evidence update.
+- Production alias: `https://sarafi-swart.vercel.app`.
+- Supabase project reference: `vbvwuqzqtcorassvotke`.
+- Tracked migrations are present through `202608270001_step13_private_documents.sql`.
+- `npx supabase db lint --linked`: passed, no schema errors.
+- `npm audit --omit=dev`: passed, 0 vulnerabilities.
+- Tracked-file secret scan: no credential material found; only intentional negative-test
+  identifiers matched.
+- `npx supabase inspect db role-stats --linked`: completed without modifying data.
+- `npx playwright test tests/e2e/authenticated-security.spec.ts`: 6 skipped because
+  controlled security-test credentials and organization ID were not configured in the
+  terminal. No live authenticated result is claimed from this run.
+
 ## Security Controls Present
 
 - Organization membership and active status are checked server-side.
@@ -46,3 +62,6 @@ Code-controlled security protections are implemented and partially exercised. St
 not claimed 100% complete until the required live multi-role and privileged-security
 matrix is executed and attached with timestamps and test-account identifiers that do not
 include credentials.
+
+Current certification result: **PARTIAL / BLOCKED ON CONTROLLED LIVE IDENTITIES**. No
+production data was created, modified, revoked, or deleted during this run.
