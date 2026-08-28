@@ -12,5 +12,7 @@ test.describe('Stage 9 browser matrix', () => {
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Good morning, Mohammad.' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Buy currency', exact: true })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /My money/ })).toBeVisible()
   })
 })

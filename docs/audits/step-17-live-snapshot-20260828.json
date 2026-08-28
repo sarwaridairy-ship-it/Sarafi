@@ -1,0 +1,38 @@
+{
+  "project": "vbvwuqzqtcorassvotke.supabase.co",
+  "generated_at": "2026-08-27T21:41:13.670Z",
+  "mode": "snapshot",
+  "balanced": true,
+  "actual": {
+    "organization_id": "be17ca88-f8d8-44d4-9120-03b3ad1dd24e",
+    "counts": {
+      "organizations": 1,
+      "memberships": 3,
+      "branches": 1,
+      "cashboxes": 1,
+      "financial_events": 4,
+      "journal_entries": 4,
+      "journal_lines": 11,
+      "debts": 0,
+      "settlements": 0,
+      "inventory_positions": 1,
+      "security_audit_events": 6
+    },
+    "totals": {
+      "journal_base_debit": 18003.02,
+      "journal_base_credit": 18003.02,
+      "journal_native_debit": 18000.02,
+      "journal_native_credit": 18000.02,
+      "outstanding_debt": 0,
+      "settlement_amount": 0
+    },
+    "inventory": [
+      {
+        "currency_code": "USD",
+        "quantity": 1999.98,
+        "carrying_base_value": 1999.98
+      }
+    ],
+    "posted_entries": 4
+  }
+}

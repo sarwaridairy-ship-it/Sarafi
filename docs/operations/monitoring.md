@@ -10,6 +10,8 @@
 - Authentication abuse, failed MFA, refresh-token revocation, and rate-limit events.
 - Private document upload rejection/failure and compliance job failures.
 - Backup/PITR health and restore-test results.
+- Step 16 concurrency report status, failed inventory guards, duplicate command receipts,
+  and negative-position constraint violations.
 
 ## Logging rules
 

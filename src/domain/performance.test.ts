@@ -13,4 +13,13 @@ describe('synthetic performance budgets', () => {
     expect(result.transactionCount).toBe(5000)
     expect(elapsed).toBeLessThan(250)
   })
+
+  it('summarizes 50000 synthetic journal entries within an extended budget', () => {
+    const entries = Array.from({ length: 50000 }, (_, index) => ({ id: `perf-50k-${index}`, organizationId: 'org-a', branchId: 'branch-a', status: 'posted' as const, sourceType: 'SELL_FX', clientCommandId: `perf-50k-${index}`, occurredAt: new Date(2026, 0, 1 + (index % 28)).toISOString(), realizedProfit: '100.000000000000', lines: [] }))
+    const started = performance.now()
+    const result = summarizeProfit(entries, { organizationId: 'org-a' })
+    const elapsed = performance.now() - started
+    expect(result.transactionCount).toBe(50000)
+    expect(elapsed).toBeLessThan(2500)
+  }, 15000)
 })

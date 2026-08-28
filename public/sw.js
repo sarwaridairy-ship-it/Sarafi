@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sarafi-shell-v1'
+const CACHE_NAME = 'sarafi-shell-v2'
 const SHELL = ['/']
 
 self.addEventListener('install', (event) => {
@@ -11,5 +11,12 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request).then((cached) => cached ?? caches.match('/'))))
+  const requestUrl = new URL(event.request.url)
+  const isNavigation = event.request.mode === 'navigate'
+  const isFinancialOrAuth = requestUrl.pathname.startsWith('/rest/') || requestUrl.pathname.startsWith('/auth/') || requestUrl.pathname.startsWith('/functions/') || requestUrl.pathname.includes('supabase')
+  if (isNavigation || isFinancialOrAuth) {
+    event.respondWith(fetch(event.request))
+    return
+  }
+  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)))
 })

@@ -125,19 +125,30 @@ organizations:
 
 ## Status
 
+The explicit `npm run security:step15` runner now requires every credential it consumes
+and writes `test-results/step15/security-report.json`. The 2026-08-28 rerun was blocked
+before the matrix because Supabase returned `AAL2 is required for this action` while
+resetting the fixture membership; Owner A's existing factor also prevents new factor
+enrollment from AAL1. MFA and the dependent privileged fixture reset therefore remain
+unverified in the current run. No security control was weakened.
+
 Code-controlled security protections are implemented and partially exercised. Step 15 is
 not claimed 100% complete until the required live multi-role and privileged-security
 matrix is executed and attached with timestamps and test-account identifiers that do not
 include credentials.
 
-Current certification result: **PARTIAL**. Controlled identities now exist and the
-available live matrix executed, but Step 15 is not 100% complete because four required
-security categories are unsupported and real TOTP/MFA privileged-action evidence is
-missing. No unrelated production data was created, modified, revoked, or deleted during
-this run.
+The fresh-identity provisioner is available as `npm run security:provision-mfa`; it
+requires a trusted service-role key and writes credentials only to ignored local storage.
+Approval certification is available as `npm run security:approval`; its live report is
+retained in ignored test output and summarized in [step-15-closure-report-20260828.json](step-15-closure-report-20260828.json).
 
-Provisioning blocker: the trusted local environment exposes only `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_ANON_KEY`. No Supabase Auth Admin credential or Dashboard provisioning
-session is available to this agent. Auth users must be created through the Admin API or
-Dashboard; they cannot be created by inserting into `auth.users`, and the anon key cannot
-provision users or tenants.
+Current closure result: **MFA and approval sub-gates PASS**. A fresh owner reached AAL2,
+wrong TOTP was denied, AAL1 privileged access was denied, AAL2 access was allowed, and
+the approval self/viewer/cross-tenant/authorized/repeat/concurrent checks passed. The
+complete Step 15 certification remains **PARTIAL** until the full manifest is rerun with
+those fresh fixtures and every required category is retained in one report. No unrelated
+production data was created, modified, revoked, or deleted during this run.
+
+The fresh fixture was provisioned through the trusted Admin API flow. Credentials remain
+in ignored local files only; no service-role key, password, TOTP secret, or token is part
+of the retained report.

@@ -2,9 +2,12 @@ import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createHmac } from 'node:crypto'
+import { mkdirSync, writeFileSync } from 'node:fs'
 
-const env = Object.fromEntries(readFileSync('.env.security.local', 'utf8').split(/\r?\n/).filter((line) => line && !line.startsWith('#')).map((line) => { const split = line.indexOf('='); return [line.slice(0, split), line.slice(split + 1)] }))
-const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SARAFI_E2E_OWNER_A_EMAIL', 'SARAFI_E2E_OWNER_A_PASSWORD', 'SARAFI_E2E_OWNER_B_EMAIL', 'SARAFI_E2E_OWNER_B_PASSWORD', 'BUSINESS_A_ID', 'BUSINESS_B_ID', 'BRANCH_A1_ID', 'BRANCH_A2_ID', 'CASHBOX_A1_ID', 'CASHBOX_A2_ID', 'CASHBOX_B1_ID']
+const envFile = process.env.SARAFI_STEP15_ENV ?? '.env.security.local'
+const fileEnv = Object.fromEntries(readFileSync(envFile, 'utf8').split(/\r?\n/).filter((line) => line && !line.startsWith('#')).map((line) => { const split = line.indexOf('='); return [line.slice(0, split), line.slice(split + 1)] }))
+const env = { ...fileEnv, ...process.env }
+const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SARAFI_E2E_OWNER_A_EMAIL', 'SARAFI_E2E_OWNER_A_PASSWORD', 'SARAFI_E2E_OWNER_B_EMAIL', 'SARAFI_E2E_OWNER_B_PASSWORD', 'SARAFI_E2E_CASHIER_A_EMAIL', 'SARAFI_E2E_CASHIER_A_PASSWORD', 'SARAFI_E2E_VIEWER_A_EMAIL', 'SARAFI_E2E_VIEWER_A_PASSWORD', 'SARAFI_E2E_COMPLIANCE_A_EMAIL', 'SARAFI_E2E_COMPLIANCE_A_PASSWORD', 'BUSINESS_A_ID', 'BUSINESS_B_ID', 'BRANCH_A1_ID', 'BRANCH_A2_ID', 'CASHBOX_A1_ID', 'CASHBOX_A2_ID', 'CASHBOX_B1_ID']
 for (const key of required) if (!env[key]) throw new Error(`Missing security fixture setting: ${key}`)
 const client = () => createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
 const results = []
@@ -18,8 +21,9 @@ const totp = (secret, time = Date.now()) => { const counter = Math.floor(time / 
 const enrollOwnerMfa = async (client, label) => {
   const existing = await client.auth.mfa.listFactors()
   if (existing.error) throw new Error(`${label} MFA factor lookup failed: ${existing.error.message}`)
-  const factor = (await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SECURITY_TEST_${label}_TOTP` })).data
-  if (!factor?.id || !factor.totp?.secret) throw new Error(`${label} MFA enrollment did not return a TOTP factor`)
+  const enrolled = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SECURITY_TEST_${label}_TOTP_${randomUUID()}` })
+  const factor = enrolled.data
+  if (enrolled.error || !factor?.id || !factor.totp?.secret) throw new Error(`${label} MFA enrollment failed: ${enrolled.error?.message ?? 'no TOTP factor returned'}`)
   const before = await client.auth.mfa.getAuthenticatorAssuranceLevel()
   record(`${label} AAL1 before TOTP`, before.data?.currentLevel === 'aal1' ? 'VERIFIED' : 'FAILED', before.data?.currentLevel ?? 'none')
   const challenge = await client.auth.mfa.challenge({ factorId: factor.id })
@@ -35,7 +39,9 @@ const fxCommand = (org, branch, cashbox) => ({ organization_id: org, branch_id: 
 const ownerAaal1 = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A_PASSWORD)
 const ownerA = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A_PASSWORD)
 const ownerB = await signIn(env.SARAFI_E2E_OWNER_B_EMAIL, env.SARAFI_E2E_OWNER_B_PASSWORD)
-await enrollOwnerMfa(ownerA, 'Owner A')
+try { await enrollOwnerMfa(ownerA, 'Owner A') } catch (error) {
+  record('Owner A AAL1/AAL2 TOTP certification', 'FAILED', error instanceof Error ? error.message : 'MFA enrollment failed')
+}
 const fixtureReset = await ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: true, reason_input: 'Security certification fixture reset' })
 record('Offline financial posting disabled', 'VERIFIED', 'No client reconnect submission path and legacy financial sync RPC retired')
 record('Legacy offline command auto-replay denied', 'VERIFIED', 'Legacy encrypted records are review-only and reconnect cannot submit them')
@@ -153,5 +159,8 @@ const certificationCoverage = {
   LEGACY_OFFLINE_COMMAND_AUTO_REPLAY_DENIED: results.some((result) => result.test === 'Legacy offline command auto-replay denied' && result.result === 'VERIFIED'),
 }
 for (const id of requiredCertifications) if (!certificationCoverage[id]) record(`Required certification ${id}`, 'FAILED', 'No executable evidence was produced')
-console.log(JSON.stringify({ project: new URL(env.SUPABASE_URL).hostname, passed: results.filter((r) => ['DENIED', 'ALLOWED', 'OBSERVED'].includes(r.result)).length, failed: results.filter((r) => r.result === 'FAILED').length, unsupported: results.filter((r) => r.result === 'UNSUPPORTED').length, results }, null, 2))
+const report = { project: new URL(env.SUPABASE_URL).hostname, generated_at: new Date().toISOString(), passed: results.filter((r) => ['DENIED', 'ALLOWED', 'OBSERVED'].includes(r.result)).length, failed: results.filter((r) => r.result === 'FAILED').length, unsupported: results.filter((r) => r.result === 'UNSUPPORTED').length, results }
+mkdirSync('test-results/step15', { recursive: true })
+writeFileSync('test-results/step15/security-report.json', `${JSON.stringify(report, null, 2)}\n`)
+console.log(JSON.stringify(report, null, 2))
 if (results.some((r) => r.result === 'FAILED')) process.exitCode = 1

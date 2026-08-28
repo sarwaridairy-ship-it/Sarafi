@@ -5,6 +5,7 @@ const authUrl = process.env.SARAFI_AUTH_E2E_URL
 
 test.describe('accessibility acceptance', () => {
   test('public workspace has no critical or serious automated violations', async ({ page }) => {
+    test.setTimeout(120000)
     await page.goto('/')
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([])

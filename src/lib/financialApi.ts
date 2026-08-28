@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabase'
+import Decimal from 'decimal.js'
 import { parseFxTradeCommand, type FxTradeCommand } from '../domain/commands'
 import { validateDocumentFile, type DocumentType } from './integrations'
 
@@ -34,6 +35,15 @@ export async function recordOperation(command: Record<string, unknown>): Promise
   if (!session.data.session) return { data: null, error: 'Authentication required' }
   const result = await client.rpc('record_operation', { command })
   return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function commitImport(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('commit_import', { command })
+  return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
 }
 
 export async function recordDebt(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
@@ -151,9 +161,9 @@ export async function listLocationEvidence(organizationId: string): Promise<RpcR
 export async function listCashboxBalances(organizationId: string, cashboxId: string): Promise<RpcResult<CashboxBalanceRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.from('journal_lines').select('currency_code,native_debit,native_credit,ledger_accounts!inner(cashbox_id)').eq('organization_id', organizationId).eq('ledger_accounts.cashbox_id', cashboxId)
-  const balances = new Map<string, number>()
-  for (const row of result.data ?? []) balances.set(row.currency_code, (balances.get(row.currency_code) ?? 0) + Number(row.native_debit) - Number(row.native_credit))
+  const result = await client.from('journal_lines').select('currency_code,native_debit,native_credit,ledger_accounts!inner(cashbox_id),journal_entries!inner(status)').eq('organization_id', organizationId).eq('ledger_accounts.cashbox_id', cashboxId).eq('journal_entries.status', 'posted')
+  const balances = new Map<string, Decimal>()
+  for (const row of result.data ?? []) balances.set(row.currency_code, (balances.get(row.currency_code) ?? new Decimal(0)).plus(row.native_debit).minus(row.native_credit))
   return { data: Array.from(balances, ([currency_code, expected_amount]) => ({ currency_code, expected_amount: expected_amount.toFixed(12) })), error: result.error?.message ?? null }
 }
 

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 .env.security.local
+.env.step16.local
+.env.mfa15.local
+.env.approval15.local
 test-results
 supabase/.temp
 

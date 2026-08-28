@@ -11,6 +11,15 @@
     "e2e": "playwright test",
     "typecheck": "tsc -b --pretty false",
     "smoke": "npm run typecheck && npm run lint && npm test && npm run e2e",
+    "security:step16": "node scripts/security/run-step16-concurrency.mjs",
+    "security:step15": "node scripts/security/run-step15-live.mjs",
+    "security:provision-mfa": "node scripts/security/provision-step15-mfa.mjs",
+    "security:mfa-certification": "node scripts/security/run-step15-mfa-certification.mjs",
+    "security:provision-approval": "node scripts/security/provision-step15-approval.mjs",
+    "security:approval": "node scripts/security/run-step15-approval-certification.mjs",
+    "security:offline": "node scripts/security/run-offline-retirement.mjs",
+    "security:step17": "node scripts/security/run-step17-reconciliation.mjs",
+    "performance:step18": "npm run build && node scripts/performance/check-step18.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

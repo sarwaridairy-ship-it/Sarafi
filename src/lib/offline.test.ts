@@ -26,6 +26,7 @@ describe('offline draft safety', () => {
     expect(() => draftBook.saveDraft({ ...policy, cashboxId: 'cash-2', amount: '1', currency: 'USD', kind: 'BUY_FX' })).toThrow('assigned')
     expect(() => draftBook.saveDraft({ ...policy, amount: '1', currency: 'USD', kind: 'SELL_FX' })).toThrow('permitted')
     expect(() => draftBook.saveDraft({ ...policy, amount: '1', currency: 'USD', kind: 'BUY_FX' })).not.toThrow()
+    expect(() => draftBook.saveDraft({ ...policy, amount: '1001', currency: 'USD', kind: 'BUY_FX' })).toThrow('exceeds')
   })
 
   it('hydrates pending and previously resolved commands from durable storage', async () => {

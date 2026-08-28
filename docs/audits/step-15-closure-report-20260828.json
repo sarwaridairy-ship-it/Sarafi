@@ -1,0 +1,33 @@
+{
+  "project": "vbvwuqzqtcorassvotke.supabase.co",
+  "generated_at": "2026-08-28T09:11:44.926Z",
+  "mfa": {
+    "fresh_owner_created": true,
+    "aal1": "PASS",
+    "totp_enrolled": "PASS",
+    "aal2": "PASS",
+    "aal1_privileged_denial": "PASS",
+    "aal2_privileged_allowance": "PASS",
+    "wrong_code_denial": "PASS"
+  },
+  "approval": {
+    "self_denial": "PASS",
+    "viewer_denial": "PASS",
+    "cross_tenant_denial": "PASS",
+    "authorized_success": "PASS",
+    "repeat_idempotency": "PASS",
+    "concurrent_decision": "PASS",
+    "financial_events": 8,
+    "journal_entries": 8,
+    "receipts": 8,
+    "audit_events": 17
+  },
+  "offline_retirement": {
+    "offline_financial_posting_disabled": "PASS",
+    "legacy_auto_replay_denied": "PASS",
+    "no_background_replay": "PASS",
+    "drafts_not_posted": "PASS",
+    "reconnect_has_no_post_callback": "PASS"
+  },
+  "migration_parity": "local and remote match through 202608270016; 017-019 remain local-only"
+}

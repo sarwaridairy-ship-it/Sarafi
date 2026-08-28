@@ -126,9 +126,10 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Synthetic 5,000-entry report performance budget test
 - [x] UAT guide covering owner, manager, cashier, accountant, reconciliation, exports, and offline flow
 - [x] Typecheck, build, lint, dependency audit, and live Supabase schema lint pass
-- [ ] Live authenticated RLS matrix with multiple test users
-- [ ] Live concurrency/TOCTOU and RPC replay tests against two cashiers
-- [ ] Backup restore drill and migration rollback/forward test
+- [ ] Live authenticated RLS matrix with multiple test users; fresh MFA and approval sub-gates pass, full manifest consolidation remains
+- [x] Live concurrency/TOCTOU and RPC replay tests against two same-tenant cashiers; 7/7 checks passed and report retained in [step-16-live-report-20260828.json](../audits/step-16-live-report-20260828.json) ([procedure](../audits/step-16-concurrency.md))
+- [ ] Backup restore drill and migration rollback/forward test; use the executable [Step 17 recovery procedure](../audits/step-17-recovery-drill.md)
+- [ ] Reconcile remote migration history `202608270013`-`016` before applying pending migrations; see [migration reconciliation](../audits/migration-reconciliation-20260828.md)
 - [ ] Human Afghan Dari/Pashto terminology and device UAT sign-off
 - [ ] Android/iOS device matrix and realistic network performance evidence
 
@@ -142,10 +143,22 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Live Supabase migration list and schema lint evidence
 - [x] Production dependency audit clean
 - [ ] Public web hosting/domain/TLS deployment
-- [ ] Provider backup/PITR and restore-drill evidence
+- [ ] Provider backup/PITR and restore-drill evidence; reconciliation runner is available but provider restore is still required
 - [ ] Authenticated production smoke test
 - [ ] Signed Android/iOS builds and store release
 - [ ] Human UAT and legal/compliance sign-off
+
+## Stage 11 status
+
+- [x] Initial app shell stays under the 500 KB budget and large report export code is lazy-loaded
+- [x] Service worker never falls back to cached navigation or financial/auth responses
+- [x] CSV import templates, dry-run validation, duplicate detection, and Decimal totals
+- [x] User-facing CSV import preview with row-level errors, totals, and non-mutating dry run
+- [ ] 3G/low-memory/50k-transaction device evidence and full PWA reconnect matrix
+- [x] User-facing import confirmation and tenant-scoped authoritative commit implementation; live deployment is frozen pending migration reconciliation
+- [x] Authenticated report export uses the active tenant and reconciliation reads posted entries with Decimal arithmetic
+- [x] Transfer and bank movement RPC semantics preserve source/destination asset locations
+- [ ] Native mobile package only after web/PWA acceptance
 
 ## Inventory completion status
 
@@ -162,5 +175,5 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Placeholder branch/cashbox IDs removed from financial posting
 - [x] Anonymous live organization/RPC security regression tests pass
 - [x] Production vendor chunk split reduced initial bundle to approximately 312 KB
-- [ ] Provision controlled multi-user identities for authenticated RLS/concurrency evidence
+- [x] Provision controlled multi-user identities for authenticated concurrency evidence; Step 16 runner and fixture report are retained
 - [ ] Complete full operation-form live adapters and authenticated dashboard smoke journey

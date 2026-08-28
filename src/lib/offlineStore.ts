@@ -46,10 +46,14 @@ export async function listOfflineDrafts(): Promise<OfflineDraft[]> {
   const key = await getDurableKey()
   const drafts = await createEncryptedOfflineStore(key).list()
   const legacy = await withNamedStore(legacyStoreName, 'readonly', (store) => store.getAll()) as Array<LegacyEncryptedCommand | EncryptedDraft>
-  const legacyDrafts = await Promise.all(legacy.filter((record): record is LegacyEncryptedCommand => 'clientCommandId' in record).map(async (record) => {
-    const draft = await decryptLegacyCommand(record, key)
-    return { draftId: record.clientCommandId ?? draft.draftId, localSequence: draft.localSequence, createdAt: draft.createdAt, tenantId: draft.tenantId, userId: draft.userId, deviceId: draft.deviceId, cashboxId: draft.cashboxId, amount: draft.amount, currency: draft.currency, kind: draft.kind, status: 'legacy_review_required' as const, reviewNote: 'Previous offline transaction found. This transaction was never posted to the ledger.' }
-  }))
+  const legacyDrafts = (await Promise.all(legacy.filter((record): record is LegacyEncryptedCommand => 'clientCommandId' in record).map(async (record) => {
+    try {
+      const draft = await decryptLegacyCommand(record, key)
+      return { draftId: record.clientCommandId, localSequence: draft.localSequence, createdAt: draft.createdAt, tenantId: draft.tenantId, userId: draft.userId, deviceId: draft.deviceId, cashboxId: draft.cashboxId, amount: draft.amount, currency: draft.currency, kind: draft.kind, status: 'legacy_review_required' as const, reviewNote: 'Previous offline transaction found. This transaction was never posted to the ledger.' }
+    } catch {
+      return { draftId: record.clientCommandId, localSequence: 0, createdAt: new Date(0).toISOString(), tenantId: record.tenantId, userId: record.userId, deviceId: record.deviceId, cashboxId: '', amount: '0', currency: 'UNKNOWN', kind: 'BUY_FX' as const, status: 'legacy_review_required' as const, reviewNote: 'Legacy command could not be decrypted. Review or remove it; it was never posted.' }
+    }
+  })))
   return [...drafts, ...legacyDrafts]
 }
 export async function removeOfflineDraft(draftId: string): Promise<void> { await withStore('readwrite', (store) => store.delete(draftId)) }

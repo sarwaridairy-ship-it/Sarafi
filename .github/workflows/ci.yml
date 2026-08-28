@@ -17,8 +17,10 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run e2e
+      - name: Performance and import checks
+        run: npm run performance:step18 && npm test -- src/domain/imports.test.ts
       - name: Authenticated security journeys
         if: ${{ secrets.SARAFI_E2E_EMAIL != '' && secrets.SARAFI_E2E_PASSWORD != '' && secrets.SARAFI_E2E_ORGANIZATION_ID != '' }}
         env:

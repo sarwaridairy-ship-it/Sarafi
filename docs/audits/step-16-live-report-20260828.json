@@ -1,0 +1,43 @@
+{
+  "project": "vbvwuqzqtcorassvotke.supabase.co",
+  "generated_at": "2026-08-27T21:37:54.048Z",
+  "passed": 7,
+  "failed": 0,
+  "results": [
+    {
+      "name": "Concurrent $8k + $7k sale cannot overspend inventory",
+      "result": "PASS",
+      "detail": "successful_posts=1; one cashier posted and the other received Insufficient currency inventory"
+    },
+    {
+      "name": "Retry after committed timeout produces one posting",
+      "result": "PASS",
+      "detail": "all three responses returned the same journal entry"
+    },
+    {
+      "name": "Same idempotency key across devices has one economic effect",
+      "result": "PASS",
+      "detail": "all three responses returned the same journal entry"
+    },
+    {
+      "name": "Journal remains balanced",
+      "result": "PASS",
+      "detail": "debit=18003.02; credit=18003.02"
+    },
+    {
+      "name": "No duplicate receipt/event exists",
+      "result": "PASS",
+      "detail": "events=4; receipts=4"
+    },
+    {
+      "name": "No prohibited negative inventory exists",
+      "result": "PASS",
+      "detail": "quantity=1999.98"
+    },
+    {
+      "name": "Single economic effect per successful command",
+      "result": "PASS",
+      "detail": "before_events=1; after_events=4"
+    }
+  ]
+}
