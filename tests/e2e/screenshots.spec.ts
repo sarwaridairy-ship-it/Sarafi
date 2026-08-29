@@ -8,6 +8,7 @@ const locales = [
   {
     code: "en",
     slug: "en",
+    authLanguage: "English",
     buy: "Buy currency",
     sell: "Sell currency",
     money: /My money/,
@@ -19,6 +20,7 @@ const locales = [
   {
     code: "fa-AF",
     slug: "dari",
+    authLanguage: "دری",
     buy: "خرید ارز",
     sell: "فروش ارز",
     money: /پول من/,
@@ -30,6 +32,7 @@ const locales = [
   {
     code: "ps-AF",
     slug: "pashto",
+    authLanguage: "پښتو",
     buy: "د اسعارو پېرود",
     sell: "د اسعارو پلور",
     money: /زما پیسې/,
@@ -54,7 +57,7 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
   for (const locale of locales) {
     await page.setViewportSize({ width: 1366, height: 900 });
     await page.goto("/?public=1");
-    await page.locator(".auth-card select").selectOption(locale.code);
+    await page.getByRole("button", { name: locale.authLanguage, exact: true }).click();
     await page.screenshot({
       path: path.join(outputDirectory, `public-${locale.slug}-desktop.png`),
       fullPage: true,

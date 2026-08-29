@@ -9,7 +9,7 @@ test.describe("accessibility acceptance", () => {
   }) => {
     test.setTimeout(120000);
     await page.goto("/");
-    const results = await new AxeBuilder({ page }).analyze();
+    const results = await new AxeBuilder({ page }).setLegacyMode(true).analyze();
     expect(
       results.violations.filter((violation) =>
         ["critical", "serious"].includes(violation.impact ?? ""),
@@ -64,6 +64,7 @@ test.describe("accessibility acceptance", () => {
       .click();
     const results = await new AxeBuilder({ page })
       .include(".trade-modal")
+      .setLegacyMode(true)
       .analyze();
     expect(
       results.violations.filter((violation) =>
@@ -83,7 +84,7 @@ test.describe("production authentication accessibility", () => {
     page,
   }) => {
     await page.goto(authUrl!);
-    const results = await new AxeBuilder({ page }).analyze();
+    const results = await new AxeBuilder({ page }).setLegacyMode(true).analyze();
     expect(
       results.violations.filter((violation) =>
         ["critical", "serious"].includes(violation.impact ?? ""),

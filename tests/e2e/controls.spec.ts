@@ -15,12 +15,8 @@ test.describe("workspace controls", () => {
         "Record currency buying and selling, know where your money is, track debts, and control your shop from one place.",
       ),
     ).toBeVisible();
-    await expect(
-      page.getByRole("combobox", { name: "Language" }),
-    ).toBeVisible();
-    await page
-      .getByRole("combobox", { name: "Language" })
-      .selectOption("fa-AF");
+    await expect(page.getByRole("group", { name: "Language" })).toBeVisible();
+    await page.getByRole("button", { name: "دری", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
     await expect(
       page.getByRole("heading", { name: "دفتر دیجیتلی ساده برای صرافی‌ها" }),
