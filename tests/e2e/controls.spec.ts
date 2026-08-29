@@ -81,8 +81,20 @@ test.describe("workspace controls", () => {
       .click();
     await page.getByRole("button", { name: /Settings/ }).click();
     await expect(
-      page.getByRole("heading", { name: "Settings", exact: true }),
+      page.getByRole("heading", { name: "Shop settings", exact: true }),
     ).toBeVisible();
+    await expect(page.locator(".settings-card")).toHaveCount(3);
+    await page.getByRole("button", { name: /Back to Home/ }).click();
+    await page
+      .locator(".sidebar nav")
+      .first()
+      .getByRole("button", { name: /More/ })
+      .click();
+    await page.getByRole("button", { name: /Compliance/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Compliance control", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".queue-card")).toHaveCount(2);
   });
 
   test("help, privacy, filter, and trade controls respond", async ({
@@ -150,10 +162,10 @@ test.describe("workspace controls", () => {
       .getByRole("combobox", { name: "Change language" })
       .selectOption("fa-AF");
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-    await expect(page.getByText("صبح بخیر، محمد.")).toBeVisible();
+    await expect(page.getByText("صبح بخیر.")).toBeVisible();
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("lang", "fa-AF");
-    await expect(page.getByText("صبح بخیر، محمد.")).toBeVisible();
+    await expect(page.getByText("صبح بخیر.")).toBeVisible();
     await page
       .getByRole("combobox", { name: "تغییر زبان" })
       .selectOption("ps-AF");

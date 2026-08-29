@@ -17,6 +17,15 @@ export type TeamMemberRecord = { id: string; user_id: string; role_code: string;
 export type DeviceRecord = { id: string; user_id: string; friendly_name: string; status: string; last_seen_at: string; revoked_at: string | null }
 export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by: string; decided_by: string | null }
 export type PrivateDocumentRecord = { id: string; organization_id: string; entity_id: string; entity_type: string; storage_path: string; content_type: string; size_bytes: number; sha256: string; uploaded_by: string; created_at: string }
+export type ReceiptRecord = { id: string; journal_entry_id: string; receipt_number: string; language_code: string; created_at: string }
+export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; features: Array<{ feature_code: string; enabled: boolean }> }
+export type ComplianceWorkspaceRecord = {
+  profile: { profile_name: string; legal_signoff_status: string; reviewed_at: string | null; reviewed_by: string | null } | null
+  ruleSet: { id: string; version: string; source_reference: string | null; status: string; effective_from: string; required_documents: string[]; screening_required: boolean } | null
+  alertCounts: { open: number; reviewing: number; closed: number }
+  caseCounts: { draft: number; ready: number; submitted: number; closed: number }
+  screeningProvider: string | null
+}
 
 export async function postFxTrade(command: unknown): Promise<RpcResult<Record<string, unknown>>> {
   const parsed: FxTradeCommand = parseFxTradeCommand(command)
@@ -26,6 +35,61 @@ export async function postFxTrade(command: unknown): Promise<RpcResult<Record<st
   if (!session.data.session) return { data: null, error: 'Authentication required' }
   const result = await client.rpc('record_fx_trade', { command: parsed })
   return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function getReceiptForJournalEntry(organizationId: string, journalEntryId: string): Promise<RpcResult<ReceiptRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.from('receipts').select('id,journal_entry_id,receipt_number,language_code,created_at').eq('organization_id', organizationId).eq('journal_entry_id', journalEntryId).maybeSingle()
+  return { data: result.data as ReceiptRecord | null, error: result.error?.message ?? null }
+}
+
+export async function getWorkspaceSettings(organizationId: string): Promise<RpcResult<WorkspaceSettingsRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const [settings, features] = await Promise.all([
+    client.from('organization_settings').select('default_language,base_currency_code,negative_cash_allowed,receipt_prefix,timezone').eq('organization_id', organizationId).maybeSingle(),
+    client.from('organization_features').select('feature_code,enabled').eq('organization_id', organizationId).order('feature_code'),
+  ])
+  const error = settings.error?.message ?? features.error?.message ?? null
+  if (error || !settings.data) return { data: null, error: error ?? 'Organization settings were not found' }
+  return { data: { ...settings.data, features: (features.data ?? []) as Array<{ feature_code: string; enabled: boolean }> } as WorkspaceSettingsRecord, error: null }
+}
+
+export async function getComplianceWorkspace(organizationId: string): Promise<RpcResult<ComplianceWorkspaceRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const [profile, ruleSet, alerts, cases, providers] = await Promise.all([
+    client.from('compliance_profiles').select('profile_name,legal_signoff_status,reviewed_at,reviewed_by').eq('organization_id', organizationId).maybeSingle(),
+    client.from('compliance_rule_sets').select('id,version,source_reference,status,effective_from,required_documents,screening_required').eq('organization_id', organizationId).order('effective_from', { ascending: false }).limit(1).maybeSingle(),
+    client.from('compliance_alerts').select('status').eq('organization_id', organizationId),
+    client.from('compliance_cases').select('report_status').eq('organization_id', organizationId),
+    client.from('organization_features').select('feature_code').eq('organization_id', organizationId).eq('enabled', true).like('feature_code', 'sanctions_provider:%').limit(1),
+  ])
+  const error = profile.error?.message ?? ruleSet.error?.message ?? alerts.error?.message ?? cases.error?.message ?? providers.error?.message ?? null
+  if (error) return { data: null, error }
+  const alertCounts = { open: 0, reviewing: 0, closed: 0 }
+  for (const row of alerts.data ?? []) {
+    if (row.status === 'open') alertCounts.open += 1
+    else if (row.status === 'under_review') alertCounts.reviewing += 1
+    else if (row.status === 'cleared' || row.status === 'reported') alertCounts.closed += 1
+  }
+  const caseCounts = { draft: 0, ready: 0, submitted: 0, closed: 0 }
+  for (const row of cases.data ?? []) {
+    const status = row.report_status as keyof typeof caseCounts
+    if (status in caseCounts) caseCounts[status] += 1
+  }
+  const providerCode = providers.data?.[0]?.feature_code ?? null
+  return {
+    data: {
+      profile: profile.data,
+      ruleSet: ruleSet.data,
+      alertCounts,
+      caseCounts,
+      screeningProvider: providerCode?.replace('sanctions_provider:', '') ?? null,
+    } as ComplianceWorkspaceRecord,
+    error: null,
+  }
 }
 
 export async function recordOperation(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {

@@ -63,7 +63,7 @@ test("core web journeys remain usable on a constrained connection", async ({
     await timed("owner home", async () => {
       await page.goto("/");
       await expect(
-        page.getByRole("heading", { name: "Good morning, Mohammad." }),
+        page.getByRole("heading", { name: "Good morning." }),
       ).toBeVisible();
     }),
   );

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Decimal from "decimal.js";
 import "./App.css";
+import "./professional.css";
 import { validateClientEnvironment } from "./lib/env";
 import { readPublicSupabaseConfig } from "./lib/supabase";
 import { calculateCounterAmount } from "./domain/valuation";
@@ -10,6 +11,7 @@ import { isRtl, translate, type Language } from "./lib/i18n";
 import { ux } from "./lib/uxCopy";
 import {
   getCurrentRates,
+  getReceiptForJournalEntry,
   getOwnerDashboard,
   getTeamControlPlane,
   getPrivateCounterpartyDocuments,
@@ -60,6 +62,13 @@ import {
 import { OfflineDraftBook } from "./lib/offline";
 import { indexedDbOfflineStore } from "./lib/offlineStore";
 import { ImportWorkspace } from "./ImportWorkspace";
+import {
+  AppIcon,
+  ComplianceView,
+  ReceiptSuccessDialog,
+  SettingsView,
+  type CompletedTrade,
+} from "./ProfessionalWorkspace";
 
 const loadExports = () => import("./lib/exports");
 
@@ -146,6 +155,9 @@ function App() {
   const [tradeCounterparty, setTradeCounterparty] = useState("");
   const [tradeBusy, setTradeBusy] = useState(false);
   const [tradeReviewing, setTradeReviewing] = useState(false);
+  const [completedTrade, setCompletedTrade] = useState<CompletedTrade | null>(
+    null,
+  );
   const [calculatorAmount, setCalculatorAmount] = useState("1000");
   const [rate, setRateState] = useState(inspectionMode ? "70.25" : "");
   const setRate = (_value: string) => undefined;
@@ -540,6 +552,20 @@ function App() {
       setTradeBusy(false);
       return;
     }
+    const journalEntryId = String(sessionCheck.data?.id ?? "");
+    const receiptResult = journalEntryId
+      ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+      : { data: null, error: "Missing journal entry reference" };
+    setCompletedTrade({
+      receiptNumber: receiptResult.data?.receipt_number ?? null,
+      journalEntryId,
+      givenAmount: tradeGivenAmount ?? amount,
+      givenCurrency: tradeGivenCurrency,
+      receivedAmount: tradeReceivedAmount ?? "—",
+      receivedCurrency: tradeReceivedCurrency,
+      rate: effectiveTradeRate,
+      occurredAt: new Date().toISOString(),
+    });
     setDashboardRefresh((value) => value + 1);
     setAmount("");
     setTradeFee("");
@@ -548,8 +574,30 @@ function App() {
     setTradeReviewing(false);
     setTradeBusy(false);
     setShowTrade(false);
-    setToast(u("savedSuccessfully"));
-    window.setTimeout(() => setToast(""), 2800);
+  };
+
+  const printCompletedTrade = async (width: "58mm" | "80mm") => {
+    if (!completedTrade) return;
+    const { printThermalReceipt } = await loadExports();
+    printThermalReceipt(
+      {
+        businessName: organizationName || u("yourBusiness"),
+        reference:
+          completedTrade.receiptNumber || completedTrade.journalEntryId,
+        type: t("recordTrade"),
+        amount: completedTrade.receivedAmount,
+        currency: completedTrade.receivedCurrency,
+        rate: completedTrade.rate,
+        direction: isRtl(language) ? "rtl" : "ltr",
+        locale: language,
+        labels: {
+          amount: t("amount"),
+          rate: t("exchangeRate"),
+          date: u("businessDate"),
+        },
+      },
+      width,
+    );
   };
 
   const exportActivity = async () => {
@@ -854,11 +902,11 @@ function App() {
         <nav>
           {(
             [
-              ["Dashboard", t("home"), "◫"],
-              ["Trade", t("newTransaction"), "+"],
-              ["Cash & Accounts", t("myMoney"), "▣"],
-              ["People", t("customersDebts"), "♙"],
-              ["Transactions", t("transactions"), "≡"],
+              ["Dashboard", t("home"), "home"],
+              ["Trade", t("newTransaction"), "trade"],
+              ["Cash & Accounts", t("myMoney"), "wallet"],
+              ["People", t("customersDebts"), "people"],
+              ["Transactions", t("transactions"), "transactions"],
             ] as const
           ).map(([item, label, icon]) => (
             <button
@@ -870,7 +918,9 @@ function App() {
                 if (item === "Trade") openTrade(undefined, event.currentTarget);
               }}
             >
-              <span className="nav-icon">{icon}</span>
+              <span className="nav-icon">
+                <AppIcon name={icon} />
+              </span>
               {label}
               {item === "Transactions" && (
                 <em>{dashboard?.transaction_count ?? "—"}</em>
@@ -898,7 +948,9 @@ function App() {
             onClick={() => setShowMoreNavigation(!showMoreNavigation)}
             aria-expanded={showMoreNavigation}
           >
-            <span className="nav-icon">...</span>
+            <span className="nav-icon">
+              <AppIcon name="more" />
+            </span>
             {t("more")}
             <span className="chevron">⌄</span>
           </button>
@@ -991,11 +1043,11 @@ function App() {
       <nav className="mobile-nav" aria-label={t("workspace")}>
         {(
           [
-            ["Dashboard", t("home"), "◫"],
-            ["Trade", t("newTransaction"), "+"],
-            ["Cash & Accounts", t("myMoney"), "▣"],
-            ["People", t("customersDebts"), "♙"],
-            ["Transactions", t("transactions"), "≡"],
+            ["Dashboard", t("home"), "home"],
+            ["Trade", t("newTransaction"), "trade"],
+            ["Cash & Accounts", t("myMoney"), "wallet"],
+            ["People", t("customersDebts"), "people"],
+            ["Transactions", t("transactions"), "transactions"],
           ] as const
         ).map(([item, label, icon]) => (
           <button
@@ -1007,7 +1059,9 @@ function App() {
               if (item === "Trade") openTrade(undefined, event.currentTarget);
             }}
           >
-            <span>{icon}</span>
+            <span>
+              <AppIcon name={icon} />
+            </span>
             {label}
           </button>
         ))}
@@ -1016,7 +1070,9 @@ function App() {
           onClick={() => setShowMoreNavigation(!showMoreNavigation)}
           aria-expanded={showMoreNavigation}
         >
-          <span>•••</span>
+          <span>
+            <AppIcon name="more" />
+          </span>
           {t("more")}
         </button>
       </nav>
@@ -1086,7 +1142,7 @@ function App() {
               onClick={() => setPrivacy(!privacy)}
               aria-label={privacy ? u("showAmounts") : u("hideAmounts")}
             >
-              {privacy ? "◉" : "◌"}
+              <AppIcon name={privacy ? "eye" : "eyeOff"} />
             </button>
             <select
               className="lang-button"
@@ -1114,6 +1170,11 @@ function App() {
               section={activeNav}
               trades={trades}
               organizationId={organizationId}
+              organizationName={organizationName || u("yourBusiness")}
+              branchName={
+                inspectionMode ? t("mainBranch") : branchName || t("mainBranch")
+              }
+              roleLabel={roleLabel}
               userId={user?.id ?? "inspection-user"}
               deviceId={browserDeviceId}
               branchId={branchId}
@@ -1131,9 +1192,7 @@ function App() {
                     {dashboardDate}
                   </p>
                   <h1>
-                    {user
-                      ? `${t("goodMorning").split(",")[0]}, ${user.email?.split("@")[0] ?? "there"}.`
-                      : t("goodMorning")}
+                    {t("goodMorning")}
                   </h1>
                   <p className="subtitle">{t("businessStand")}</p>
                 </div>
@@ -1992,6 +2051,15 @@ function App() {
           </form>
         </div>
       )}
+      {completedTrade && (
+        <ReceiptSuccessDialog
+          language={language}
+          businessName={organizationName || u("yourBusiness")}
+          trade={completedTrade}
+          onPrint={(width) => void printCompletedTrade(width)}
+          onDone={() => setCompletedTrade(null)}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -2002,6 +2070,9 @@ function WorkspaceView({
   section,
   trades,
   organizationId,
+  organizationName,
+  branchName,
+  roleLabel,
   userId,
   deviceId,
   branchId,
@@ -2014,6 +2085,9 @@ function WorkspaceView({
   section: string;
   trades: Trade[];
   organizationId: string | null;
+  organizationName: string;
+  branchName: string;
+  roleLabel: string;
   userId: string;
   deviceId: string;
   branchId: string | null;
@@ -2022,6 +2096,25 @@ function WorkspaceView({
   onNavigate: (section: string) => void;
   onToast: (message: string) => void;
 }) {
+  if (section === "Settings")
+    return (
+      <SettingsView
+        language={language}
+        organizationId={organizationId}
+        organizationName={organizationName}
+        branchName={branchName}
+        roleLabel={roleLabel}
+        onDashboard={onDashboard}
+      />
+    );
+  if (section === "Compliance")
+    return (
+      <ComplianceView
+        language={language}
+        organizationId={organizationId}
+        onDashboard={onDashboard}
+      />
+    );
   if (section === "Transactions")
     return (
       <TransactionsView

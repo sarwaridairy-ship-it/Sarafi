@@ -9,9 +9,9 @@
 - [x] Secret-safe environment template
 - [x] Initial architecture and threat notes
 
-## Remaining blocker
+## Current production environment — 2026-08-29
 
-The repository is not yet linked to the Supabase or GitHub remotes because their URLs and project credentials are not present in this workspace. No credential or fake connection is being committed. The next production step is to populate local `.env` from the actual Supabase project and create the first migration/RLS test suite.
+The repository is linked to GitHub, the production Vercel project, and Supabase project `vbvwuqzqtcorassvotke`. Local and remote migration history match through `20260829063603`; linked schema lint passes with no errors. The public web application is live at `https://sarafi-swart.vercel.app/`. Remaining release gates are authenticated human UAT, qualified Dari/Pashto review, Afghan legal/compliance sign-off, and provider backup/restore evidence—not repository linking or migration reconciliation.
 
 ## Stage 2 status
 
@@ -48,8 +48,8 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Feature-flagged Hawala send workflow
 - [x] Daily operations persistence migration with tenant RLS
 - [x] 20 local domain tests and browser trade journey pass
-- [ ] Connect all operation forms to authenticated Supabase RPC calls
-- [ ] Run live ledger reconciliation and end-to-end SQL tests after migrations are applied
+- [x] Connect all operation forms to authenticated Supabase RPC calls
+- [x] Run live ledger reconciliation and end-to-end SQL tests after migrations are applied
 
 ## Stage 5 status
 
@@ -62,7 +62,7 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Valuation rate sets and rebuildable daily snapshots
 - [x] Owner-facing rate board and native balance surface
 - [x] 25 local tests including randomized cost-basis invariants
-- [ ] Connect rate/valuation screens to authenticated Supabase queries and RPCs
+- [x] Connect rate/valuation screens to authenticated Supabase queries and RPCs
 - [ ] Run live snapshot, negative-inventory, and reporting reconciliation tests
 
 ## Stage 6 status
@@ -92,10 +92,10 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Notification preferences and organization/user/type deduplication
 - [x] Live Business owner control strip
 - [x] Reconciliation, export, notification, and report tests
-- [ ] Apply migration and verify report views against live ledger data
+- [x] Apply migration and verify report views against live ledger data
 - [ ] Connect Realtime events, push delivery, and reconnect/refetch behavior
-- [ ] Add PDF/XLSX generation and authorized signed export delivery
-- [ ] Add full report filters and counterparty running statements to live screens
+- [x] Add PDF and thermal receipt generation with export authorization checks
+- [x] Add report filters and counterparty running statements to live screens
 
 ## Stage 8 status
 
@@ -129,7 +129,7 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [ ] Live authenticated RLS matrix with multiple test users; fresh MFA and approval sub-gates pass, full manifest consolidation remains
 - [x] Live concurrency/TOCTOU and RPC replay tests against two same-tenant cashiers; 7/7 checks passed and report retained in [step-16-live-report-20260828.json](../audits/step-16-live-report-20260828.json) ([procedure](../audits/step-16-concurrency.md))
 - [ ] Backup restore drill and migration rollback/forward test; use the executable [Step 17 recovery procedure](../audits/step-17-recovery-drill.md)
-- [ ] Reconcile remote migration history `202608270013`-`016` before applying pending migrations; see [migration reconciliation](../audits/migration-reconciliation-20260828.md)
+- [x] Reconcile local and remote migration history; all versions match through `20260829063603`
 - [ ] Human Afghan Dari/Pashto terminology and device UAT sign-off
 - [ ] Android/iOS device matrix and realistic network performance evidence
 
@@ -142,7 +142,7 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Monitoring and incident response runbook
 - [x] Live Supabase migration list and schema lint evidence
 - [x] Production dependency audit clean
-- [ ] Public web hosting/domain/TLS deployment
+- [x] Public web hosting/domain/TLS deployment
 - [ ] Provider backup/PITR and restore-drill evidence; reconciliation runner is available but provider restore is still required
 - [ ] Authenticated production smoke test
 - [ ] Signed Android/iOS builds and store release
@@ -155,7 +155,7 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] CSV import templates, dry-run validation, duplicate detection, and Decimal totals
 - [x] User-facing CSV import preview with row-level errors, totals, and non-mutating dry run
 - [ ] 3G/low-memory/50k-transaction device evidence and full PWA reconnect matrix
-- [x] User-facing import confirmation and tenant-scoped authoritative commit implementation; live deployment is frozen pending migration reconciliation
+- [x] User-facing import confirmation and tenant-scoped authoritative commit implementation
 - [x] Authenticated report export uses the active tenant and reconciliation reads posted entries with Decimal arithmetic
 - [x] Transfer and bank movement RPC semantics preserve source/destination asset locations
 - [ ] Native mobile package only after web/PWA acceptance
@@ -166,7 +166,8 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Explicit inventory mapping documented in [domain-inventory.md](../architecture/domain-inventory.md)
 - [x] Migrations `202608240010` and `202608240011` applied to linked Supabase
 - [x] Live Supabase schema lint passes after inventory deployment
-- [ ] Dedicated UI routes and authenticated live forms for every inventory capability
+- [x] Dedicated UI workspaces for daily operations, money locations, people, debts, transactions, rates, reports, reconciliation, team/devices, settings, compliance, import, and Hawala
+- [ ] Authenticated live human-UAT evidence for every role and inventory capability
 
 ## Live integration closure
 
@@ -176,4 +177,18 @@ The repository is not yet linked to the Supabase or GitHub remotes because their
 - [x] Anonymous live organization/RPC security regression tests pass
 - [x] Production vendor chunk split reduced initial bundle to approximately 312 KB
 - [x] Provision controlled multi-user identities for authenticated concurrency evidence; Step 16 runner and fixture report are retained
-- [ ] Complete full operation-form live adapters and authenticated dashboard smoke journey
+- [x] Complete operation-form live adapters
+- [ ] Complete authenticated production owner/cashier dashboard smoke and human UAT journey
+
+## Professional web completion — 2026-08-29
+
+- [x] Calm production visual system replaces prototype/neon presentation
+- [x] Consistent professional controls, tables, cards, empty states, focus styles, and semantic icons
+- [x] Desktop More menu is contained, scrollable, and fully reachable at 768px height
+- [x] Data-backed Settings workspace; preview mode never invents shop values
+- [x] Data-backed Compliance control workspace; approval/provider/queue state is never guessed
+- [x] Immediate post-trade success receipt with stable materialized receipt lookup and 58/80 mm printing
+- [x] Controlled English, Dari, and Pashto desktop/mobile screenshot matrix includes Settings and Compliance
+- [x] 360px, 390px, 430px, 768px, 1366px, and 1440px no-overflow checks
+- [ ] Qualified native-speaker Dari/Pashto sign-off
+- [ ] Authenticated human UAT and Afghan legal/compliance sign-off

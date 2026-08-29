@@ -17,7 +17,7 @@ test.describe("Stage 9 browser matrix", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: "Good morning, Mohammad." }),
+      page.getByRole("heading", { name: "Good morning." }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Buy currency", exact: true }),
@@ -94,6 +94,29 @@ test.describe("Stage 9 browser matrix", () => {
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
+  });
+
+  test("desktop More menu stays inside the sidebar and every item is reachable", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.goto("/");
+    await page
+      .locator(".sidebar nav")
+      .getByRole("button", { name: /More/ })
+      .click();
+    const menu = page.locator(".navigation-menu");
+    await expect(menu).toBeVisible();
+    const bounds = await menu.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom, viewport: window.innerHeight };
+    });
+    expect(bounds.top).toBeGreaterThanOrEqual(0);
+    expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewport);
+    await menu.getByRole("button", { name: /Settings/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Shop settings" }),
+    ).toBeVisible();
   });
 
   for (const viewport of [
