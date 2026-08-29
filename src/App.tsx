@@ -838,7 +838,11 @@ function App() {
     return (
       <AuthScreen
         language={language}
-        onLanguageChange={setLanguage}
+        onLanguageChange={(nextLanguage) => {
+          setLanguage(nextLanguage);
+          setAuthMessage("");
+          setAuthMessageKind(null);
+        }}
         mode={authMode}
         email={authEmail}
         password={authPassword}
