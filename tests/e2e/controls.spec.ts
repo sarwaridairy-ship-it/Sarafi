@@ -1,10 +1,6 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('workspace controls', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => window.localStorage.removeItem('sarafi-language'))
-  })
-
   test('first-time visitor can explain the product and choose a language', async ({ page }) => {
     await page.goto('/?public=1')
     await expect(page.getByRole('heading', { name: 'Simple digital daftar for Sarafi shops' })).toBeVisible()
@@ -23,7 +19,7 @@ test.describe('workspace controls', () => {
       await expect(page.getByRole('heading', { name: section === 'Transactions' ? 'Transaction history' : section === 'My money' ? 'Where is my money?' : 'People', exact: true })).toBeVisible()
     }
     await page.locator('.sidebar nav').first().getByRole('button', { name: /More/ }).click()
-    for (const section of ['Debts', 'Rates', 'Reports', 'Reconciliation']) {
+    for (const section of ['Debts', 'Rates', 'Reports', 'Check cashbox']) {
       await page.getByRole('button', { name: new RegExp(`^${section}`) }).click()
       await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible()
       await page.getByRole('button', { name: /Back to dashboard/ }).click()
@@ -107,8 +103,8 @@ test.describe('workspace controls', () => {
   test('reconciliation section exposes cash count and variance reason fields', async ({ page }) => {
     await page.goto('/')
     await page.locator('.sidebar nav').first().getByRole('button', { name: /More/ }).click()
-    await page.getByRole('button', { name: /^Reconciliation/ }).click()
-    await expect(page.getByRole('heading', { name: 'Reconciliation', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /^Check cashbox/ }).click()
+    await expect(page.getByRole('heading', { name: 'Check cashbox', exact: true })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Counted AFN' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Counted USD' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Variance reason' })).toBeVisible()
@@ -181,7 +177,7 @@ test.describe('workspace controls', () => {
       await expect(page.getByRole('button', { name: action, exact: true })).toBeVisible()
     }
     await page.getByRole('button', { name: 'Buy currency', exact: true }).click()
-    await expect(page.getByRole('heading', { name: /BUY/ })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Buy currency/ })).toBeVisible()
     await page.getByRole('button', { name: 'Close trade' }).click()
     await page.getByRole('button', { name: 'Receive money', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'RECEIVE MONEY' })).toBeVisible()
@@ -193,7 +189,7 @@ test.describe('workspace controls', () => {
     await page.locator('.sidebar nav').first().getByRole('button', { name: /More/ }).click()
     await expect(page.getByRole('button', { name: /^Debts/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Reports/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: /^Reconciliation/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Check cashbox/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Buy currency/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Pay money/ })).toBeVisible()
   })
@@ -220,7 +216,7 @@ test.describe('workspace controls', () => {
     await page.goto('/')
     for (const action of ['Buy currency', 'Sell currency', 'Exchange currency']) {
       await page.getByRole('button', { name: action, exact: true }).click()
-      await expect(page.getByRole('heading', { name: new RegExp(action.split(' ')[0]) })).toBeVisible()
+      await expect(page.getByRole('heading', { name: new RegExp(action.split(' ')[0], 'i') })).toBeVisible()
       await expect(page.getByRole('textbox', { name: /Fee/ })).toBeVisible()
       await expect(page.getByRole('textbox', { name: /Note/ })).toBeVisible()
       await page.getByRole('button', { name: 'Close trade' }).click()
