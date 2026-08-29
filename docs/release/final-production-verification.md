@@ -52,7 +52,7 @@
 
 - PASS: CI workflow and manually gated release workflow exist.
 - PASS: Reproducible `npm run smoke`, `npm run build`, `npm run lint`, and dependency audit commands.
-- PASS: Vercel production deployment responds with HTTP 200 at `https://sarafi-swart.vercel.app/`; deployment URL `https://sarafi-f14h3wf7n-shafiullah-s-projects1.vercel.app` was aliased to the canonical domain on 2026-08-28.
+- PASS: Vercel production deployment responds with HTTP 200 at `https://sarafi-swart.vercel.app/`; deployment URL `https://sarafi-nnz8k10ko-shafiullah-s-projects1.vercel.app` was aliased to the canonical domain on 2026-08-29.
 - NOT DONE: Signed Android/iOS builds or store submission.
 - NOT DONE: Owner/manager/cashier/accountant UAT sign-off.
 

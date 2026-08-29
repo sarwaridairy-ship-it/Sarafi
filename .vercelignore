@@ -1,0 +1,10 @@
+.github
+docs
+scripts
+supabase
+tests
+test-results
+tmp
+coverage
+*.md
+*.pdf
