@@ -1,7 +1,7 @@
 {
-  "name": "SARAFI Exchange OS",
+  "name": "SARAFI Digital Daftar",
   "short_name": "SARAFI",
-  "description": "Secure currency exchange operations for Afghanistan",
+  "description": "Simple digital daftar for Sarafi shops in Afghanistan",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f8f5",

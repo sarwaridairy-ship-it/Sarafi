@@ -1,66 +1,73 @@
 # SARAFI Web Human UX Audit
 
-**Audit date:** 2026-08-28
-**Production inspected:** https://sarafi-swart.vercel.app/
-**Local verification:** production-mode Vite server and Chromium/Firefox/WebKit browser suites
-**Production reinspection:** https://sarafi-swart.vercel.app/ after redeployment on 2026-08-28
-**Scope:** anonymous entry, first-time learnability, language choice, responsive entry surface
+**Engineering audit date:** 2026-08-29
 
-## First-time user test
+**Production target:** https://sarafi-swart.vercel.app/
 
-| Question | Production result | Evidence | Status |
-|---|---|---|---|
-| What is SARAFI? | The page showed only “Exchange OS” and “Secure access”; no product explanation. | Production screenshot captured during audit | FAIL, fixed locally |
-| Who is it for? | Audience was not named. | Production page snapshot | FAIL, fixed locally |
-| What problem does it solve? | No plain-language value or workflow explanation. | Production page snapshot | FAIL, fixed locally |
-| What should I click first? | Only Sign in/Create account were visible, with no guidance. | Production page snapshot | CONFUSING, fixed locally |
-| How would I record buying $1,000? | Impossible to infer before authentication. | Production page snapshot | CONFUSING, authenticated UX still requires verification |
-| How would I find USD owned? | Impossible to infer before authentication. | Production page snapshot | CONFUSING, authenticated UX still requires verification |
-| Which customer owes me? | Impossible to infer before authentication. | Production page snapshot | CONFUSING, authenticated UX still requires verification |
+**Scope:** web only; native packaging and authoritative offline posting are excluded
+**Evidence:** production-equivalent build, Chromium/Firefox/WebKit, Axe, controlled screenshots, read-only live reconciliation
+
+## Result
+
+The web interface is technically ready for production deployment and controlled human UAT. Core daily work is presented as Home, New transaction, My money, Customers & debts, Transactions, and grouped More. English, Afghanistan Dari, and Pashto render semantically at runtime; direct Dari-to-Pashto switching no longer leaves mixed copy.
+
+This is not a claim that real-Saraf or native-language human UAT has passed. Those gates require external participants and remain open.
+
+## First-time comprehension
+
+| Question | Current answer visible without documentation | Engineering result |
+|---|---|---|
+| What is SARAFI? | A simple digital daftar for Sarafi shops. | PASS |
+| What is it for? | Buying/selling currency, locating money, tracking debts, controlling cashboxes/employees, and seeing results. | PASS |
+| How do I start? | Direct Sign in/Create account actions. | PASS |
+| How do I choose a language? | English, دری, and پښتو are direct choices. | PASS |
+| Can a cashier find ordinary work? | Buy, Sell, Exchange, Receive, and Pay are on Home. | PASS technically; human timing pending |
+| Can an owner find money? | My money is first-level navigation with currency/location views. | PASS technically; human 10-second test pending |
 
 ## Issue ledger
 
-| ID | Area | Route/screen | Language | Viewport | Role | Severity | User question | Actual behavior | Why confusing | Expected behavior | Screenshot/evidence | Root cause | Proposed fix | Status | Verification |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| UX-001 | Product explanation | `/` auth entry | English | Desktop | Visitor | HIGH | What is this? | Production opened directly to an unexplained auth form. | “Exchange OS” is technical and does not describe a Sarafi workflow. | Explain digital daftar, buying/selling, money location, debts, and shop control before sign-in. | Production screenshot from 2026-08-28 | AuthScreen had no public intro content. | Add localized public entry panel. | FIXED LOCALLY | Local production-mode browser snapshot |
-| UX-002 | Language choice | `/` auth entry | EN/FA/PS | Desktop/mobile | Visitor | HIGH | Can I use my language? | Production had no language control. | A first-time Afghan user cannot choose Dari/Pashto before auth. | Explicit three-option selector before sign-in, persisted with RTL. | Production snapshot; local browser snapshot | Language state existed only inside authenticated shell. | Move direct language selector into AuthScreen. | FIXED LOCALLY | Local EN/FA/PS browser interaction |
-| UX-003 | Localization leakage | `/` auth entry | Dari/Pashto | Desktop/mobile | Visitor | HIGH | What do these buttons mean? | Local intro translated, but auth labels/headings remained English. | Mixed language undermines trust and learnability. | Auth labels, errors, recovery, and actions translate together. | Local browser snapshot after language switch | AuthScreen retained hard-coded strings. | Add auth translation resources and use them in AuthScreen. | FIXED LOCALLY | Local i18n test and browser entry verification |
-| UX-004 | Mobile entry layout | `/` auth entry | EN/FA/PS | 360/390/430 | Visitor | MEDIUM | Can I read and start on a phone? | Responsive public entry stacks intro and auth card without horizontal overflow. | The deployment had not previously been checked at target widths. | No horizontal overflow, readable intro, prominent first action. | Production browser viewport probe and Pashto screenshot on 2026-08-28 | Responsive CSS and direct language selector are deployed. | Keep viewport checks in release verification. | VERIFIED FOR PUBLIC ENTRY | Production probe: scroll width remained below viewport at 360, 390, 430, 768, and 1366px in Dari and Pashto |
-| UX-005 | Authenticated information architecture | Protected workspace | EN/FA/PS | Desktop/mobile | Owner/cashier | HIGH | What do I do after sign-in? | Primary destinations are now Home, New transaction, My money, Customers & debts, and Transactions; advanced workspace areas are grouped under More. | The previous first-level module list made cashier actions compete with admin/reporting surfaces. | Group Home, New Transaction, My Money, Customers & Debts, Transactions, More. | Local Chromium/Firefox/WebKit browser evidence on 2026-08-28 | Existing internal section IDs and role filters are retained while the presentation is simplified. | Complete authenticated owner/cashier UAT on production. | VERIFIED IN INSPECTION MODE; UAT PENDING | 21/21 UX tests pass in Chromium, Firefox, and WebKit; authenticated production evidence pending |
-| UX-006 | Human terminology | Protected workspace | Dari/Pashto | All | Owner/cashier | HIGH | What does this money status mean? | Core Buy/Sell amounts now identify the business perspective as “We give” and “We receive” in all launch languages, but other protected screens still contain hard-coded technical wording. | Technical language remains in ledger, reconciliation, counterparty, and infrastructure-facing messages. | Use Today, Check Cashbox, Customers & Sarafs, People owe us, We owe. | Source audit; local core-form update | Protected screens are only partially backed by translation keys. | Continue moving visible headings, empty states, errors, and statuses to the glossary-backed translation layer. | PARTIAL | Typecheck, lint, unit suite, and build pass; human language review pending |
+| ID | Severity | Area | Finding | Resolution | Status/evidence |
+|---|---:|---|---|---|---|
+| UX-001 | CRITICAL | Buy accounting meaning | Buy treated the entered amount as AFN, so 1,000 could preview as 14.28 USD. | Cashier always enters foreign amount. Buy 1,000 USD at 70.25 now repeats “We receive 1,000 USD / We give 70,250 AFN” in form and confirmation. | FIXED; unit and three-browser exact-value tests |
+| UX-002 | CRITICAL | Exchange pricing | USD/EUR could reuse the USD/AFN sell rate, creating a false cross-currency value. | Exchange fails closed when no approved direct pair rate exists and tells the user an authorized rate must be added. | FIXED SAFE; three-browser regression test. Configuring a real pair remains an operational requirement. |
+| UX-003 | HIGH | Language switching | A DOM mutation translator could leave Dari text after switching to Pashto. | All core copy now renders semantically from language state. | FIXED; direct Dari→Pashto contamination regression |
+| UX-004 | HIGH | Protected-screen localization | Daily workspaces contained English/technical strings in RTL languages. | Team, My money, Customers/Sarafs, Transactions, Rates, Reports, Debts, Cashbox check, Hawala, import, onboarding, dialogs, empty states, and errors use semantic copy. | FIXED technically; route-wide English-leak scan in Dari/Pashto |
+| UX-005 | HIGH | Navigation/roles | Owner controls competed with cashier work and More was a flat technical surface. | Six primary destinations; More grouped into Business, Team, Settings, and Advanced. Cashier/viewer visibility and disabled states are role-aware. | FIXED; role and responsive browser tests |
+| UX-006 | HIGH | Error safety | Backend/RPC wording could reach ordinary users. | Core failures are sanitized into task-focused messages; raw backend details are not rendered in daily workflows. | FIXED in audited routes; authenticated denial wording still needs production UAT |
+| UX-007 | MEDIUM | Load reliability | Google Fonts blocked page `load` for up to 30 seconds on constrained/filtered connections. | Removed remote font dependency; robust system fonts cover Latin, Dari, and Pashto. | FIXED; full matrix page loads generally under four seconds |
+| UX-008 | MEDIUM | WebKit keyboard behavior | Safari/WebKit did not always focus a clicked trigger, so modal focus restoration could target the page body. | Modal opener stores the actual trigger element; Escape restores it. | FIXED; full WebKit keyboard suite |
+| UX-009 | MEDIUM | Mobile width | The live-business controls could overflow narrow screens. | Mobile grid and six-item bottom navigation fit 360/390/430 widths. | FIXED; exact viewport overflow tests |
+| UX-010 | MEDIUM | Money evidence | Inspection My money waited on a live backend and could remain at Loading. | Controlled inspection is deterministic; production still uses authoritative calls. | FIXED; evidence drill-down test |
+| UX-011 | MEDIUM | Thermal receipt | Preview opening could return an unwritable window; receipt was hard-coded English/RTL and accepted unescaped values. | 58mm/80mm HTML is escaped, language/direction aware, and keeps money values isolated LTR. | FIXED technically; physical printer and authenticated receipt UAT pending |
+| UX-012 | LOW | Financial precision display | Computed values exposed internal 12-decimal precision. | UI displays two decimals while server commands retain exact decimal precision. | FIXED; visual reinspection and browser tests |
 
-## Evidence boundary
+## Language and terminology review
 
-## Production deployment evidence
+- English: engineering review PASS.
+- Afghanistan Dari: core-route technical/contextual review PASS; RTL and money direction visually inspected.
+- Pashto: core-route technical/contextual review PASS; no Dari or English fallback detected on audited routes.
+- Human language gate: PENDING. No claim of competent native-review approval is made.
+- Codes such as AFN, USD, EUR, CSV, PDF, and the SARAFI name are intentionally retained.
 
-- Vercel deployment completed with `vercel deploy --prod --yes`.
-- Deployment URL: `https://sarafi-f14h3wf7n-shafiullah-s-projects1.vercel.app`.
-- Canonical alias: `https://sarafi-swart.vercel.app`.
-- Production HTTP response: `200`; Vercel response identified bundle `/assets/index-DCpWpz2m.js`.
-- Production browser reinspection: public EN, Dari, and Pashto entry verified; RTL and no-overflow checks passed at 360, 390, 430, 768, and 1366px.
-- Deployment identity limitation: the deploy used the current dirty worktree. `HEAD` and `origin/main` are `62654ce`, but the deployed UX edits were not committed, so a single Git SHA cannot be claimed as the exact deployment source.
+## Visual evidence
 
-## Current local verification
+The controlled set under `test-results/web-ux-production/` contains public, owner, cashier, Buy, Sell, My money, Customers & debts, Transactions, and More screenshots in all three languages, plus 390px owner/More views. No real customer or production financial data is included.
 
-- Public entry explanation and direct language selection: PASS in production-mode local browser.
-- English, Afghan Dari, and Pashto entry copy: PASS technically; RTL direction updates correctly.
-- 390px Pashto entry: PASS with no horizontal overflow in the inspected viewport.
-- Auth labels and status copy: localized in source and covered by translation tests.
-- Authenticated navigation: primary destinations are grouped in source and mobile navigation is available at 360-430px widths.
-- Buy/Sell amount meaning: “We give” and “We receive” labels are localized in source.
-- Core dashboard and trade-form terminology now uses translated keys for English, Dari, and Pashto, including My Money, Today, attention items, Fee, and the business-perspective amount fields.
-- Translation regression: accessible Buy form fields switch from `We give`/`We receive` to Dari equivalents in the browser test.
-- Chromium, Firefox, and WebKit UX suite: 21/21 tests passed per browser.
-- Public accessibility suite: 2/2 tests passed per browser; authenticated accessibility remained intentionally skipped without a production auth fixture.
+Representative images visually reviewed:
 
-The language glossary files identify candidate terminology only. Human Afghan Dari and
-Pashto approval remains open and must be completed by competent reviewers.
+- Pashto owner Home at 390px
+- Dari Buy confirmation at desktop
+- English grouped More at 390px
+- Pashto My money at desktop
 
-This audit is not a 100% completion certificate. Authenticated owner/cashier UAT,
-full protected-screen terminology migration, provider backup/restore evidence, and
-competent Dari/Pashto review remain required acceptance gates.
+## Evidence boundary and UAT gate
 
-The production site was inspected after the 2026-08-28 redeployment for the public entry
-surface. The subsequent translation repair is locally verified but not yet deployed:
-both Vercel redeploy attempts failed with a provider `fetch failed` error, and production
-continues to serve the prior bundle until a deployment succeeds.
+Engineering automation cannot establish that an ordinary Afghan Saraf understands the product without help. Required external closure:
+
+1. Two Saraf owners and two cashiers complete the scripted tasks without coaching.
+2. A competent Afghanistan Dari reviewer approves terminology.
+3. A competent Pashto reviewer approves terminology.
+4. Authenticated production owner/cashier journeys and receipts are verified with controlled credentials.
+5. 58mm/80mm output is checked on actual supported printer hardware.
+
+Until these are recorded, `START NATIVE APP = NO`.

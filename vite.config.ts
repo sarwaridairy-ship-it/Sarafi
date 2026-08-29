@@ -1,5 +1,5 @@
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -8,12 +8,11 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/@supabase')) return 'supabase'
-          if (id.includes('node_modules/jspdf')) return 'pdf'
-          return undefined
+          if (id.includes("node_modules/@supabase")) return "supabase";
+          return undefined;
         },
       },
     },
-    chunkSizeWarningLimit: 400,
+    chunkSizeWarningLimit: 500,
   },
-})
+});
