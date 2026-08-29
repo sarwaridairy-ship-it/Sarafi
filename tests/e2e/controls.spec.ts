@@ -244,7 +244,7 @@ test.describe("workspace controls", () => {
     ).toBeVisible();
   });
 
-  test("Team & Devices exposes memberships, devices, and approval inbox", async ({
+  test("owner can create a branch-and-cashbox-scoped employee invitation", async ({
     page,
   }) => {
     await page.goto("/");
@@ -265,6 +265,59 @@ test.describe("workspace controls", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Approval requests", exact: true }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Add employee" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Add employee", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("group", { name: "Allowed branches" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Allowed cashboxes" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Main branch" })).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Main Counter" })).toBeChecked();
+
+    await page.getByRole("textbox", { name: "Full name" }).fill("Farid Ahmad");
+    await page
+      .getByRole("textbox", { name: "Work email" })
+      .fill("farid.ahmad@example.com");
+    await expect(page.getByRole("combobox", { name: "Job role" })).toHaveValue(
+      "cashier",
+    );
+    await page.getByRole("button", { name: "Create invitation" }).click();
+
+    await expect(page.getByText("Invitation ready", { exact: true })).toBeVisible();
+    const invitationLink = page.getByRole("textbox", {
+      name: "Copy invitation link",
+    });
+    await expect(invitationLink).toHaveValue(/\?invite=[a-f0-9]{64}$/);
+    const pendingInvitation = page.locator("article").filter({
+      has: page.getByText("farid.ahmad@example.com", { exact: true }),
+    });
+    await expect(
+      pendingInvitation.getByText("Farid Ahmad · Cashier", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      pendingInvitation.getByText("Assigned to: Main branch · Main Counter", {
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
+
+  test("invitation link clearly offers sign-in or account creation", async ({
+    page,
+  }) => {
+    await page.goto(`/?public=1&invite=${"ab".repeat(32)}`);
+    await expect(
+      page.getByRole("heading", { name: "Join your Sarafi team", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Sign in or create an account with the email address that received this invitation.",
+      ),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Create an account" }).click();
+    await expect(
+      page.getByRole("button", { name: /Create account and join/ }),
     ).toBeVisible();
   });
 

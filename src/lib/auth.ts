@@ -2,8 +2,11 @@ import type { AuthenticatorAssuranceLevels, RealtimeChannel, SupabaseClient, Use
 import { getSupabaseClient } from './supabase'
 
 export type AuthFailureDetails = { error: string | null; errorCode: string | null; status: number | null }
-export type DetailedAuthResult = AuthFailureDetails & { user: User | null }
+export type DetailedAuthResult = AuthFailureDetails & { user: User | null; sessionActive: boolean }
 export type MfaState = { aal: AuthenticatorAssuranceLevels | null; verified: boolean }
+export type TotpFactorSummary = { id: string; friendlyName: string; status: string }
+export type TotpEnrollment = { id: string; qrCode: string; secret: string; uri: string }
+export type MfaReadiness = MfaState & { factors: TotpFactorSummary[]; error: string | null }
 
 async function withTimeout<T>(request: Promise<T>, message = 'The request timed out. Check your connection and try again.'): Promise<T> {
   let timeoutId: number | undefined
@@ -36,18 +39,18 @@ const requestFailure = (error: unknown, fallback: string): AuthFailureDetails =>
 
 export async function signInWithPassword(email: string, password: string): Promise<DetailedAuthResult> {
   const { client, error } = clientOrError()
-  if (!client) return { user: null, error, errorCode: 'supabase_not_configured', status: null }
+  if (!client) return { user: null, sessionActive: false, error, errorCode: 'supabase_not_configured', status: null }
   let result
-  try { result = await withTimeout(client.auth.signInWithPassword({ email: email.trim(), password })) } catch (requestError) { return { user: null, ...requestFailure(requestError, 'Sign-in request failed') } }
-  return { user: result.data.user, ...authFailure(result.error) }
+  try { result = await withTimeout(client.auth.signInWithPassword({ email: email.trim(), password })) } catch (requestError) { return { user: null, sessionActive: false, ...requestFailure(requestError, 'Sign-in request failed') } }
+  return { user: result.data.user, sessionActive: Boolean(result.data.session), ...authFailure(result.error) }
 }
 
 export async function signUpWithPassword(email: string, password: string): Promise<DetailedAuthResult> {
   const { client, error } = clientOrError()
-  if (!client) return { user: null, error, errorCode: 'supabase_not_configured', status: null }
+  if (!client) return { user: null, sessionActive: false, error, errorCode: 'supabase_not_configured', status: null }
   let result
-  try { result = await withTimeout(client.auth.signUp({ email: email.trim(), password })) } catch (requestError) { return { user: null, ...requestFailure(requestError, 'Sign-up request failed') } }
-  return { user: result.data.user, ...authFailure(result.error) }
+  try { result = await withTimeout(client.auth.signUp({ email: email.trim(), password })) } catch (requestError) { return { user: null, sessionActive: false, ...requestFailure(requestError, 'Sign-up request failed') } }
+  return { user: result.data.user, sessionActive: Boolean(result.data.session), ...authFailure(result.error) }
 }
 
 export async function sendPasswordReset(email: string, redirectTo: string): Promise<AuthFailureDetails> {
@@ -72,11 +75,28 @@ export async function getMfaState(): Promise<MfaState> {
   return { aal: result.data?.currentLevel ?? null, verified: result.data?.currentLevel === 'aal2' }
 }
 
-export async function enrollTotp(friendlyName: string) {
+export async function getMfaReadiness(): Promise<MfaReadiness> {
+  const { client, error } = clientOrError()
+  if (!client) return { aal: null, verified: false, factors: [], error }
+  const [assurance, factors] = await Promise.all([
+    client.auth.mfa.getAuthenticatorAssuranceLevel(),
+    client.auth.mfa.listFactors(),
+  ])
+  const currentLevel = assurance.data?.currentLevel ?? null
+  return {
+    aal: currentLevel,
+    verified: currentLevel === 'aal2',
+    factors: (factors.data?.totp ?? []).filter((factor) => factor.status === 'verified').map((factor) => ({ id: factor.id, friendlyName: factor.friendly_name ?? 'Authenticator app', status: factor.status })),
+    error: assurance.error?.message ?? factors.error?.message ?? null,
+  }
+}
+
+export async function enrollTotp(friendlyName: string): Promise<{ factor: TotpEnrollment | null; error: string | null }> {
   const { client, error } = clientOrError()
   if (!client) return { factor: null, error }
   const result = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName })
-  return { factor: result.data, error: result.error?.message ?? null }
+  if (result.error || !result.data?.totp) return { factor: null, error: result.error?.message ?? 'Authenticator setup could not be started' }
+  return { factor: { id: result.data.id, qrCode: result.data.totp.qr_code, secret: result.data.totp.secret, uri: result.data.totp.uri }, error: null }
 }
 
 export async function verifyTotp(factorId: string, code: string): Promise<string | null> {

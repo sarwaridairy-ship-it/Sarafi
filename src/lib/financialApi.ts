@@ -4,18 +4,22 @@ import { parseFxTradeCommand, type FxTradeCommand } from '../domain/commands'
 import { validateDocumentFile, type DocumentType } from './integrations'
 
 export type RpcResult<T> = { data: T | null; error: string | null }
-export type DashboardSnapshot = { transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location: string; currency: string; quantity: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
+export type DashboardSnapshot = { transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string; currency: string; quantity: string }>; receivables: Array<{ currency: string; amount: string }>; payables: Array<{ currency: string; amount: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
 export type DebtRecord = { id: string; counterparty_id: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null }
 export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string }
 export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string }
-export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; account_code: string; account_name: string }
+export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string }
 export type CashboxBalanceRecord = { currency_code: string; expected_amount: string }
 export type CounterpartyStatementRecord = { id: string; occurred_at: string; event_type: string; reference: string; status: string; memo: string | null; direction: 'receivable' | 'payable' | null; currency_code: string | null; amount: string | null }
 export type RateHistoryRecord = { id: string; from_currency: string; to_currency: string; buy_rate: string; sell_rate: string; effective_from: string; group_name: string; branch_id: string | null }
-export type TeamMemberRecord = { id: string; user_id: string; role_code: string; active: boolean; mfa_required: boolean }
-export type DeviceRecord = { id: string; user_id: string; friendly_name: string; status: string; last_seen_at: string; revoked_at: string | null }
-export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by: string; decided_by: string | null }
+export type TeamScopeRecord = { id: string; name: string; branch_id?: string }
+export type TeamMemberRecord = { id: string; display_name: string; email: string; role_code: string; active: boolean; mfa_required: boolean; joined_at: string; is_current_user: boolean; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
+export type TeamInvitationRecord = { id: string; display_name: string; email: string; role_code: string; mfa_required: boolean; status: string; created_at: string; expires_at: string; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
+export type DeviceRecord = { id: string; friendly_name: string; status: string; last_seen_at: string; revoked_at: string | null; member_name: string }
+export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null }
+export type TeamControlPlane = { members: TeamMemberRecord[]; invitations: TeamInvitationRecord[]; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[]; devices: DeviceRecord[]; approvals: ApprovalRecord[] }
+export type CreatedTeamInvitation = { id: string; invite_token: string; email: string; display_name: string; role_code: string; expires_at: string }
 export type PrivateDocumentRecord = { id: string; organization_id: string; entity_id: string; entity_type: string; storage_path: string; content_type: string; size_bytes: number; sha256: string; uploaded_by: string; created_at: string }
 export type ReceiptRecord = { id: string; journal_entry_id: string; receipt_number: string; language_code: string; created_at: string }
 export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; features: Array<{ feature_code: string; enabled: boolean }> }
@@ -213,13 +217,8 @@ export async function listJournalEntries(organizationId: string): Promise<RpcRes
 export async function listLocationEvidence(organizationId: string): Promise<RpcResult<LocationEvidenceRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.from('journal_lines').select('id,journal_entry_id,currency_code,native_debit,native_credit,journal_entries!inner(occurred_at,memo,status,organization_id),ledger_accounts!inner(code,name,category)').eq('organization_id', organizationId).eq('journal_entries.organization_id', organizationId).eq('journal_entries.status', 'posted').eq('ledger_accounts.category', 'asset').order('id', { ascending: false }).limit(500)
-  const rows = (result.data ?? []).map((row) => {
-    const entry = Array.isArray(row.journal_entries) ? row.journal_entries[0] : row.journal_entries
-    const account = Array.isArray(row.ledger_accounts) ? row.ledger_accounts[0] : row.ledger_accounts
-    return { id: row.id, journal_entry_id: row.journal_entry_id, currency_code: row.currency_code, native_debit: row.native_debit, native_credit: row.native_credit, occurred_at: entry?.occurred_at ?? '', memo: entry?.memo ?? null, account_code: account?.code ?? '', account_name: account?.name ?? '' }
-  }) as LocationEvidenceRecord[]
-  return { data: rows, error: result.error?.message ?? null }
+  const result = await client.rpc('get_money_location_evidence', { target_org: organizationId })
+  return { data: result.data as LocationEvidenceRecord[] | null, error: result.error?.message ?? null }
 }
 
 export async function listCashboxBalances(organizationId: string, cashboxId: string): Promise<RpcResult<CashboxBalanceRecord[]>> {
@@ -274,16 +273,54 @@ export async function listRateHistory(organizationId: string): Promise<RpcResult
   return { data: rows, error: result.error?.message ?? null }
 }
 
-export async function getTeamControlPlane(organizationId: string): Promise<RpcResult<{ members: TeamMemberRecord[]; devices: DeviceRecord[]; approvals: ApprovalRecord[] }>> {
+export async function getTeamControlPlane(organizationId: string): Promise<RpcResult<TeamControlPlane>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const [members, devices, approvals] = await Promise.all([
-    client.from('organization_memberships').select('id,user_id,role_code,active,mfa_required').eq('organization_id', organizationId).order('created_at'),
-    client.from('devices').select('id,user_id,friendly_name,status,last_seen_at,revoked_at').eq('organization_id', organizationId).order('last_seen_at', { ascending: false }),
-    client.from('approval_requests').select('id,action_type,reason,amount_base,currency_code,status,requested_at,requested_by,decided_by').eq('organization_id', organizationId).order('requested_at', { ascending: false }).limit(100),
-  ])
-  const error = members.error?.message ?? devices.error?.message ?? approvals.error?.message ?? null
-  return { data: { members: (members.data ?? []) as TeamMemberRecord[], devices: (devices.data ?? []) as DeviceRecord[], approvals: (approvals.data ?? []) as ApprovalRecord[] }, error }
+  const result = await client.rpc('get_team_control_plane', { target_org: organizationId })
+  return { data: result.data as TeamControlPlane | null, error: result.error?.message ?? null }
+}
+
+export async function createTeamInvitation(input: { organizationId: string; email: string; displayName: string; role: string; branchIds: string[]; cashboxIds: string[] }): Promise<RpcResult<CreatedTeamInvitation>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_team_invitation', {
+    target_org: input.organizationId,
+    invited_email: input.email.trim(),
+    invited_name: input.displayName.trim(),
+    invited_role: input.role,
+    branch_scope: input.branchIds,
+    cashbox_scope: input.cashboxIds,
+    requires_mfa: false,
+  })
+  return { data: result.data as CreatedTeamInvitation | null, error: result.error?.message ?? null }
+}
+
+export async function acceptTeamInvitation(inviteToken: string): Promise<RpcResult<{ organization_id: string; membership_id: string; display_name: string; role_code: string }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('accept_team_invitation', { invite_token: inviteToken.trim() })
+  return { data: result.data as { organization_id: string; membership_id: string; display_name: string; role_code: string } | null, error: result.error?.message ?? null }
+}
+
+export async function cancelTeamInvitation(invitationId: string, reason: string): Promise<RpcResult<{ id: string; status: string }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('cancel_team_invitation', { target_invitation: invitationId, reason_input: reason.trim() })
+  return { data: result.data as { id: string; status: string } | null, error: result.error?.message ?? null }
+}
+
+export async function updateTeamMembership(input: { membershipId: string; role: string; branchIds: string[]; cashboxIds: string[]; active: boolean; reason: string }): Promise<RpcResult<{ id: string; role_code: string; active: boolean }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('update_team_membership', {
+    target_membership: input.membershipId,
+    new_role: input.role,
+    branch_scope: input.branchIds,
+    cashbox_scope: input.cashboxIds,
+    active_input: input.active,
+    reason_input: input.reason.trim(),
+  })
+  return { data: result.data as { id: string; role_code: string; active: boolean } | null, error: result.error?.message ?? null }
 }
 
 export async function uploadPrivateCounterpartyDocument(organizationId: string, counterpartyId: string, documentType: DocumentType, file: File): Promise<RpcResult<PrivateDocumentRecord>> {

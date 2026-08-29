@@ -16,7 +16,10 @@ const allowedLatinWords = new Set([
 
 async function visibleLatinWords(page: Page) {
   return page.locator("body").evaluate((body) => {
-    const text = (body as HTMLElement).innerText;
+    const text = (body as HTMLElement).innerText.replace(
+      /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+      "",
+    );
     return [...new Set(text.match(/[A-Za-z]{3,}/g) ?? [])];
   });
 }

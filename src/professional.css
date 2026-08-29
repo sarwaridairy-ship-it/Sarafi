@@ -1294,16 +1294,257 @@ td {
   font-size: 11px;
 }
 
+.team-workspace {
+  display: grid;
+  gap: 22px;
+}
+
+.team-header-actions,
+.team-form-actions,
+.member-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.team-security-gate,
+.team-editor,
+.invite-success {
+  padding: 20px;
+  border: 1px solid #d6e1db;
+  border-radius: 13px;
+  background: #fbfdfb;
+}
+
+.team-security-gate {
+  border-color: #e5d49f;
+  background: linear-gradient(135deg, #fffaf0, #fffdf8);
+}
+
+.team-security-gate .settings-card-title {
+  margin-bottom: 16px;
+}
+
+.team-editor {
+  box-shadow: 0 14px 36px rgba(19, 71, 59, 0.08);
+}
+
+.invite-success {
+  display: grid;
+  gap: 15px;
+  border-color: #a9d1bb;
+  background: linear-gradient(135deg, #eef9f2, #f8fcf9);
+}
+
+.invite-success h2,
+.team-editor h2,
+.team-section h2 {
+  margin: 0;
+}
+
+.invite-success > label,
+.team-form-grid > label,
+.mfa-verification > label,
+.mfa-enrollment label {
+  display: grid;
+  gap: 7px;
+  color: #4d625a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.invite-success input,
+.team-editor input,
+.team-editor select,
+.mfa-verification input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cfdad4;
+  border-radius: 9px;
+  color: #1f3932;
+  background: #fff;
+}
+
+.invite-success input[readonly],
+.mfa-enrollment input[readonly] {
+  color: #405a52;
+  background: #f3f7f4;
+}
+
+.team-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.scope-grid fieldset {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #dce5e0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.scope-grid legend {
+  padding-inline: 5px;
+  color: #294b42;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.scope-grid label {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: #40564f;
+  background: #f7faf8;
+  font-size: 11px;
+}
+
+.scope-grid input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  accent-color: #176555;
+}
+
+.form-note {
+  margin: 14px 0;
+  padding: 11px 13px;
+  border-radius: 8px;
+  color: #496159;
+  background: #f3f7f4;
+  font-size: 11px;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.team-section {
+  min-width: 0;
+}
+
+.team-section > h2 {
+  margin-bottom: 11px;
+  font-size: 15px;
+}
+
+.team-member-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #dce5e0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.team-member-card .balance-name {
+  min-width: 0;
+}
+
+.team-member-card .balance-name b,
+.team-member-card .balance-name small {
+  overflow-wrap: anywhere;
+}
+
+.member-actions {
+  justify-content: flex-end;
+}
+
+.member-actions .text-button,
+.invitation-card > .text-button {
+  min-height: 36px;
+}
+
+.text-button.danger {
+  color: #9b3535 !important;
+}
+
+.status-active,
+.status-suspended {
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.status-active {
+  color: #1d694f;
+  background: #eaf6ef;
+}
+
+.status-suspended {
+  color: #8c4141;
+  background: #fff0ef;
+}
+
+.team-secondary-grid {
+  align-items: start;
+}
+
+.mfa-verification {
+  display: grid;
+  gap: 14px;
+}
+
+.mfa-verification > label {
+  max-width: 260px;
+}
+
+.mfa-enrollment {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.mfa-enrollment img {
+  display: block;
+  width: 180px;
+  height: 180px;
+  padding: 8px;
+  border: 1px solid #d5dfda;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.invitation-problem {
+  max-width: 480px;
+}
+
 @media (max-width: 1024px) {
   .sidebar { width: 230px; }
   .content-wrap { padding-inline: 28px; }
   .security-grid { grid-template-columns: 1fr; }
+  .team-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 780px) {
   .settings-grid,
   .compliance-summary,
-  .queue-grid { grid-template-columns: 1fr; }
+  .queue-grid,
+  .team-grid { grid-template-columns: 1fr; }
   .settings-card-wide,
   .compliance-hero { grid-column: auto; }
   .auth-layout { gap: 34px; }
@@ -1385,6 +1626,14 @@ td {
   .queue-card { padding: 16px; }
   .queue-card { grid-template-columns: 1fr; gap: 14px; }
   .security-grid { grid-template-columns: 1fr; }
+  .team-header-actions { align-items: stretch; flex-direction: column; }
+  .team-form-grid,
+  .scope-grid { grid-template-columns: 1fr; }
+  .team-member-card { grid-template-columns: auto minmax(0, 1fr); }
+  .team-member-card .member-actions,
+  .invitation-card > .text-button { grid-column: 1 / -1; justify-content: flex-start; }
+  .mfa-enrollment { grid-template-columns: 1fr; }
+  .mfa-enrollment img { width: min(180px, 100%); height: auto; }
   .feature-list { grid-template-columns: 1fr; }
   .receipt-success { padding: 22px 16px; }
   .receipt-actions { grid-template-columns: 1fr; }

@@ -14,6 +14,9 @@ import {
   getReceiptForJournalEntry,
   getOwnerDashboard,
   getTeamControlPlane,
+  acceptTeamInvitation,
+  cancelTeamInvitation,
+  createTeamInvitation,
   getPrivateCounterpartyDocuments,
   getPrivateDocumentUrl,
   listCashboxBalances,
@@ -33,6 +36,7 @@ import {
   recordReportExport,
   requestReversal,
   settleDebt,
+  updateTeamMembership,
   uploadPrivateCounterpartyDocument,
   type DashboardSnapshot,
   type CounterpartyRecord,
@@ -42,6 +46,9 @@ import {
   type LocationEvidenceRecord,
   type RateHistoryRecord,
   type TeamMemberRecord,
+  type TeamInvitationRecord,
+  type TeamScopeRecord,
+  type CreatedTeamInvitation,
   type DeviceRecord,
   type ApprovalRecord,
   type PrivateDocumentRecord,
@@ -50,10 +57,15 @@ import { getSupabaseClient } from "./lib/supabase";
 import { createBusiness } from "./lib/onboarding";
 import {
   sendPasswordReset,
+  enrollTotp,
+  getMfaReadiness,
   signInWithPassword,
   signOut,
   signUpWithPassword,
+  verifyTotp,
   type DetailedAuthResult,
+  type MfaReadiness,
+  type TotpEnrollment,
 } from "./lib/auth";
 import {
   BrowserDocumentCaptureProvider,
@@ -91,6 +103,14 @@ function localizedAuthError(
   if (code === "supabase_not_configured")
     return ux(language, "authConfigurationError");
   return ux(language, "requestFailed");
+}
+
+function localizedInvitationError(language: Language, error: string): string {
+  const message = error.toLowerCase();
+  if (message.includes("expired")) return ux(language, "invitationExpired");
+  if (message.includes("email address") || message.includes("invited email"))
+    return ux(language, "invitationWrongAccount");
+  return ux(language, "invitationInvalid");
 }
 
 type Trade = {
@@ -229,6 +249,11 @@ function App() {
         ? "owner"
         : "viewer",
   );
+  const [inviteToken, setInviteToken] = useState(() => {
+    const token = new URLSearchParams(window.location.search).get("invite") ?? "";
+    return /^[a-f0-9]{64}$/i.test(token) ? token : "";
+  });
+  const [invitationFailure, setInvitationFailure] = useState("");
   const [authMode, setAuthMode] = useState<"signIn" | "signUp" | "reset">(
     "signIn",
   );
@@ -284,6 +309,10 @@ function App() {
       window.removeEventListener("offline", goOffline);
     };
   }, []);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [activeNav]);
 
   useEffect(() => {
     const modal = document.querySelector<HTMLElement>(
@@ -348,40 +377,63 @@ function App() {
     if (inspectionMode || !user) return;
     const client = getSupabaseClient();
     if (!client) return;
-    void client
-      .from("organization_memberships")
-      .select("organization_id,role_code")
-      .eq("user_id", user.id)
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle()
-      .then(async ({ data }) => {
-        setOrganizationId(data?.organization_id ?? null);
-        if (
-          data?.role_code &&
-          [
-            "owner",
-            "manager",
-            "accountant",
-            "cashier",
-            "compliance_officer",
-            "viewer",
-          ].includes(data.role_code)
-        )
-          setWorkspaceRole(data.role_code as WorkspaceRole);
-        if (!data?.organization_id) {
-          setOrganizationLoading(false);
-          return;
+    let active = true;
+    const loadMembership = async () => {
+      setOrganizationLoading(true);
+      if (inviteToken) {
+        const accepted = await acceptTeamInvitation(inviteToken);
+        if (!active) return;
+        if (accepted.error) {
+          setInvitationFailure(localizedInvitationError(language, accepted.error));
+        } else {
+          setInvitationFailure("");
+          setInviteToken("");
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.delete("invite");
+          window.history.replaceState({}, "", nextUrl);
+          setToast(ux(language, "invitationAccepted"));
         }
-        const organization = await client
-          .from("organizations")
-          .select("display_name")
-          .eq("id", data.organization_id)
-          .maybeSingle();
-        setOrganizationName(organization.data?.display_name ?? "");
+      }
+      const membership = await client
+        .from("organization_memberships")
+        .select("organization_id,role_code")
+        .eq("user_id", user.id)
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle();
+      if (!active) return;
+      const data = membership.data;
+      setOrganizationId(data?.organization_id ?? null);
+      if (
+        data?.role_code &&
+        [
+          "owner",
+          "manager",
+          "accountant",
+          "cashier",
+          "compliance_officer",
+          "viewer",
+        ].includes(data.role_code)
+      )
+        setWorkspaceRole(data.role_code as WorkspaceRole);
+      if (!data?.organization_id) {
         setOrganizationLoading(false);
-      });
-  }, [inspectionMode, user]);
+        return;
+      }
+      const organization = await client
+        .from("organizations")
+        .select("display_name")
+        .eq("id", data.organization_id)
+        .maybeSingle();
+      if (!active) return;
+      setOrganizationName(organization.data?.display_name ?? "");
+      setOrganizationLoading(false);
+    };
+    void loadMembership();
+    return () => {
+      active = false;
+    };
+  }, [inspectionMode, inviteToken, language, user]);
 
   useEffect(() => {
     if (inspectionMode) return;
@@ -471,9 +523,9 @@ function App() {
         ? await signInWithPassword(authEmail, authPassword)
         : authMode === "signUp"
           ? await signUpWithPassword(authEmail, authPassword)
-          : { user: null, ...(await sendPasswordReset(authEmail, window.location.origin)) };
+          : { user: null, sessionActive: false, ...(await sendPasswordReset(authEmail, window.location.origin)) };
     setAuthBusy(false);
-    if (result.user) setUser(result.user);
+    if (result.user && result.sessionActive) setUser(result.user);
     setAuthMessageKind(result.error ? "error" : "success");
     setAuthMessage(
       result.error
@@ -849,6 +901,7 @@ function App() {
         message={authMessage}
         messageKind={authMessageKind}
         busy={authBusy}
+        invitation={Boolean(inviteToken)}
         onModeChange={(mode) => {
           setAuthMode(mode);
           setAuthMessage("");
@@ -878,6 +931,23 @@ function App() {
             </span>
           </div>
           <p className="auth-subtitle">{t("awaitingLiveLedger")}</p>
+        </section>
+      </main>
+    );
+  if (!organizationId && inviteToken && invitationFailure)
+    return (
+      <main className="auth-shell">
+        <section className="auth-card invitation-problem" role="alert">
+          <div className="brand auth-brand">
+            <span className="brand-mark">S</span>
+            <span>SARAFI</span>
+          </div>
+          <p className="kicker">{u("joinTeam")}</p>
+          <h1>{u("invitationInvalid")}</h1>
+          <p className="auth-subtitle">{invitationFailure}</p>
+          <button className="primary-action full" onClick={handleSignOut}>
+            {u("signOutDifferentAccount")}
+          </button>
         </section>
       </main>
     );
@@ -1215,6 +1285,7 @@ function App() {
                 inspectionMode ? t("mainBranch") : branchName || t("mainBranch")
               }
               roleLabel={roleLabel}
+              canManageTeam={workspaceRole === "owner"}
               userId={user?.id ?? "inspection-user"}
               deviceId={browserDeviceId}
               branchId={branchId}
@@ -1554,13 +1625,13 @@ function App() {
                       {dashboard.locations.slice(0, 6).map((location) => (
                         <div
                           className="balance-row"
-                          key={`${location.location}-${location.currency}`}
+                          key={`${location.location_id}-${location.currency}`}
                         >
                           <span className="currency-badge usd">
                             {location.currency}
                           </span>
                           <span className="balance-name">
-                            <b>{location.location}</b>
+                            <b>{location.location_name}</b>
                             <small>{t("assetLocation")}</small>
                           </span>
                           <strong>{hidden || location.quantity}</strong>
@@ -2113,6 +2184,7 @@ function WorkspaceView({
   organizationName,
   branchName,
   roleLabel,
+  canManageTeam,
   userId,
   deviceId,
   branchId,
@@ -2128,6 +2200,7 @@ function WorkspaceView({
   organizationName: string;
   branchName: string;
   roleLabel: string;
+  canManageTeam: boolean;
   userId: string;
   deviceId: string;
   branchId: string | null;
@@ -2206,6 +2279,7 @@ function WorkspaceView({
       <TeamDevicesView
         language={language}
         organizationId={organizationId}
+        canManage={canManageTeam}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -2455,16 +2529,19 @@ function OfflineView({
 function TeamDevicesView({
   language,
   organizationId,
+  canManage,
   onDashboard,
   onToast,
 }: {
   language: Language;
   organizationId: string | null;
+  canManage: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
+  const inspection = organizationId === "inspection";
   const roleName = (role: string) =>
     ({
       owner: u("owner"),
@@ -2483,63 +2560,684 @@ function TeamDevicesView({
       approved: u("approved"),
       rejected: u("rejected"),
     })[status] ?? u("review");
-  const [members, setMembers] = useState<TeamMemberRecord[]>([]);
+  const previewBranch: TeamScopeRecord = {
+    id: "inspection-branch",
+    name: translate(language, "mainBranch"),
+  };
+  const previewCashbox: TeamScopeRecord = {
+    id: "inspection-cashbox",
+    name: u("previewCashboxName"),
+    branch_id: previewBranch.id,
+  };
+  const previewMembers: TeamMemberRecord[] = [
+    {
+      id: "inspection-owner",
+      display_name: u("previewOwnerName"),
+      email: "owner@example.com",
+      role_code: "owner",
+      active: true,
+      mfa_required: true,
+      joined_at: new Date().toISOString(),
+      is_current_user: true,
+      branches: [],
+      cashboxes: [],
+    },
+    {
+      id: "inspection-cashier",
+      display_name: u("previewCashierName"),
+      email: "cashier@example.com",
+      role_code: "cashier",
+      active: true,
+      mfa_required: false,
+      joined_at: new Date().toISOString(),
+      is_current_user: false,
+      branches: [previewBranch],
+      cashboxes: [previewCashbox],
+    },
+  ];
+  const [members, setMembers] = useState<TeamMemberRecord[]>(
+    inspection ? previewMembers : [],
+  );
+  const [invitations, setInvitations] = useState<TeamInvitationRecord[]>([]);
+  const [branches, setBranches] = useState<TeamScopeRecord[]>(
+    inspection ? [previewBranch] : [],
+  );
+  const [cashboxes, setCashboxes] = useState<TeamScopeRecord[]>(
+    inspection ? [previewCashbox] : [],
+  );
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
+  const [loading, setLoading] = useState(!inspection);
+  const [refresh, setRefresh] = useState(0);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("cashier");
+  const [inviteBranches, setInviteBranches] = useState<string[]>([]);
+  const [inviteCashboxes, setInviteCashboxes] = useState<string[]>([]);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [createdInvitation, setCreatedInvitation] =
+    useState<CreatedTeamInvitation | null>(null);
+  const [mfa, setMfa] = useState<MfaReadiness>({
+    aal: inspection ? "aal2" : null,
+    verified: inspection,
+    factors: [],
+    error: null,
+  });
+  const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const [editingMember, setEditingMember] =
+    useState<TeamMemberRecord | null>(null);
+  const [editRole, setEditRole] = useState("cashier");
+  const [editBranches, setEditBranches] = useState<string[]>([]);
+  const [editCashboxes, setEditCashboxes] = useState<string[]>([]);
+  const [editActive, setEditActive] = useState(true);
+  const [editReason, setEditReason] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+
+  const roleOptions = [
+    "manager",
+    "accountant",
+    "cashier",
+    "viewer",
+    "compliance_officer",
+  ];
+
   useEffect(() => {
-    if (organizationId && organizationId !== "inspection")
-      void getTeamControlPlane(organizationId).then((result) => {
+    if (!organizationId) return;
+    if (inspection) return;
+    void getTeamControlPlane(organizationId).then((result) => {
         if (result.data) {
           setMembers(result.data.members);
+          setInvitations(result.data.invitations);
+          setBranches(result.data.branches);
+          setCashboxes(result.data.cashboxes);
           setDevices(result.data.devices);
           setApprovals(result.data.approvals);
         }
-        if (result.error) onToast(ux(language, "couldNotLoad"));
+        if (result.error) onToast(ux(language, "teamLoadFailed"));
+        setLoading(false);
       });
-  }, [language, onToast, organizationId]);
+  }, [inspection, language, onToast, organizationId, refresh]);
+
+  useEffect(() => {
+    if (!canManage || inspection) return;
+    void getMfaReadiness().then((readiness) => setMfa(readiness));
+  }, [canManage, inspection]);
+
+  const toggleScope = (
+    value: string,
+    selected: string[],
+    setSelected: (next: string[]) => void,
+  ) =>
+    setSelected(
+      selected.includes(value)
+        ? selected.filter((item) => item !== value)
+        : [...selected, value],
+    );
+
+  const resetInvite = () => {
+    setInviteName("");
+    setInviteEmail("");
+    setInviteRole("cashier");
+    setInviteBranches(branches[0] ? [branches[0].id] : []);
+    setInviteCashboxes(cashboxes[0] ? [cashboxes[0].id] : []);
+  };
+
+  const openInvite = () => {
+    resetInvite();
+    setCreatedInvitation(null);
+    setShowInvite(true);
+  };
+
+  const beginAuthenticatorSetup = async () => {
+    setSecurityBusy(true);
+    const result = await enrollTotp("SARAFI team management");
+    setSecurityBusy(false);
+    if (result.error || !result.factor) {
+      onToast(u("mfaSetupFailed"));
+      return;
+    }
+    setEnrollment(result.factor);
+  };
+
+  const confirmMfa = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const factorId = enrollment?.id ?? mfa.factors[0]?.id;
+    if (!factorId || !/^\d{6}$/.test(verificationCode)) {
+      onToast(u("mfaVerificationFailed"));
+      return;
+    }
+    setSecurityBusy(true);
+    const error = await verifyTotp(factorId, verificationCode);
+    const readiness = error ? null : await getMfaReadiness();
+    setSecurityBusy(false);
+    if (error || !readiness?.verified) {
+      onToast(u("mfaVerificationFailed"));
+      return;
+    }
+    setMfa(readiness);
+    setEnrollment(null);
+    setVerificationCode("");
+    onToast(u("securityVerified"));
+  };
+
+  const submitInvitation = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId || inviteBusy) return;
+    if (
+      inviteRole === "cashier" &&
+      (!inviteBranches.length || !inviteCashboxes.length)
+    ) {
+      onToast(u("cashierScopeRequired"));
+      return;
+    }
+    if (!mfa.verified) {
+      onToast(u("secureTeamIntro"));
+      return;
+    }
+    setInviteBusy(true);
+    if (inspection) {
+      const now = new Date();
+      const expires = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+      const result: CreatedTeamInvitation = {
+        id: crypto.randomUUID(),
+        invite_token: "ab".repeat(32),
+        email: inviteEmail.trim(),
+        display_name: inviteName.trim(),
+        role_code: inviteRole,
+        expires_at: expires.toISOString(),
+      };
+      setCreatedInvitation(result);
+      setInvitations((current) => [
+        {
+          id: result.id,
+          display_name: result.display_name,
+          email: result.email,
+          role_code: result.role_code,
+          mfa_required: false,
+          status: "pending",
+          created_at: now.toISOString(),
+          expires_at: result.expires_at,
+          branches: branches.filter((item) =>
+            inviteBranches.includes(item.id),
+          ),
+          cashboxes: cashboxes.filter((item) =>
+            inviteCashboxes.includes(item.id),
+          ),
+        },
+        ...current,
+      ]);
+      setInviteBusy(false);
+      setShowInvite(false);
+      return;
+    }
+    const result = await createTeamInvitation({
+      organizationId,
+      email: inviteEmail,
+      displayName: inviteName,
+      role: inviteRole,
+      branchIds: inviteBranches,
+      cashboxIds: inviteCashboxes,
+    });
+    setInviteBusy(false);
+    if (result.error || !result.data) {
+      if (result.error?.includes("AAL2")) {
+        setMfa((current) => ({ ...current, verified: false, aal: "aal1" }));
+        onToast(u("secureTeamIntro"));
+      } else if (result.error?.toLowerCase().includes("cashier")) {
+        onToast(u("cashierScopeRequired"));
+      } else {
+        onToast(u("teamSaveFailed"));
+      }
+      return;
+    }
+    setCreatedInvitation(result.data);
+    setShowInvite(false);
+    setRefresh((value) => value + 1);
+  };
+
+  const invitationUrl = createdInvitation
+    ? `${window.location.origin}/?invite=${createdInvitation.invite_token}`
+    : "";
+
+  const copyInvitation = async () => {
+    if (!invitationUrl) return;
+    try {
+      await navigator.clipboard.writeText(invitationUrl);
+      onToast(u("linkCopied"));
+    } catch {
+      onToast(u("inviteLinkInstructions"));
+    }
+  };
+
+  const cancelInvitation = async (invitation: TeamInvitationRecord) => {
+    if (
+      !window.confirm(
+        `${u("cancelInvite")}: ${invitation.display_name} (${invitation.email})?`,
+      )
+    )
+      return;
+    if (inspection) {
+      setInvitations((current) =>
+        current.filter((item) => item.id !== invitation.id),
+      );
+      return;
+    }
+    const result = await cancelTeamInvitation(
+      invitation.id,
+      "Cancelled by shop owner",
+    );
+    if (result.error) {
+      onToast(
+        result.error.includes("AAL2")
+          ? u("secureTeamIntro")
+          : u("teamSaveFailed"),
+      );
+      return;
+    }
+    setRefresh((value) => value + 1);
+  };
+
+  const openMemberEditor = (member: TeamMemberRecord, active = member.active) => {
+    setEditingMember(member);
+    setEditRole(member.role_code);
+    setEditBranches(member.branches.map((item) => item.id));
+    setEditCashboxes(member.cashboxes.map((item) => item.id));
+    setEditActive(active);
+    setEditReason("");
+  };
+
+  const saveMember = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingMember || editBusy) return;
+    if (
+      editRole === "cashier" &&
+      editActive &&
+      (!editBranches.length || !editCashboxes.length)
+    ) {
+      onToast(u("cashierScopeRequired"));
+      return;
+    }
+    if (!mfa.verified) {
+      onToast(u("secureTeamIntro"));
+      return;
+    }
+    setEditBusy(true);
+    if (inspection) {
+      setMembers((current) =>
+        current.map((member) =>
+          member.id === editingMember.id
+            ? {
+                ...member,
+                role_code: editRole,
+                active: editActive,
+                branches: branches.filter((item) =>
+                  editBranches.includes(item.id),
+                ),
+                cashboxes: cashboxes.filter((item) =>
+                  editCashboxes.includes(item.id),
+                ),
+              }
+            : member,
+        ),
+      );
+      setEditBusy(false);
+      setEditingMember(null);
+      return;
+    }
+    const result = await updateTeamMembership({
+      membershipId: editingMember.id,
+      role: editRole,
+      branchIds: editBranches,
+      cashboxIds: editCashboxes,
+      active: editActive,
+      reason: editReason,
+    });
+    setEditBusy(false);
+    if (result.error) {
+      onToast(
+        result.error.includes("AAL2")
+          ? u("secureTeamIntro")
+          : u("teamSaveFailed"),
+      );
+      return;
+    }
+    setEditingMember(null);
+    setRefresh((value) => value + 1);
+  };
+
+  const scopeSummary = (
+    branchScope: TeamScopeRecord[],
+    cashboxScope: TeamScopeRecord[],
+  ) => {
+    const names = [...branchScope, ...cashboxScope].map((item) => item.name);
+    return names.length ? names.join(" · ") : u("noSpecificScope");
+  };
+
   return (
-    <section className="panel">
+    <section className="panel team-workspace">
       <div className="panel-header">
         <div>
           <p className="kicker">{u("teamGroup")}</p>
           <h1>{t("teamDevices")}</h1>
           <p>{u("teamIntro")}</p>
         </div>
-        <button className="text-button" onClick={onDashboard}>
-          {u("backHome")} →
-        </button>
+        <div className="team-header-actions">
+          {canManage && (
+            <button className="primary-action" onClick={openInvite}>
+              {u("addEmployee")}
+            </button>
+          )}
+          <button className="text-button" onClick={onDashboard}>
+            {u("backHome")} →
+          </button>
+        </div>
       </div>
-      <div className="dashboard-grid">
-        <div>
+
+      {canManage && !mfa.verified && (
+        <section className="team-security-gate" aria-labelledby="team-security-title">
+          <div className="settings-card-title">
+            <AppIcon name="shield" />
+            <div>
+              <h2 id="team-security-title">{u("secureTeamAction")}</h2>
+              <p>{u("secureTeamIntro")}</p>
+            </div>
+          </div>
+          {!mfa.factors.length && !enrollment ? (
+            <button
+              className="primary-action"
+              disabled={securityBusy}
+              onClick={() => void beginAuthenticatorSetup()}
+            >
+              {u("setupAuthenticator")}
+            </button>
+          ) : (
+            <form className="mfa-verification" onSubmit={confirmMfa}>
+              {enrollment && (
+                <div className="mfa-enrollment">
+                  <img src={enrollment.qrCode} alt={u("setupAuthenticator")} />
+                  <div>
+                    <p>{u("authenticatorInstructions")}</p>
+                    <label>
+                      {u("authenticatorSecret")}
+                      <input readOnly value={enrollment.secret} dir="ltr" />
+                    </label>
+                  </div>
+                </div>
+              )}
+              <label>
+                {u("verificationCode")}
+                <input
+                  required
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(event) =>
+                    setVerificationCode(
+                      event.target.value.replace(/\D/g, "").slice(0, 6),
+                    )
+                  }
+                />
+              </label>
+              <button className="primary-action" disabled={securityBusy}>
+                {securityBusy ? u("verifyingSecurity") : u("verifySecurity")}
+              </button>
+            </form>
+          )}
+        </section>
+      )}
+
+      {createdInvitation && (
+        <section className="invite-success" aria-live="polite">
+          <div>
+            <p className="kicker">{u("inviteCreated")}</p>
+            <h2>{createdInvitation.display_name}</h2>
+            <p>{u("inviteLinkInstructions")}</p>
+          </div>
+          <label>
+            {u("copyInviteLink")}
+            <input readOnly dir="ltr" value={invitationUrl} />
+          </label>
+          <div className="team-form-actions">
+            <button className="primary-action" onClick={() => void copyInvitation()}>
+              {u("copyInviteLink")}
+            </button>
+            <a
+              className="secondary-action"
+              href={`mailto:${encodeURIComponent(createdInvitation.email)}?subject=${encodeURIComponent("SARAFI team invitation")}&body=${encodeURIComponent(invitationUrl)}`}
+            >
+              {u("emailInvite")}
+            </a>
+          </div>
+        </section>
+      )}
+
+      {showInvite && (
+        <form className="team-editor" onSubmit={submitInvitation}>
+          <div className="panel-header">
+            <div>
+              <h2>{u("addEmployee")}</h2>
+              <p>{u("addEmployeeIntro")}</p>
+            </div>
+            <button className="text-button" type="button" onClick={() => setShowInvite(false)}>
+              ×
+            </button>
+          </div>
+          <div className="team-form-grid">
+            <label>
+              {u("fullName")}
+              <input required minLength={2} maxLength={100} value={inviteName} onChange={(event) => setInviteName(event.target.value)} />
+            </label>
+            <label>
+              {u("workEmail")}
+              <input required type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
+            </label>
+            <label>
+              {u("employeeRole")}
+              <select
+                value={inviteRole}
+                onChange={(event) => {
+                  const nextRole = event.target.value;
+                  setInviteRole(nextRole);
+                  if (nextRole === "cashier") {
+                    if (!inviteBranches.length && branches[0])
+                      setInviteBranches([branches[0].id]);
+                    if (!inviteCashboxes.length && cashboxes[0])
+                      setInviteCashboxes([cashboxes[0].id]);
+                  }
+                }}
+              >
+                {roleOptions.map((role) => <option key={role} value={role}>{roleName(role)}</option>)}
+              </select>
+            </label>
+          </div>
+          {inviteRole === "cashier" ? (
+            <div className="scope-grid">
+              <fieldset>
+                <legend>{u("branchAccess")}</legend>
+                {branches.map((branch) => (
+                  <label key={branch.id}>
+                    <input
+                      type="checkbox"
+                      checked={inviteBranches.includes(branch.id)}
+                      onChange={() => {
+                        const removing = inviteBranches.includes(branch.id);
+                        toggleScope(branch.id, inviteBranches, setInviteBranches);
+                        if (removing)
+                          setInviteCashboxes((current) =>
+                            current.filter(
+                              (cashboxId) =>
+                                cashboxes.find((cashbox) => cashbox.id === cashboxId)
+                                  ?.branch_id !== branch.id,
+                            ),
+                          );
+                      }}
+                    />
+                    {branch.name}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset>
+                <legend>{u("cashboxAccess")}</legend>
+                {cashboxes
+                  .filter((cashbox) => !cashbox.branch_id || inviteBranches.includes(cashbox.branch_id))
+                  .map((cashbox) => (
+                    <label key={cashbox.id}>
+                      <input type="checkbox" checked={inviteCashboxes.includes(cashbox.id)} onChange={() => toggleScope(cashbox.id, inviteCashboxes, setInviteCashboxes)} />
+                      {cashbox.name}
+                    </label>
+                  ))}
+              </fieldset>
+            </div>
+          ) : (
+            <p className="form-note">{u("businessWideAccess")}</p>
+          )}
+          <div className="team-form-actions">
+            <button className="primary-action" disabled={inviteBusy || !mfa.verified}>
+              {inviteBusy ? u("sendingInvite") : u("sendInvite")}
+            </button>
+            <button className="secondary-action" type="button" onClick={() => setShowInvite(false)}>
+              {u("cancelAction")}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {editingMember && (
+        <form className="team-editor" onSubmit={saveMember}>
+          <div className="panel-header">
+            <div>
+              <h2>{u("editAccess")} · {editingMember.display_name}</h2>
+              <p>{editingMember.email}</p>
+            </div>
+            <button className="text-button" type="button" onClick={() => setEditingMember(null)}>×</button>
+          </div>
+          <div className="team-form-grid">
+            <label>
+              {u("employeeRole")}
+              <select value={editRole} onChange={(event) => setEditRole(event.target.value)}>
+                {roleOptions.map((role) => <option key={role} value={role}>{roleName(role)}</option>)}
+              </select>
+            </label>
+            <label>
+              {u("accessChangeReason")}
+              <input required minLength={2} value={editReason} onChange={(event) => setEditReason(event.target.value)} />
+            </label>
+            <label>
+              {u("status")}
+              <select value={editActive ? "active" : "suspended"} onChange={(event) => setEditActive(event.target.value === "active")}>
+                <option value="active">{u("active")}</option>
+                <option value="suspended">{u("suspended")}</option>
+              </select>
+            </label>
+          </div>
+          {editRole === "cashier" ? (
+            <div className="scope-grid">
+              <fieldset>
+                <legend>{u("branchAccess")}</legend>
+                {branches.map((branch) => (
+                  <label key={branch.id}>
+                    <input type="checkbox" checked={editBranches.includes(branch.id)} onChange={() => toggleScope(branch.id, editBranches, setEditBranches)} />
+                    {branch.name}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset>
+                <legend>{u("cashboxAccess")}</legend>
+                {cashboxes.filter((cashbox) => !cashbox.branch_id || editBranches.includes(cashbox.branch_id)).map((cashbox) => (
+                  <label key={cashbox.id}>
+                    <input type="checkbox" checked={editCashboxes.includes(cashbox.id)} onChange={() => toggleScope(cashbox.id, editCashboxes, setEditCashboxes)} />
+                    {cashbox.name}
+                  </label>
+                ))}
+              </fieldset>
+            </div>
+          ) : (
+            <p className="form-note">{u("businessWideAccess")}</p>
+          )}
+          <div className="team-form-actions">
+            <button className="primary-action" disabled={editBusy || !mfa.verified}>
+              {editBusy ? u("loading") : u("saveAccess")}
+            </button>
+            <button className="secondary-action" type="button" onClick={() => setEditingMember(null)}>
+              {u("cancelAction")}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="team-grid">
+        <div className="team-section">
           <h2>{u("teamAccess")}</h2>
           <div className="balance-list">
-            {members.length ? (
+            {loading ? (
+              <div className="empty-live">{u("loading")}</div>
+            ) : members.length ? (
               members.map((member) => (
-                <div className="balance-row" key={member.id}>
+                <article className="team-member-card" key={member.id}>
                   <span className="currency-badge usd">
-                    {member.role_code.slice(0, 1).toUpperCase()}
+                    {member.display_name.slice(0, 1).toUpperCase()}
                   </span>
                   <span className="balance-name">
                     <b>
-                      {roleName(member.role_code)} ·{" "}
-                      {member.active ? u("active") : u("suspended")}
+                      {member.display_name} · {roleName(member.role_code)}
                     </b>
+                    <small>{member.email}</small>
                     <small>
-                      {member.mfa_required
-                        ? u("extraSecurityRequired")
-                        : u("normalSecurity")}
+                      {u("assignedTo")}: {scopeSummary(member.branches, member.cashboxes)}
                     </small>
+                    <small>{u("memberSince")} {new Date(member.joined_at).toLocaleDateString(language)}</small>
                   </span>
-                  <strong>
-                    {member.active ? u("accessOn") : u("accessOff")}
-                  </strong>
-                </div>
+                  <div className="member-actions">
+                    <strong className={member.active ? "status-active" : "status-suspended"}>
+                      {member.active ? u("active") : u("suspended")}
+                    </strong>
+                    {canManage && !member.is_current_user && member.role_code !== "owner" && (
+                      <>
+                        <button className="text-button" onClick={() => openMemberEditor(member)}>
+                          {u("editAccess")}
+                        </button>
+                        <button className="text-button danger" onClick={() => openMemberEditor(member, !member.active)}>
+                          {member.active ? u("suspendAccess") : u("reactivateAccess")}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </article>
               ))
             ) : (
               <div className="empty-live">{u("noTeam")}</div>
             )}
           </div>
         </div>
+        <div className="team-section">
+          <h2>{u("pendingInvitations")}</h2>
+          <div className="balance-list">
+            {invitations.length ? invitations.map((invitation) => (
+              <article className="team-member-card invitation-card" key={invitation.id}>
+                <span className="currency-badge usd">✉</span>
+                <span className="balance-name">
+                  <b>{invitation.display_name} · {roleName(invitation.role_code)}</b>
+                  <small>{invitation.email}</small>
+                  <small>{u("assignedTo")}: {scopeSummary(invitation.branches, invitation.cashboxes)}</small>
+                  <small>{u("expires")} {new Date(invitation.expires_at).toLocaleString(language)}</small>
+                </span>
+                {canManage && (
+                  <button className="text-button danger" onClick={() => void cancelInvitation(invitation)}>
+                    {u("cancelInvite")}
+                  </button>
+                )}
+              </article>
+            )) : <div className="empty-live">{u("noPendingInvites")}</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-grid team-secondary-grid">
         <div>
           <h2>{u("registeredDevices")}</h2>
           <div className="balance-list">
@@ -2551,6 +3249,7 @@ function TeamDevicesView({
                     <b>
                       {device.friendly_name} · {statusName(device.status)}
                     </b>
+                    <small>{device.member_name}</small>
                     <small>
                       {u("lastSeen")}{" "}
                       {new Date(device.last_seen_at).toLocaleString(language)}
@@ -2659,30 +3358,32 @@ function MoneyLocationView({
   const filteredEvidence = evidence.filter(
     (item) =>
       (currency === "ALL" || item.currency_code === currency) &&
-      (!selectedLocation || item.account_code === selectedLocation),
+      (!selectedLocation || item.location_id === selectedLocation),
   );
-  const exposure = (direction: "receivable" | "payable") =>
-    evidence
-      .filter(
-        (item) =>
-          item.account_code.startsWith(`${direction}:`) &&
-          (currency === "ALL" || item.currency_code === currency),
-      )
-      .reduce(
-        (total, row) =>
-          total.plus(new Decimal(row.native_debit).minus(row.native_credit)),
-        new Decimal(0),
-      )
-      .toFixed(2);
-  const locationLabel = (value: string) =>
-    value
-      .replace(/^location:/, "")
-      .replace(/:[A-Z]{3}$/, "")
-      .replace(/^cashbox:/, "Cashbox ");
+  const exposure = (direction: "receivable" | "payable") => {
+    const balances =
+      direction === "receivable"
+        ? (snapshot?.receivables ?? [])
+        : (snapshot?.payables ?? []);
+    const visible = balances.filter(
+      (item) => currency === "ALL" || item.currency === currency,
+    );
+    if (!visible.length) return currency === "ALL" ? "0" : `0.00 ${currency}`;
+    return visible
+      .map((item) => `${new Decimal(item.amount).toFixed(2)} ${item.currency}`)
+      .join(" · ");
+  };
+  const selectedLocationName =
+    snapshot?.locations.find((item) => item.location_id === selectedLocation)
+      ?.location_name ??
+    evidence.find((item) => item.location_id === selectedLocation)
+      ?.location_name ??
+    "";
   const rows =
     view === "currency"
       ? currencies.map((item) => ({
           key: item,
+          selectionKey: null,
           label: item,
           amount:
             snapshot?.positions.find((position) => position.currency === item)
@@ -2690,8 +3391,9 @@ function MoneyLocationView({
           currency: item,
         }))
       : visibleLocations.map((item) => ({
-          key: `${item.location}:${item.currency}`,
-          label: locationLabel(item.location),
+          key: `${item.location_id}:${item.currency}`,
+          selectionKey: item.location_id,
+          label: item.location_name,
           amount: item.quantity,
           currency: item.currency,
         }));
@@ -2744,15 +3446,11 @@ function MoneyLocationView({
       <div className="metric-grid">
         <article className="metric-card">
           <span>{u("theyOweUs")}</span>
-          <strong>
-            {exposure("receivable")} {currency === "ALL" ? "" : currency}
-          </strong>
+          <strong>{exposure("receivable")}</strong>
         </article>
         <article className="metric-card">
           <span>{u("weOweThem")}</span>
-          <strong>
-            {exposure("payable")} {currency === "ALL" ? "" : currency}
-          </strong>
+          <strong>{exposure("payable")}</strong>
         </article>
         <article className="metric-card">
           <span>{u("postedRecords")}</span>
@@ -2771,9 +3469,7 @@ function MoneyLocationView({
                   key={row.key}
                   onClick={() =>
                     setSelectedLocation(
-                      view === "location"
-                        ? row.key.split(":").slice(0, -1).join(":")
-                        : null,
+                      view === "location" ? row.selectionKey : null,
                     )
                   }
                 >
@@ -2800,7 +3496,7 @@ function MoneyLocationView({
               <div>
                 <h2>
                   {selectedLocation
-                    ? `${u("amountSource")} · ${locationLabel(selectedLocation)}`
+                    ? `${u("amountSource")} · ${selectedLocationName}`
                     : u("amountSource")}
                 </h2>
                 <p>{u("eachAmountSource")}</p>
@@ -2816,7 +3512,7 @@ function MoneyLocationView({
                     <span className="balance-name">
                       <b>
                         {line.memo ||
-                          line.account_name ||
+                          line.location_name ||
                           u("recordedTransaction")}
                       </b>
                       <small>
@@ -4224,6 +4920,7 @@ function AuthScreen({
   language,
   onLanguageChange,
   mode,
+  invitation,
   email,
   password,
   message,
@@ -4237,6 +4934,7 @@ function AuthScreen({
   language: Language;
   onLanguageChange: (language: Language) => void;
   mode: "signIn" | "signUp" | "reset";
+  invitation: boolean;
   email: string;
   password: string;
   message: string;
@@ -4249,6 +4947,7 @@ function AuthScreen({
 }) {
   const reset = mode === "reset";
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
+  const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   return (
     <main className="auth-shell">
       <div className="auth-layout">
@@ -4299,6 +4998,8 @@ function AuthScreen({
           <h1>
             {reset
               ? t("resetPassword")
+              : invitation
+                ? u("joinTeam")
               : mode === "signUp"
                 ? t("createOwnerAccount")
                 : t("welcomeBack")}
@@ -4306,6 +5007,8 @@ function AuthScreen({
           <p className="auth-subtitle">
             {reset
               ? t("resetSubtitle")
+              : invitation
+                ? u("joinTeamSubtitle")
               : mode === "signUp"
                 ? t("signUpSubtitle")
                 : t("signInSubtitle")}
@@ -4346,7 +5049,9 @@ function AuthScreen({
                 : reset
                   ? t("sendResetLink")
                   : mode === "signUp"
-                    ? t("createAccount")
+                    ? invitation
+                      ? u("createAndJoin")
+                      : t("createAccount")
                     : t("signIn")}{" "}
               <span aria-hidden="true">{isRtl(language) ? "←" : "→"}</span>
             </button>
