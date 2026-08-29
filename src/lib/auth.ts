@@ -1,12 +1,19 @@
 import type { AuthenticatorAssuranceLevels, RealtimeChannel, SupabaseClient, User } from '@supabase/supabase-js'
 import { getSupabaseClient } from './supabase'
 
-export type AuthResult = { user: User | null; error: string | null }
+export type AuthFailureDetails = { error: string | null; errorCode: string | null; status: number | null }
+export type DetailedAuthResult = AuthFailureDetails & { user: User | null }
 export type MfaState = { aal: AuthenticatorAssuranceLevels | null; verified: boolean }
 
 async function withTimeout<T>(request: Promise<T>, message = 'The request timed out. Check your connection and try again.'): Promise<T> {
   let timeoutId: number | undefined
-  const timeout = new Promise<never>((_, reject) => { timeoutId = window.setTimeout(() => reject(new Error(message)), 12000) })
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      const error = new Error(message)
+      error.name = 'TimeoutError'
+      reject(error)
+    }, 12000)
+  })
   try { return await Promise.race([request, timeout]) } finally { if (timeoutId !== undefined) window.clearTimeout(timeoutId) }
 }
 
@@ -15,28 +22,40 @@ function clientOrError(): { client: SupabaseClient | null; error: string | null 
   return client ? { client, error: null } : { client: null, error: 'Supabase is not configured' }
 }
 
-export async function signInWithPassword(email: string, password: string): Promise<AuthResult> {
+const authFailure = (error: { message: string; code?: string; status?: number } | null): AuthFailureDetails => ({
+  error: error?.message ?? null,
+  errorCode: error?.code ?? null,
+  status: error?.status ?? null,
+})
+
+const requestFailure = (error: unknown, fallback: string): AuthFailureDetails => ({
+  error: error instanceof Error ? error.message : fallback,
+  errorCode: error instanceof Error && error.name === 'TimeoutError' ? 'request_timeout' : 'network_error',
+  status: null,
+})
+
+export async function signInWithPassword(email: string, password: string): Promise<DetailedAuthResult> {
   const { client, error } = clientOrError()
-  if (!client) return { user: null, error }
+  if (!client) return { user: null, error, errorCode: 'supabase_not_configured', status: null }
   let result
-  try { result = await withTimeout(client.auth.signInWithPassword({ email: email.trim(), password })) } catch (requestError) { return { user: null, error: requestError instanceof Error ? requestError.message : 'Sign-in request failed' } }
-  return { user: result.data.user, error: result.error?.message ?? null }
+  try { result = await withTimeout(client.auth.signInWithPassword({ email: email.trim(), password })) } catch (requestError) { return { user: null, ...requestFailure(requestError, 'Sign-in request failed') } }
+  return { user: result.data.user, ...authFailure(result.error) }
 }
 
-export async function signUpWithPassword(email: string, password: string): Promise<AuthResult> {
+export async function signUpWithPassword(email: string, password: string): Promise<DetailedAuthResult> {
   const { client, error } = clientOrError()
-  if (!client) return { user: null, error }
+  if (!client) return { user: null, error, errorCode: 'supabase_not_configured', status: null }
   let result
-  try { result = await withTimeout(client.auth.signUp({ email: email.trim(), password })) } catch (requestError) { return { user: null, error: requestError instanceof Error ? requestError.message : 'Sign-up request failed' } }
-  return { user: result.data.user, error: result.error?.message ?? null }
+  try { result = await withTimeout(client.auth.signUp({ email: email.trim(), password })) } catch (requestError) { return { user: null, ...requestFailure(requestError, 'Sign-up request failed') } }
+  return { user: result.data.user, ...authFailure(result.error) }
 }
 
-export async function sendPasswordReset(email: string, redirectTo: string): Promise<string | null> {
+export async function sendPasswordReset(email: string, redirectTo: string): Promise<AuthFailureDetails> {
   const { client, error } = clientOrError()
-  if (!client) return error
+  if (!client) return { error, errorCode: 'supabase_not_configured', status: null }
   let result
-  try { result = await withTimeout(client.auth.resetPasswordForEmail(email.trim(), { redirectTo })) } catch (requestError) { return requestError instanceof Error ? requestError.message : 'Password reset request failed' }
-  return result.error?.message ?? null
+  try { result = await withTimeout(client.auth.resetPasswordForEmail(email.trim(), { redirectTo })) } catch (requestError) { return requestFailure(requestError, 'Password reset request failed') }
+  return authFailure(result.error)
 }
 
 export async function signOut(): Promise<string | null> {

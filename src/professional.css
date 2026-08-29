@@ -1219,6 +1219,75 @@ td {
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.26);
 }
 
+.auth-language-switcher {
+  min-width: 0;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+}
+
+.auth-language-switcher legend {
+  margin-bottom: 7px;
+  color: #52635b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.auth-language-switcher > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #dce4df;
+  border-radius: 9px;
+  background: #f3f6f3;
+}
+
+.auth-language-switcher button {
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #52635b;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.auth-language-switcher button:hover {
+  color: #164f40;
+  background: #e7efea;
+}
+
+.auth-language-switcher button.active {
+  border-color: #d3dfd8;
+  color: #0d5c49;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(16, 55, 45, 0.09);
+}
+
+.auth-language-switcher button:focus-visible {
+  outline: 3px solid rgba(36, 128, 108, 0.18);
+  outline-offset: 1px;
+}
+
+.auth-message {
+  border: 1px solid #d8e8de;
+  line-height: 1.55;
+}
+
+.auth-message.error {
+  border-color: #edc8c3;
+  color: #8a3029;
+  background: #fff3f1;
+}
+
+.auth-message.success {
+  border-color: #cbe3d3;
+  color: #285f45;
+  background: #eef8f1;
+}
+
 .auth-card label,
 .auth-subtitle,
 .auth-links button {

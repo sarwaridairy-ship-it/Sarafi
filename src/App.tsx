@@ -53,6 +53,7 @@ import {
   signInWithPassword,
   signOut,
   signUpWithPassword,
+  type DetailedAuthResult,
 } from "./lib/auth";
 import {
   BrowserDocumentCaptureProvider,
@@ -71,6 +72,26 @@ import {
 } from "./ProfessionalWorkspace";
 
 const loadExports = () => import("./lib/exports");
+
+function localizedAuthError(
+  language: Language,
+  result: Pick<DetailedAuthResult, "errorCode" | "status">,
+): string {
+  const code = result.errorCode ?? "";
+  if (result.status === 429 || code.includes("rate_limit"))
+    return ux(language, "authTooManyAttempts");
+  if (code === "invalid_credentials" || code === "invalid_grant")
+    return ux(language, "authInvalidCredentials");
+  if (code === "email_not_confirmed")
+    return ux(language, "authEmailNotConfirmed");
+  if (code === "request_timeout")
+    return ux(language, "authRequestTimedOut");
+  if (code === "network_error")
+    return ux(language, "authServiceUnreachable");
+  if (code === "supabase_not_configured")
+    return ux(language, "authConfigurationError");
+  return ux(language, "requestFailed");
+}
 
 type Trade = {
   id: string | number;
@@ -214,6 +235,9 @@ function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [authMessageKind, setAuthMessageKind] = useState<
+    "error" | "success" | null
+  >(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [browserDeviceId] = useState(() => {
     const key = "sarafi-browser-device-id";
@@ -441,20 +465,19 @@ function App() {
     event.preventDefault();
     setAuthBusy(true);
     setAuthMessage("");
+    setAuthMessageKind(null);
     const result =
       authMode === "signIn"
         ? await signInWithPassword(authEmail, authPassword)
         : authMode === "signUp"
           ? await signUpWithPassword(authEmail, authPassword)
-          : {
-              user: null,
-              error: await sendPasswordReset(authEmail, window.location.origin),
-            };
+          : { user: null, ...(await sendPasswordReset(authEmail, window.location.origin)) };
     setAuthBusy(false);
     if (result.user) setUser(result.user);
+    setAuthMessageKind(result.error ? "error" : "success");
     setAuthMessage(
       result.error
-        ? u("requestFailed")
+        ? localizedAuthError(language, result)
         : authMode === "reset"
           ? t("passwordResetRequested")
           : authMode === "signUp"
@@ -820,10 +843,23 @@ function App() {
         email={authEmail}
         password={authPassword}
         message={authMessage}
+        messageKind={authMessageKind}
         busy={authBusy}
-        onModeChange={setAuthMode}
-        onEmailChange={setAuthEmail}
-        onPasswordChange={setAuthPassword}
+        onModeChange={(mode) => {
+          setAuthMode(mode);
+          setAuthMessage("");
+          setAuthMessageKind(null);
+        }}
+        onEmailChange={(value) => {
+          setAuthEmail(value);
+          setAuthMessage("");
+          setAuthMessageKind(null);
+        }}
+        onPasswordChange={(value) => {
+          setAuthPassword(value);
+          setAuthMessage("");
+          setAuthMessageKind(null);
+        }}
         onSubmit={submitAuth}
       />
     );
@@ -4187,6 +4223,7 @@ function AuthScreen({
   email,
   password,
   message,
+  messageKind,
   busy,
   onModeChange,
   onEmailChange,
@@ -4199,6 +4236,7 @@ function AuthScreen({
   email: string;
   password: string;
   message: string;
+  messageKind: "error" | "success" | null;
   busy: boolean;
   onModeChange: (mode: "signIn" | "signUp" | "reset") => void;
   onEmailChange: (value: string) => void;
@@ -4231,20 +4269,28 @@ function AuthScreen({
           </div>
         </section>
         <section className="auth-card">
-          <label>
-            {t("language")}
-            <select
-              aria-label={t("language")}
-              value={language}
-              onChange={(event) =>
-                onLanguageChange(event.target.value as Language)
-              }
-            >
-              <option value="fa-AF">دری</option>
-              <option value="ps-AF">پښتو</option>
-              <option value="en">English</option>
-            </select>
-          </label>
+          <fieldset className="auth-language-switcher">
+            <legend>{t("language")}</legend>
+            <div>
+              {([
+                ["fa-AF", "دری"],
+                ["ps-AF", "پښتو"],
+                ["en", "English"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  lang={value}
+                  dir={value === "en" ? "ltr" : "rtl"}
+                  className={language === value ? "active" : ""}
+                  aria-pressed={language === value}
+                  onClick={() => onLanguageChange(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <p className="kicker">{t("secureAccess")}</p>
           <h1>
             {reset
@@ -4260,7 +4306,7 @@ function AuthScreen({
                 ? t("signUpSubtitle")
                 : t("signInSubtitle")}
           </p>
-          <form onSubmit={onSubmit}>
+          <form onSubmit={onSubmit} aria-describedby={message ? "auth-feedback" : undefined}>
             <label>
               {t("emailAddress")}
               <input
@@ -4277,7 +4323,7 @@ function AuthScreen({
                 <input
                   type="password"
                   required
-                  minLength={8}
+                  minLength={mode === "signUp" ? 8 : undefined}
                   value={password}
                   onChange={(event) => onPasswordChange(event.target.value)}
                   autoComplete={
@@ -4298,11 +4344,15 @@ function AuthScreen({
                   : mode === "signUp"
                     ? t("createAccount")
                     : t("signIn")}{" "}
-              <span>→</span>
+              <span aria-hidden="true">{isRtl(language) ? "←" : "→"}</span>
             </button>
           </form>
           {message && (
-            <p className="auth-message" role="status">
+            <p
+              id="auth-feedback"
+              className={`auth-message ${messageKind ?? ""}`}
+              role={messageKind === "error" ? "alert" : "status"}
+            >
               {message}
             </p>
           )}
