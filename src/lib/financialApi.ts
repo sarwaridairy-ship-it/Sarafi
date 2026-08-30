@@ -8,11 +8,13 @@ export type DashboardSnapshot = { transaction_count: number; buy_count: number; 
 export type DebtRecord = { id: string; counterparty_id: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null }
 export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string }
-export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string }
+export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null }
 export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string }
 export type CashboxBalanceRecord = { currency_code: string; expected_amount: string }
 export type CounterpartyStatementRecord = { id: string; occurred_at: string; event_type: string; reference: string; status: string; memo: string | null; direction: 'receivable' | 'payable' | null; currency_code: string | null; amount: string | null }
 export type RateHistoryRecord = { id: string; from_currency: string; to_currency: string; buy_rate: string; sell_rate: string; effective_from: string; group_name: string; branch_id: string | null }
+export type CurrencyCatalogRecord = { code: string; name_en: string; name_dari: string; name_pashto: string; symbol: string; minor_unit: number; enabled: boolean }
+export type MoneyAccountRecord = { id: string; name: string; account_type: 'cashbox' | 'safe' | 'bank' | 'mobile_money' | 'partner' | 'other'; branch_id: string | null; cashbox_id: string | null; reference_label: string | null; active: boolean; balances: Array<{ currency: string; amount: string }> }
 export type TeamScopeRecord = { id: string; name: string; branch_id?: string }
 export type TeamMemberRecord = { id: string; display_name: string; email: string; role_code: string; active: boolean; mfa_required: boolean; joined_at: string; is_current_user: boolean; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
 export type TeamInvitationRecord = { id: string; display_name: string; email: string; role_code: string; mfa_required: boolean; status: string; created_at: string; expires_at: string; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
@@ -103,6 +105,64 @@ export async function recordOperation(command: Record<string, unknown>): Promise
   if (!session.data.session) return { data: null, error: 'Authentication required' }
   const result = await client.rpc('record_operation', { command })
   return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function listCurrencyCatalog(organizationId?: string | null): Promise<RpcResult<CurrencyCatalogRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const currencies = await client.from('currencies').select('code,name_en,name_dari,name_pashto,symbol,minor_unit').eq('active', true).order('code')
+  if (currencies.error) return { data: null, error: currencies.error.message }
+  let enabled = new Set<string>()
+  if (organizationId && organizationId !== 'inspection') {
+    const selected = await client.from('organization_currencies').select('currency_code').eq('organization_id', organizationId).eq('enabled', true)
+    if (selected.error) return { data: null, error: selected.error.message }
+    enabled = new Set((selected.data ?? []).map((row) => row.currency_code))
+  }
+  return {
+    data: (currencies.data ?? []).map((row) => ({ ...row, enabled: organizationId === 'inspection' ? ['AFN', 'USD', 'EUR', 'AED', 'PKR'].includes(row.code) : enabled.has(row.code) })) as CurrencyCatalogRecord[],
+    error: null,
+  }
+}
+
+export async function setOrganizationCurrency(organizationId: string, currencyCode: string, enabled: boolean): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_organization_currency', { target_org: organizationId, target_currency: currencyCode, enabled_input: enabled })
+  return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
+}
+
+export async function listMoneyAccounts(organizationId: string): Promise<RpcResult<MoneyAccountRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_money_accounts', { target_org: organizationId })
+  return { data: result.data as MoneyAccountRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function createMoneyAccount(input: { organizationId: string; name: string; accountType: Exclude<MoneyAccountRecord['account_type'], 'cashbox'>; branchId?: string | null; reference?: string }): Promise<RpcResult<MoneyAccountRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_money_account', {
+    target_org: input.organizationId,
+    name_input: input.name.trim(),
+    account_type_input: input.accountType,
+    branch_id_input: input.branchId ?? null,
+    reference_input: input.reference?.trim() ?? '',
+  })
+  return { data: result.data as MoneyAccountRecord | null, error: result.error?.message ?? null }
+}
+
+export async function setExchangeRate(input: { organizationId: string; branchId?: string | null; sourceCurrency: string; targetCurrency: string; buyRate: string; sellRate: string }): Promise<RpcResult<RateHistoryRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_exchange_rate', {
+    target_org: input.organizationId,
+    target_branch: input.branchId ?? null,
+    source_currency_input: input.sourceCurrency,
+    target_currency_input: input.targetCurrency,
+    buy_rate_input: input.buyRate,
+    sell_rate_input: input.sellRate,
+  })
+  return { data: result.data as RateHistoryRecord | null, error: result.error?.message ?? null }
 }
 
 export async function commitImport(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
@@ -210,8 +270,34 @@ export async function requestReversal(command: Record<string, unknown>): Promise
 export async function listJournalEntries(organizationId: string): Promise<RpcResult<JournalRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.from('journal_entries').select('id,status,memo,occurred_at,branch_id').eq('organization_id', organizationId).order('occurred_at', { ascending: false }).limit(100)
-  return { data: result.data as JournalRecord[] | null, error: result.error?.message ?? null }
+  const [result, cashboxes] = await Promise.all([
+    client.from('journal_entries').select('id,status,memo,occurred_at,branch_id,financial_events!inner(event_type,immutable_reference,metadata)').eq('organization_id', organizationId).order('occurred_at', { ascending: false }).limit(100),
+    client.from('cashboxes').select('id,name').eq('organization_id', organizationId),
+  ])
+  const cashboxNames = new Map((cashboxes.data ?? []).map((cashbox) => [cashbox.id, cashbox.name]))
+  const rows = (result.data ?? []).map((row) => {
+    const event = Array.isArray(row.financial_events) ? row.financial_events[0] : row.financial_events
+    return {
+      id: row.id,
+      status: row.status,
+      memo: row.memo,
+      occurred_at: row.occurred_at,
+      branch_id: row.branch_id,
+      event_type: event?.event_type,
+      immutable_reference: event?.immutable_reference,
+      source_account_name: event?.metadata?.source_account_name ?? null,
+      destination_account_name: event?.metadata?.destination_account_name ?? null,
+      source_account_kind: event?.metadata?.source_account_kind ?? null,
+      destination_account_kind: event?.metadata?.destination_account_kind ?? null,
+      legacy_location_name: event?.metadata?.location ?? event?.metadata?.origin_location ?? null,
+      legacy_from_name: event?.metadata?.from_location ?? null,
+      legacy_to_name: event?.metadata?.to_location ?? null,
+      cashbox_name: cashboxNames.get(event?.metadata?.cashbox_id) ?? null,
+      currency_code: event?.metadata?.currency ?? event?.metadata?.sold_currency ?? null,
+      amount: event?.metadata?.amount ?? event?.metadata?.sold_amount ?? null,
+    }
+  }) as JournalRecord[]
+  return { data: rows, error: result.error?.message ?? cashboxes.error?.message ?? null }
 }
 
 export async function listLocationEvidence(organizationId: string): Promise<RpcResult<LocationEvidenceRecord[]>> {
@@ -258,10 +344,10 @@ export async function getOwnerDashboard(organizationId: string, targetDay?: stri
   return { data: result.data as DashboardSnapshot | null, error: result.error?.message ?? null }
 }
 
-export async function getCurrentRates(organizationId: string, branchId?: string): Promise<RpcResult<{ buy_rate: string; sell_rate: string; from_currency: string; to_currency: string }[]>> {
+export async function getCurrentRates(organizationId: string, branchId?: string, fromCurrency = 'USD', toCurrency = 'AFN'): Promise<RpcResult<{ buy_rate: string; sell_rate: string; from_currency: string; to_currency: string }[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.from('rate_board_entries').select('buy_rate,sell_rate,from_currency,to_currency').eq('organization_id', organizationId).eq('from_currency', 'USD').eq('to_currency', 'AFN').eq('active', true).or(`branch_id.is.null,branch_id.eq.${branchId ?? '00000000-0000-0000-0000-000000000000'}`).order('effective_from', { ascending: false }).limit(1)
+  const result = await client.from('rate_board_entries').select('buy_rate,sell_rate,from_currency,to_currency,branch_id').eq('organization_id', organizationId).eq('from_currency', fromCurrency).eq('to_currency', toCurrency).eq('active', true).or(`branch_id.is.null,branch_id.eq.${branchId ?? '00000000-0000-0000-0000-000000000000'}`).order('branch_id', { ascending: false, nullsFirst: false }).order('effective_from', { ascending: false }).limit(1)
   return { data: result.data as { buy_rate: string; sell_rate: string; from_currency: string; to_currency: string }[] | null, error: result.error?.message ?? null }
 }
 

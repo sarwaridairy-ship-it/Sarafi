@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Decimal from "decimal.js";
 import "./App.css";
 import "./professional.css";
@@ -11,6 +11,8 @@ import { isRtl, translate, type Language } from "./lib/i18n";
 import { ux } from "./lib/uxCopy";
 import {
   getCurrentRates,
+  listCurrencyCatalog,
+  listMoneyAccounts,
   getReceiptForJournalEntry,
   getOwnerDashboard,
   getTeamControlPlane,
@@ -33,6 +35,9 @@ import {
   recordHawalaSend,
   recordOpeningBalance,
   recordOperation,
+  createMoneyAccount,
+  setOrganizationCurrency,
+  setExchangeRate,
   recordReportExport,
   requestReversal,
   settleDebt,
@@ -45,6 +50,8 @@ import {
   type JournalRecord,
   type LocationEvidenceRecord,
   type RateHistoryRecord,
+  type CurrencyCatalogRecord,
+  type MoneyAccountRecord,
   type TeamMemberRecord,
   type TeamInvitationRecord,
   type TeamScopeRecord,
@@ -140,6 +147,34 @@ type WorkspaceRole =
   | "compliance_officer"
   | "viewer";
 
+const inspectionCurrencies: CurrencyCatalogRecord[] = [
+  ["AFN", "Afghan Afghani", "افغانی", "افغانۍ", "؋"],
+  ["USD", "United States Dollar", "دالر امریکایی", "امریکايي ډالر", "$"],
+  ["EUR", "Euro", "یورو", "یورو", "€"],
+  ["AED", "UAE Dirham", "درهم امارات", "اماراتي درهم", "د.إ"],
+  ["PKR", "Pakistani Rupee", "روپیه پاکستانی", "پاکستانۍ روپۍ", "₨"],
+  ["GBP", "British Pound", "پوند انگلیس", "بریتانوي پونډ", "£"],
+  ["SAR", "Saudi Riyal", "ریال سعودی", "سعودي ریال", "﷼"],
+  ["CNY", "Chinese Yuan", "یوان چین", "چینايي یوان", "¥"],
+  ["INR", "Indian Rupee", "روپیه هندی", "هندي روپۍ", "₹"],
+].map(([code, name_en, name_dari, name_pashto, symbol]) => ({
+  code,
+  name_en,
+  name_dari,
+  name_pashto,
+  symbol,
+  minor_unit: 2,
+  enabled: true,
+}));
+
+function currencyName(language: Language, currency: CurrencyCatalogRecord) {
+  return language === "fa-AF"
+    ? currency.name_dari
+    : language === "ps-AF"
+      ? currency.name_pashto
+      : currency.name_en;
+}
+
 function App() {
   validateClientEnvironment();
   const inspectionMode =
@@ -161,11 +196,11 @@ function App() {
     null,
   );
   const [operationAmount, setOperationAmount] = useState("");
+  const [operationBaseAmount, setOperationBaseAmount] = useState("");
   const [operationCurrency, setOperationCurrency] = useState("AFN");
-  const [operationLocation, setOperationLocation] = useState("Main Counter");
-  const [operationFromLocation, setOperationFromLocation] =
-    useState("Main Counter");
-  const [operationToLocation, setOperationToLocation] = useState("Main Safe");
+  const [operationSourceAccount, setOperationSourceAccount] = useState("");
+  const [operationDestinationAccount, setOperationDestinationAccount] =
+    useState("");
   const [operationCategory, setOperationCategory] = useState("Other");
   const [operationMemo, setOperationMemo] = useState("");
   const [activityFilter, setActivityFilter] = useState("Today");
@@ -185,12 +220,8 @@ function App() {
   const [tradeSide, setTradeSide] = useState<
     "BUY_FX" | "SELL_FX" | "EXCHANGE_FX"
   >("SELL_FX");
-  const [tradeCurrency, setTradeCurrency] = useState<"AFN" | "USD" | "EUR">(
-    "USD",
-  );
-  const [tradeReceiveCurrency, setTradeReceiveCurrency] = useState<
-    "AFN" | "USD" | "EUR"
-  >("EUR");
+  const [tradeCurrency, setTradeCurrency] = useState("USD");
+  const [tradeReceiveCurrency, setTradeReceiveCurrency] = useState("EUR");
   const [tradeFee, setTradeFee] = useState("");
   const [tradeNote, setTradeNote] = useState("");
   const [tradeCounterparty, setTradeCounterparty] = useState("");
@@ -215,11 +246,20 @@ function App() {
   const [organizationName, setOrganizationName] = useState(
     inspectionMode ? "Kabul Central Exchange" : "",
   );
-  const [branchId, setBranchId] = useState<string | null>(null);
+  const [branchId, setBranchId] = useState<string | null>(
+    inspectionMode ? "inspection-branch" : null,
+  );
   const [branchName, setBranchName] = useState(
     inspectionMode ? "Main branch" : "",
   );
-  const [cashboxId, setCashboxId] = useState<string | null>(null);
+  const [cashboxId, setCashboxId] = useState<string | null>(
+    inspectionMode ? "inspection-cashbox-id" : null,
+  );
+  const [currencyCatalog, setCurrencyCatalog] = useState<
+    CurrencyCatalogRecord[]
+  >([]);
+  const [moneyAccounts, setMoneyAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [moneyContextRefresh, setMoneyContextRefresh] = useState(0);
   const [organizationLoading, setOrganizationLoading] =
     useState(!inspectionMode);
   const [businessName, setBusinessName] = useState("");
@@ -228,7 +268,7 @@ function App() {
     "USD",
   ]);
   const [onboardingCashboxName, setOnboardingCashboxName] =
-    useState("Main Counter");
+    useState(() => ux(language, "previewCashboxName"));
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null,
   );
@@ -466,6 +506,79 @@ function App() {
   }, [inspectionMode, organizationId]);
 
   useEffect(() => {
+    if (inspectionMode) {
+      setCurrencyCatalog(inspectionCurrencies);
+      setMoneyAccounts([
+        {
+          id: "inspection-cashbox",
+          name: ux(language, "previewCashboxName"),
+          account_type: "cashbox",
+          branch_id: "inspection-branch",
+          cashbox_id: "inspection-cashbox-id",
+          reference_label: null,
+          active: true,
+          balances: [
+            { currency: "AFN", amount: "1250000" },
+            { currency: "USD", amount: "18000" },
+          ],
+        },
+        {
+          id: "inspection-safe",
+          name: ux(language, "previewSafeName"),
+          account_type: "safe",
+          branch_id: "inspection-branch",
+          cashbox_id: null,
+          reference_label: null,
+          active: true,
+          balances: [{ currency: "AFN", amount: "450000" }],
+        },
+        {
+          id: "inspection-bank",
+          name: ux(language, "previewBankName"),
+          account_type: "bank",
+          branch_id: null,
+          cashbox_id: null,
+          reference_label: ux(language, "previewBankReference"),
+          active: true,
+          balances: [{ currency: "AFN", amount: "300000" }],
+        },
+      ]);
+      return;
+    }
+    void listCurrencyCatalog(organizationId).then((result) => {
+      if (result.data) {
+        setCurrencyCatalog(result.data);
+        const codes = result.data.filter((item) => item.enabled).map((item) => item.code);
+        const foreignCodes = codes.filter((code) => code !== "AFN");
+        setOperationCurrency((current) => codes.includes(current) ? current : codes[0] ?? "AFN");
+        setOpeningCurrency((current) => codes.includes(current) ? current : codes[0] ?? "AFN");
+        setTradeCurrency((current) => foreignCodes.includes(current) ? current : foreignCodes[0] ?? "USD");
+        setTradeReceiveCurrency((current) => foreignCodes.includes(current) ? current : foreignCodes[1] ?? foreignCodes[0] ?? "USD");
+      }
+      if (result.error && organizationId) setToast(ux(language, "couldNotLoad"));
+    });
+    if (!organizationId) {
+      setMoneyAccounts([]);
+      return;
+    }
+    void listMoneyAccounts(organizationId).then((result) => {
+      if (result.data) setMoneyAccounts(result.data);
+      if (result.error) setToast(ux(language, "couldNotLoad"));
+    });
+  }, [inspectionMode, language, moneyContextRefresh, organizationId]);
+
+  const enabledCurrencies = currencyCatalog.filter((item) => item.enabled);
+  const enabledCurrencyCodes = enabledCurrencies.length
+    ? enabledCurrencies.map((item) => item.code)
+    : ["AFN", "USD", "EUR"];
+  const tradeCurrencies = enabledCurrencyCodes.filter(
+    (currency) => currency !== "AFN",
+  );
+  const branchMoneyAccounts = moneyAccounts.filter(
+    (account) => !account.branch_id || !branchId || account.branch_id === branchId,
+  );
+
+  useEffect(() => {
     if (inspectionMode) return;
     if (!organizationId) return;
     void getOwnerDashboard(organizationId, dashboardDate).then((result) => {
@@ -498,7 +611,12 @@ function App() {
 
   useEffect(() => {
     if (inspectionMode || !organizationId) return;
-    void getCurrentRates(organizationId, branchId ?? undefined).then(
+    void getCurrentRates(
+      organizationId,
+      branchId ?? undefined,
+      tradeCurrency,
+      "AFN",
+    ).then(
       (result) => {
         if (result.error) {
           setToast(ux(language, "couldNotLoad"));
@@ -508,10 +626,13 @@ function App() {
         if (current) {
           setRateState(current.buy_rate);
           setSellRate(current.sell_rate);
+        } else {
+          setRateState("");
+          setSellRate("");
         }
       },
     );
-  }, [branchId, inspectionMode, language, organizationId]);
+  }, [branchId, inspectionMode, language, organizationId, tradeCurrency]);
 
   const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -546,7 +667,7 @@ function App() {
       language,
       base_currency_code: "AFN",
       currencies: onboardingCurrencies,
-      branch_name: "Main Branch",
+      branch_name: t("mainBranch"),
       cashbox_name: onboardingCashboxName,
     });
     setOrganizationLoading(false);
@@ -561,6 +682,10 @@ function App() {
     event.preventDefault();
     if (tradeBusy) return;
     if (tradeSide === "EXCHANGE_FX") {
+      setToast(u("pairRateUnavailable"));
+      return;
+    }
+    if (!rate || !sellRate) {
       setToast(u("pairRateUnavailable"));
       return;
     }
@@ -682,7 +807,7 @@ function App() {
     }
     const authorization = await recordReportExport({
       organization_id: organizationId,
-      report_name: "Recent Activity",
+      report_name: u("recentActivity"),
       format: "csv",
       filters: { scope: "loaded_activity" },
     });
@@ -695,12 +820,12 @@ function App() {
         entryId: `trade_${trade.id}`,
         occurredAt: trade.time,
         type: trade.direction,
-        branchId: "Kabul Central",
+        branchId: branchName || t("mainBranch"),
         status: trade.status.toLowerCase(),
         realizedProfit: "0",
       })),
-      "Kabul Central Exchange",
-      "Recent Activity",
+      organizationName || u("yourBusiness"),
+      u("recentActivity"),
       new Date().toISOString(),
     );
     const link = document.createElement("a");
@@ -714,12 +839,43 @@ function App() {
   };
 
   const openOperation = (kind: OperationKind) => {
+    const activeAccount =
+      (cashboxId
+        ? branchMoneyAccounts.find((account) => account.cashbox_id === cashboxId)
+        : undefined) ??
+      branchMoneyAccounts.find((account) => account.account_type === "cashbox") ??
+      branchMoneyAccounts[0];
+    const bankAccount = branchMoneyAccounts.find(
+      (account) => account.account_type === "bank",
+    );
+    const secondAccount = branchMoneyAccounts.find(
+      (account) => account.id !== activeAccount?.id,
+    );
     setOperationKind(kind);
     setOperationAmount("");
+    setOperationBaseAmount("");
     setOperationMemo("");
     setOperationCategory("Other");
-    setOperationFromLocation("Main Counter");
-    setOperationToLocation("Main Safe");
+    if (kind === "BANK_WITHDRAWAL") {
+      setOperationSourceAccount(bankAccount?.id ?? "");
+      setOperationDestinationAccount(activeAccount?.id ?? "");
+    } else if (kind === "BANK_DEPOSIT") {
+      setOperationSourceAccount(activeAccount?.id ?? "");
+      setOperationDestinationAccount(bankAccount?.id ?? "");
+    } else if (kind === "TRANSFER_CASH") {
+      setOperationSourceAccount(activeAccount?.id ?? "");
+      setOperationDestinationAccount(secondAccount?.id ?? "");
+    } else if (
+      kind === "RECEIVE_MONEY" ||
+      kind === "RECORD_INCOME" ||
+      kind === "OWNER_INVESTMENT"
+    ) {
+      setOperationSourceAccount("");
+      setOperationDestinationAccount(activeAccount?.id ?? "");
+    } else {
+      setOperationSourceAccount(activeAccount?.id ?? "");
+      setOperationDestinationAccount("");
+    }
     setShowActions(false);
   };
 
@@ -745,15 +901,43 @@ function App() {
       setToast(u("activeBranchRequired"));
       return;
     }
+    const incoming = [
+      "RECEIVE_MONEY",
+      "RECORD_INCOME",
+      "OWNER_INVESTMENT",
+    ].includes(operationKind);
+    const twoAccounts = [
+      "TRANSFER_CASH",
+      "BANK_DEPOSIT",
+      "BANK_WITHDRAWAL",
+    ].includes(operationKind);
+    if (
+      (!incoming && !operationSourceAccount) ||
+      (incoming && !operationDestinationAccount) ||
+      (twoAccounts &&
+        (!operationSourceAccount || !operationDestinationAccount))
+    ) {
+      setToast(u("chooseMoneyAccount"));
+      return;
+    }
+    if (
+      twoAccounts &&
+      operationSourceAccount === operationDestinationAccount
+    ) {
+      setToast(u("accountsMustDiffer"));
+      return;
+    }
     const result = await recordOperation({
       organization_id: organizationId,
       branch_id: branchId,
       operation: operationKind,
       currency: operationCurrency,
       amount: operationAmount,
-      location: operationLocation,
-      from_location: operationFromLocation,
-      to_location: operationToLocation,
+      base_amount:
+        operationCurrency === "AFN" ? operationAmount : operationBaseAmount,
+      source_money_account_id: operationSourceAccount || undefined,
+      destination_money_account_id:
+        operationDestinationAccount || undefined,
       category: operationCategory,
       memo: operationMemo,
       client_command_id: crypto.randomUUID(),
@@ -777,7 +961,7 @@ function App() {
   const handleSignOut = async () => {
     const error = await signOut();
     if (error) {
-      setToast(`Sign out failed: ${error}`);
+      setToast(u("requestFailed"));
       return;
     }
     setUser(null);
@@ -885,6 +1069,10 @@ function App() {
         ? tradeReceiveCurrency
         : "AFN";
   const effectiveTradeRate = tradeSide === "BUY_FX" ? rate : sellRate;
+  const activeMoneyAccountName =
+    moneyAccounts.find((account) => account.cashbox_id === cashboxId)?.name ??
+    moneyAccounts.find((account) => account.account_type === "cashbox")?.name ??
+    u("activeCashboxAccount");
 
   if (!user && !inspectionMode)
     return (
@@ -957,6 +1145,7 @@ function App() {
         language={language}
         businessName={businessName}
         currencies={onboardingCurrencies}
+        catalog={currencyCatalog}
         cashboxName={onboardingCashboxName}
         busy={organizationLoading}
         onLanguageChange={setLanguage}
@@ -1286,6 +1475,7 @@ function App() {
               }
               roleLabel={roleLabel}
               canManageTeam={workspaceRole === "owner"}
+              canManageMoney={workspaceRole === "owner"}
               userId={user?.id ?? "inspection-user"}
               deviceId={browserDeviceId}
               branchId={branchId}
@@ -1293,6 +1483,9 @@ function App() {
               onDashboard={() => openSection("Dashboard")}
               onNavigate={openSection}
               onToast={setToast}
+              onMoneyContextChanged={() =>
+                setMoneyContextRefresh((value) => value + 1)
+              }
             />
           )}
           {dashboardView && (
@@ -1364,46 +1557,47 @@ function App() {
                   </button>
                   {showActions && (
                     <div className="action-menu">
-                      {(
-                        [
-                          "Transfer cash",
-                          "Expense",
-                          "Owner capital",
-                          "Bank movement",
-                        ] as const
-                      ).map((action) => {
-                        const kinds: Record<typeof action, OperationKind> = {
-                          "Transfer cash": "TRANSFER_CASH",
-                          Expense: "RECORD_EXPENSE",
-                          "Owner capital": "OWNER_INVESTMENT",
-                          "Bank movement": "BANK_DEPOSIT",
-                        };
-                        const labels: Record<typeof action, string> = {
-                          "Transfer cash": t("transfer"),
-                          Expense: t("expense"),
-                          "Owner capital": t("ownerCapital"),
-                          "Bank movement": t("bankMovement"),
-                        };
+                      {([
+                        ["TRANSFER_CASH", t("transfer")],
+                        ["RECORD_EXPENSE", t("expense")],
+                        ["RECORD_INCOME", u("income")],
+                        ["OWNER_INVESTMENT", t("ownerCapital")],
+                        ["OWNER_WITHDRAWAL", u("ownerWithdrawal")],
+                        ["BANK_DEPOSIT", u("bankDeposit")],
+                        ["BANK_WITHDRAWAL", u("bankWithdrawal")],
+                      ] as Array<[OperationKind, string]>)
+                        .filter(
+                          ([kind]) =>
+                            workspaceRole !== "cashier" ||
+                            ![
+                              "RECORD_INCOME",
+                              "OWNER_INVESTMENT",
+                              "OWNER_WITHDRAWAL",
+                            ].includes(kind),
+                        )
+                        .map(([kind, label]) => {
                         return (
                           <button
                             disabled={!online || !canPostFinancial}
-                            key={action}
-                            onClick={() => openOperation(kinds[action])}
+                            key={kind}
+                            onClick={() => openOperation(kind)}
                           >
-                            {labels[action]}
+                            {label}
                             <span>→</span>
                           </button>
                         );
-                      })}
-                      <button
-                        disabled={!online || !canPostFinancial}
-                        onClick={() => {
-                          setShowActions(false);
-                          setShowOpeningBalance(true);
-                        }}
-                      >
-                        {u("openingBalance")} <span>→</span>
-                      </button>
+                        })}
+                      {(workspaceRole === "owner" || workspaceRole === "manager") && (
+                        <button
+                          disabled={!online || !canPostFinancial}
+                          onClick={() => {
+                            setShowActions(false);
+                            setShowOpeningBalance(true);
+                          }}
+                        >
+                          {u("openingBalance")} <span>→</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1473,7 +1667,7 @@ function App() {
                       setCalculatorAmount(event.target.value)
                     }
                   />
-                  <span aria-label={u("sourceCurrency")}>USD</span>
+                  <span aria-label={u("sourceCurrency")}>{tradeCurrency}</span>
                   <b>=</b>
                   <strong>
                     {rate
@@ -1582,7 +1776,7 @@ function App() {
                     {dashboard
                       ? `${t("lastSync")}: ${new Date(
                           dashboard.fresh_at,
-                        ).toLocaleTimeString(language)}`
+                        ).toLocaleTimeString(language, { hour12: false })}`
                       : t("awaitingLiveLedger")}
                   </small>
                 </div>
@@ -1818,14 +2012,15 @@ function App() {
                   />
                   <select
                     value={tradeCurrency}
-                    onChange={(event) =>
-                      setTradeCurrency(
-                        event.target.value as typeof tradeCurrency,
-                      )
-                    }
+                    onChange={(event) => {
+                      setTradeCurrency(event.target.value);
+                      setRateState("");
+                      setSellRate("");
+                    }}
                   >
-                    <option>USD</option>
-                    <option>EUR</option>
+                    {tradeCurrencies.map((currency) => (
+                      <option key={currency}>{currency}</option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -1847,13 +2042,14 @@ function App() {
                     <select
                       value={tradeReceiveCurrency}
                       onChange={(event) =>
-                        setTradeReceiveCurrency(
-                          event.target.value as typeof tradeReceiveCurrency,
-                        )
+                        setTradeReceiveCurrency(event.target.value)
                       }
                     >
-                      <option>USD</option>
-                      <option>EUR</option>
+                      {tradeCurrencies
+                        .filter((currency) => currency !== tradeCurrency)
+                        .map((currency) => (
+                          <option key={currency}>{currency}</option>
+                        ))}
                     </select>
                   ) : (
                     <select value="AFN" disabled>
@@ -1896,6 +2092,23 @@ function App() {
                 </>
               )}
             </div>
+            {tradeSide !== "EXCHANGE_FX" && (
+              <section className="trade-account-flow">
+                <h3>{u("tradeMoneyFlow")}</h3>
+                <div className="money-flow-summary">
+                  <span>
+                    <small>{u("sourceAccount")}</small>
+                    <b>{tradeSide === "BUY_FX" ? u("customerOutside") : activeMoneyAccountName}</b>
+                  </span>
+                  <strong aria-hidden="true">→</strong>
+                  <span>
+                    <small>{u("destinationAccount")}</small>
+                    <b>{tradeSide === "BUY_FX" ? activeMoneyAccountName : u("customerOutside")}</b>
+                  </span>
+                </div>
+                <p>{u("tradeHasTwoMoneySides")}</p>
+              </section>
+            )}
             {tradeReviewing && tradePreview && (
               <section className="trade-confirmation" aria-live="polite">
                 <h3>{u("confirmationTitle")}</h3>
@@ -1987,13 +2200,33 @@ function App() {
               {t("currency")}
               <select
                 value={operationCurrency}
-                onChange={(event) => setOperationCurrency(event.target.value)}
+                onChange={(event) => {
+                  setOperationCurrency(event.target.value);
+                  setOperationBaseAmount("");
+                }}
               >
-                <option>AFN</option>
-                <option>USD</option>
-                <option>EUR</option>
+                {enabledCurrencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code} · {currencyName(language, currency)}
+                  </option>
+                ))}
               </select>
             </label>
+            {operationCurrency !== "AFN" && (
+              <label>
+                {u("valueInBaseCurrency")}
+                <input
+                  required
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={operationBaseAmount}
+                  onChange={(event) => setOperationBaseAmount(event.target.value)}
+                  placeholder="0.00 AFN"
+                />
+                <small>{u("baseValueHelp")}</small>
+              </label>
+            )}
             {operationKind === "RECORD_EXPENSE" && (
               <label>
                 {t("expenseCategory")}
@@ -2015,36 +2248,100 @@ function App() {
             operationKind === "BANK_WITHDRAWAL" ? (
               <div className="form-grid">
                 <label>
-                  {t("fromLocation")}
-                  <input
+                  {u("sourceAccount")}
+                  <select
                     required
-                    value={operationFromLocation}
+                    value={operationSourceAccount}
                     onChange={(event) =>
-                      setOperationFromLocation(event.target.value)
+                      setOperationSourceAccount(event.target.value)
                     }
-                  />
+                  >
+                    <option value="">{u("chooseSourceAccount")}</option>
+                    {branchMoneyAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} · {u(`accountType_${account.account_type}` as Parameters<typeof ux>[1])}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
-                  {t("toLocation")}
-                  <input
+                  {u("destinationAccount")}
+                  <select
                     required
-                    value={operationToLocation}
+                    value={operationDestinationAccount}
                     onChange={(event) =>
-                      setOperationToLocation(event.target.value)
+                      setOperationDestinationAccount(event.target.value)
                     }
-                  />
+                  >
+                    <option value="">{u("chooseDestinationAccount")}</option>
+                    {branchMoneyAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} · {u(`accountType_${account.account_type}` as Parameters<typeof ux>[1])}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
             ) : (
               <label>
-                {t("location")}
-                <input
+                {["RECEIVE_MONEY", "RECORD_INCOME", "OWNER_INVESTMENT"].includes(
+                  operationKind,
+                )
+                  ? u("destinationAccount")
+                  : u("sourceAccount")}
+                <select
                   required
-                  value={operationLocation}
-                  onChange={(event) => setOperationLocation(event.target.value)}
-                />
+                  value={
+                    ["RECEIVE_MONEY", "RECORD_INCOME", "OWNER_INVESTMENT"].includes(
+                      operationKind,
+                    )
+                      ? operationDestinationAccount
+                      : operationSourceAccount
+                  }
+                  onChange={(event) => {
+                    if (["RECEIVE_MONEY", "RECORD_INCOME", "OWNER_INVESTMENT"].includes(operationKind))
+                      setOperationDestinationAccount(event.target.value);
+                    else setOperationSourceAccount(event.target.value);
+                  }}
+                >
+                  <option value="">{u("chooseMoneyAccount")}</option>
+                  {branchMoneyAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} · {u(`accountType_${account.account_type}` as Parameters<typeof ux>[1])}
+                    </option>
+                  ))}
+                </select>
               </label>
             )}
+            <div className="money-flow-summary" aria-live="polite">
+              <span>
+                <small>{u("sourceAccount")}</small>
+                <b>
+                  {moneyAccounts.find((account) => account.id === operationSourceAccount)?.name ??
+                    (operationKind === "RECEIVE_MONEY"
+                      ? u("customerOutside")
+                      : operationKind === "RECORD_INCOME"
+                        ? u("incomeSource")
+                        : operationKind === "OWNER_INVESTMENT"
+                          ? u("ownerPersonal")
+                          : u("chooseSourceAccount"))}
+                </b>
+              </span>
+              <strong aria-hidden="true">→</strong>
+              <span>
+                <small>{u("destinationAccount")}</small>
+                <b>
+                  {moneyAccounts.find((account) => account.id === operationDestinationAccount)?.name ??
+                    (operationKind === "PAY_MONEY"
+                      ? u("customerOutside")
+                      : operationKind === "RECORD_EXPENSE"
+                        ? u("expenseDestination")
+                        : operationKind === "OWNER_WITHDRAWAL"
+                          ? u("ownerPersonal")
+                          : u("chooseDestinationAccount"))}
+                </b>
+              </span>
+            </div>
             <label>
               {t("note")}
               <input
@@ -2126,9 +2423,11 @@ function App() {
                 value={openingCurrency}
                 onChange={(event) => setOpeningCurrency(event.target.value)}
               >
-                <option>AFN</option>
-                <option>USD</option>
-                <option>EUR</option>
+                {enabledCurrencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code} · {currencyName(language, currency)}
+                  </option>
+                ))}
               </select>
             </label>
             <div className="form-grid">
@@ -2185,6 +2484,7 @@ function WorkspaceView({
   branchName,
   roleLabel,
   canManageTeam,
+  canManageMoney,
   userId,
   deviceId,
   branchId,
@@ -2192,6 +2492,7 @@ function WorkspaceView({
   onDashboard,
   onNavigate,
   onToast,
+  onMoneyContextChanged,
 }: {
   language: Language;
   section: string;
@@ -2201,6 +2502,7 @@ function WorkspaceView({
   branchName: string;
   roleLabel: string;
   canManageTeam: boolean;
+  canManageMoney: boolean;
   userId: string;
   deviceId: string;
   branchId: string | null;
@@ -2208,6 +2510,7 @@ function WorkspaceView({
   onDashboard: () => void;
   onNavigate: (section: string) => void;
   onToast: (message: string) => void;
+  onMoneyContextChanged: () => void;
 }) {
   if (section === "Settings")
     return (
@@ -2242,8 +2545,11 @@ function WorkspaceView({
       <MoneyLocationView
         language={language}
         organizationId={organizationId}
+        branchId={branchId}
+        canManage={canManageMoney}
         onDashboard={onDashboard}
         onToast={onToast}
+        onMoneyContextChanged={onMoneyContextChanged}
       />
     );
   if (section === "People")
@@ -2261,7 +2567,10 @@ function WorkspaceView({
       <RatesView
         language={language}
         organizationId={organizationId}
+        branchId={branchId}
+        canManage={canManageMoney}
         onDashboard={onDashboard}
+        onToast={onToast}
       />
     );
   if (section === "Reports")
@@ -2270,6 +2579,8 @@ function WorkspaceView({
         language={language}
         trades={trades}
         organizationId={organizationId}
+        organizationName={organizationName}
+        branchName={branchName}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3224,7 +3535,7 @@ function TeamDevicesView({
                   <b>{invitation.display_name} · {roleName(invitation.role_code)}</b>
                   <small>{invitation.email}</small>
                   <small>{u("assignedTo")}: {scopeSummary(invitation.branches, invitation.cashboxes)}</small>
-                  <small>{u("expires")} {new Date(invitation.expires_at).toLocaleString(language)}</small>
+                  <small>{u("expires")} {new Date(invitation.expires_at).toLocaleString(language, { hour12: false })}</small>
                 </span>
                 {canManage && (
                   <button className="text-button danger" onClick={() => void cancelInvitation(invitation)}>
@@ -3252,7 +3563,7 @@ function TeamDevicesView({
                     <small>{device.member_name}</small>
                     <small>
                       {u("lastSeen")}{" "}
-                      {new Date(device.last_seen_at).toLocaleString(language)}
+                      {new Date(device.last_seen_at).toLocaleString(language, { hour12: false })}
                     </small>
                   </span>
                   <strong>
@@ -3292,7 +3603,7 @@ function TeamDevicesView({
                   </b>
                   <small>
                     {approval.reason} · {u("requested")}{" "}
-                    {new Date(approval.requested_at).toLocaleString(language)}
+                    {new Date(approval.requested_at).toLocaleString(language, { hour12: false })}
                   </small>
                 </span>
                 <strong>
@@ -3315,13 +3626,19 @@ function TeamDevicesView({
 function MoneyLocationView({
   language,
   organizationId,
+  branchId,
+  canManage,
   onDashboard,
   onToast,
+  onMoneyContextChanged,
 }: {
   language: Language;
   organizationId: string | null;
+  branchId: string | null;
+  canManage: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
+  onMoneyContextChanged: () => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
@@ -3330,21 +3647,94 @@ function MoneyLocationView({
   const [view, setView] = useState<"currency" | "location">("currency");
   const [currency, setCurrency] = useState("ALL");
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [showAccountForm, setShowAccountForm] = useState(false);
+  const [accountName, setAccountName] = useState("");
+  const [accountType, setAccountType] = useState<
+    Exclude<MoneyAccountRecord["account_type"], "cashbox">
+  >("safe");
+  const [accountReference, setAccountReference] = useState("");
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState("");
   const [loading, setLoading] = useState(organizationId !== "inspection");
   useEffect(() => {
     if (!organizationId) return;
-    if (organizationId === "inspection") return;
+    if (organizationId === "inspection") {
+      setCatalog(inspectionCurrencies);
+      setAccounts([
+        { id: "inspection-cashbox", name: ux(language, "previewCashboxName"), account_type: "cashbox", branch_id: "inspection-branch", cashbox_id: "inspection-cashbox-id", reference_label: null, active: true, balances: [{ currency: "AFN", amount: "1250000" }, { currency: "USD", amount: "18000" }] },
+        { id: "inspection-safe", name: ux(language, "previewSafeName"), account_type: "safe", branch_id: "inspection-branch", cashbox_id: null, reference_label: null, active: true, balances: [{ currency: "AFN", amount: "450000" }] },
+        { id: "inspection-bank", name: ux(language, "previewBankName"), account_type: "bank", branch_id: null, cashbox_id: null, reference_label: ux(language, "previewBankReference"), active: true, balances: [{ currency: "AFN", amount: "300000" }] },
+      ]);
+      setLoading(false);
+      return;
+    }
     void Promise.all([
       getOwnerDashboard(organizationId),
       listLocationEvidence(organizationId),
-    ]).then(([dashboardResult, evidenceResult]) => {
+      listMoneyAccounts(organizationId),
+      listCurrencyCatalog(organizationId),
+    ]).then(([dashboardResult, evidenceResult, accountResult, currencyResult]) => {
       if (dashboardResult.data) setSnapshot(dashboardResult.data);
       if (evidenceResult.data) setEvidence(evidenceResult.data);
-      if (dashboardResult.error || evidenceResult.error)
+      if (accountResult.data) setAccounts(accountResult.data);
+      if (currencyResult.data) setCatalog(currencyResult.data);
+      if (dashboardResult.error || evidenceResult.error || accountResult.error || currencyResult.error)
         onToast(ux(language, "couldNotLoad"));
       setLoading(false);
     });
   }, [language, onToast, organizationId]);
+
+  const refreshControls = async () => {
+    if (!organizationId || organizationId === "inspection") return;
+    const [accountResult, currencyResult] = await Promise.all([
+      listMoneyAccounts(organizationId),
+      listCurrencyCatalog(organizationId),
+    ]);
+    if (accountResult.data) setAccounts(accountResult.data);
+    if (currencyResult.data) setCatalog(currencyResult.data);
+    onMoneyContextChanged();
+  };
+  const submitAccount = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId) return;
+    setAccountBusy(true);
+    const result = await createMoneyAccount({
+      organizationId,
+      name: accountName,
+      accountType,
+      branchId,
+      reference: accountReference,
+    });
+    setAccountBusy(false);
+    if (result.error) {
+      onToast(u("accountCreateFailed"));
+      return;
+    }
+    setAccountName("");
+    setAccountReference("");
+    setShowAccountForm(false);
+    onToast(u("accountCreated"));
+    await refreshControls();
+  };
+  const toggleOrganizationCurrency = async (
+    currencyCode: string,
+    enabled: boolean,
+  ) => {
+    if (!organizationId) return;
+    const result = await setOrganizationCurrency(
+      organizationId,
+      currencyCode,
+      enabled,
+    );
+    if (result.error) {
+      onToast(u("currencyUpdateFailed"));
+      return;
+    }
+    onToast(u("currencyUpdated"));
+    await refreshControls();
+  };
 
   const currencies = Array.from(
     new Set([
@@ -3397,6 +3787,16 @@ function MoneyLocationView({
           amount: item.quantity,
           currency: item.currency,
         }));
+  const visibleCatalog = catalog.filter((item) => {
+    const query = currencySearch.trim().toLowerCase();
+    return (
+      !query ||
+      item.code.toLowerCase().includes(query) ||
+      currencyName(language, item).toLowerCase().includes(query)
+    );
+  });
+  const accountTypeLabel = (type: MoneyAccountRecord["account_type"]) =>
+    u(`accountType_${type}` as Parameters<typeof ux>[1]);
   return (
     <section className="panel money-workspace">
       <div className="panel-header">
@@ -3409,6 +3809,133 @@ function MoneyLocationView({
           {u("backHome")} →
         </button>
       </div>
+      <section className="account-control-panel">
+        <div className="panel-header compact-header">
+          <div>
+            <h2>{u("moneyAccountsTitle")}</h2>
+            <p>{u("moneyAccountsIntro")}</p>
+          </div>
+          {canManage && (
+            <button
+              className="primary-action"
+              onClick={() => setShowAccountForm((value) => !value)}
+            >
+              {showAccountForm ? u("cancelAction") : u("addMoneyAccount")}
+            </button>
+          )}
+        </div>
+        <div className="account-card-grid">
+          {accounts.map((account) => (
+            <article className="account-card" key={account.id}>
+              <span className={`account-kind ${account.account_type}`}>
+                {accountTypeLabel(account.account_type)}
+              </span>
+              <h3>{account.name}</h3>
+              {account.reference_label && <p>{account.reference_label}</p>}
+              <div className="account-balances">
+                {account.balances.length ? (
+                  account.balances.map((balance) => (
+                    <b key={`${account.id}-${balance.currency}`} dir="ltr">
+                      {new Decimal(balance.amount).toFixed(2)} {balance.currency}
+                    </b>
+                  ))
+                ) : (
+                  <span>{u("noMoneyInAccount")}</span>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+        {!accounts.length && !loading && (
+          <div className="empty-live">{u("noMoneyAccounts")}</div>
+        )}
+        {!canManage && (
+          <p className="owner-control-note">{u("ownerOnlyAccounts")}</p>
+        )}
+        {canManage && showAccountForm && (
+          <form className="inline-management-form" onSubmit={submitAccount}>
+            <label>
+              {u("accountName")}
+              <input
+                required
+                minLength={2}
+                maxLength={80}
+                value={accountName}
+                onChange={(event) => setAccountName(event.target.value)}
+                placeholder={u("accountNamePlaceholder")}
+              />
+            </label>
+            <label>
+              {u("accountType")}
+              <select
+                value={accountType}
+                onChange={(event) =>
+                  setAccountType(event.target.value as typeof accountType)
+                }
+              >
+                {(["safe", "bank", "mobile_money", "partner", "other"] as const).map(
+                  (type) => (
+                    <option key={type} value={type}>
+                      {accountTypeLabel(type)}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+            <label>
+              {u("accountReference")}
+              <input
+                maxLength={80}
+                value={accountReference}
+                onChange={(event) => setAccountReference(event.target.value)}
+                placeholder={u("accountReferencePlaceholder")}
+              />
+            </label>
+            <button className="primary-action" type="submit" disabled={accountBusy}>
+              {accountBusy ? u("posting") : u("saveMoneyAccount")}
+            </button>
+          </form>
+        )}
+      </section>
+      <section className="currency-control-panel">
+        <div className="panel-header compact-header">
+          <div>
+            <h2>{u("shopCurrenciesTitle")}</h2>
+            <p>{u("shopCurrenciesIntro")}</p>
+          </div>
+          <label className="currency-search">
+            <span>{u("searchCurrency")}</span>
+            <input
+              value={currencySearch}
+              onChange={(event) => setCurrencySearch(event.target.value)}
+              placeholder={u("searchCurrencyPlaceholder")}
+            />
+          </label>
+        </div>
+        <div className="currency-catalog-grid">
+          {visibleCatalog.map((item) => (
+            <label className={`currency-catalog-item ${item.enabled ? "enabled" : ""}`} key={item.code}>
+              <span className="currency-symbol">{item.symbol}</span>
+              <span>
+                <b>{item.code}</b>
+                <small>{currencyName(language, item)}</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={item.enabled}
+                disabled={!canManage || item.code === "AFN"}
+                onChange={(event) =>
+                  void toggleOrganizationCurrency(item.code, event.target.checked)
+                }
+                aria-label={`${item.code} ${u("usedInShop")}`}
+              />
+            </label>
+          ))}
+        </div>
+        <p className="owner-control-note">
+          {canManage ? u("currencyOwnerHelp") : u("ownerOnlyCurrencies")}
+        </p>
+      </section>
       <div className="rate-strip">
         <label>
           {t("currency")}
@@ -3516,7 +4043,7 @@ function MoneyLocationView({
                           u("recordedTransaction")}
                       </b>
                       <small>
-                        {new Date(line.occurred_at).toLocaleString(language)}
+                        {new Date(line.occurred_at).toLocaleString(language, { hour12: false })}
                       </small>
                     </span>
                     <strong>
@@ -3766,7 +4293,7 @@ function PeopleView({
                     <small>
                       {document.content_type} ·{" "}
                       {Math.round(document.size_bytes / 1024)} KB ·{" "}
-                      {new Date(document.created_at).toLocaleString(language)}
+                      {new Date(document.created_at).toLocaleString(language, { hour12: false })}
                     </small>
                   </span>
                   <strong>{u("preview")} →</strong>
@@ -3818,7 +4345,7 @@ function PeopleView({
                 <span className="balance-name">
                   <b>{item.memo || u("recordedTransaction")}</b>
                   <small>
-                    {new Date(item.occurred_at).toLocaleString(language)} ·{" "}
+                    {new Date(item.occurred_at).toLocaleString(language, { hour12: false })} ·{" "}
                     {item.reference.slice(0, 12)}
                     {item.memo ? ` · ${item.memo}` : ""}
                   </small>
@@ -3858,6 +4385,37 @@ function TransactionsView({
   const [selected, setSelected] = useState<JournalRecord | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const visibleEntries: JournalRecord[] =
+    organizationId === "inspection"
+      ? [
+          {
+            id: "inspection-expense-entry",
+            status: "posted",
+            memo: null,
+            occurred_at: new Date().toISOString(),
+            branch_id: "inspection-branch",
+            event_type: "record_expense",
+            immutable_reference: "000001",
+            source_account_name: u("previewCashboxName"),
+            destination_account_name: null,
+            currency_code: "AFN",
+            amount: "2500.00",
+          },
+          {
+            id: "inspection-buy-entry",
+            status: "posted",
+            memo: null,
+            occurred_at: new Date().toISOString(),
+            branch_id: "inspection-branch",
+            event_type: "buy_fx",
+            immutable_reference: "000002",
+            source_account_name: null,
+            destination_account_name: u("previewCashboxName"),
+            currency_code: "USD",
+            amount: "1000.00",
+          },
+        ]
+      : entries;
   useEffect(() => {
     if (organizationId && organizationId !== "inspection")
       void listJournalEntries(organizationId).then((result) => {
@@ -3884,6 +4442,48 @@ function TransactionsView({
       }
     }
   };
+  const transactionName = (entry: JournalRecord) =>
+    ({
+      buy_fx: t("buy"),
+      sell_fx: t("sell"),
+      exchange_fx: t("exchange"),
+      record_expense: t("expense"),
+      record_income: u("income"),
+      owner_investment: t("ownerCapital"),
+      owner_withdrawal: u("ownerWithdrawal"),
+      bank_deposit: u("bankDeposit"),
+      bank_withdrawal: u("bankWithdrawal"),
+      transfer_cash: t("transfer"),
+      receive_money: t("receive"),
+      pay_money: t("pay"),
+      opening_balance: u("openingBalance"),
+    })[entry.event_type ?? ""] ?? u("recordedTransaction");
+  const moneyFlow = (entry: JournalRecord) => {
+    const incoming = ["receive_money", "record_income", "owner_investment", "opening_balance"].includes(entry.event_type ?? "");
+    const outgoing = ["pay_money", "record_expense", "owner_withdrawal"].includes(entry.event_type ?? "");
+    const fx = ["buy_fx", "sell_fx", "exchange_fx"].includes(entry.event_type ?? "");
+    const source =
+      entry.source_account_name ||
+      entry.legacy_from_name ||
+      (outgoing ? entry.legacy_location_name : null) ||
+      (entry.event_type === "sell_fx" ? entry.cashbox_name : null) ||
+      (fx ? u("customerOutside") : null) ||
+      (entry.event_type === "opening_balance" ? u("openingFundsSource") : null) ||
+      (entry.event_type === "record_income" ? u("incomeSource") : null) ||
+      (entry.event_type === "owner_investment" ? u("ownerPersonal") : null) ||
+      (incoming ? u("customerOutside") : u("outsideAccount"));
+    const destination =
+      entry.destination_account_name ||
+      entry.legacy_to_name ||
+      (incoming ? entry.legacy_location_name : null) ||
+      (entry.event_type === "sell_fx" ? u("customerOutside") : null) ||
+      entry.cashbox_name ||
+      (fx ? u("customerOutside") : null) ||
+      (entry.event_type === "record_expense" ? u("expenseDestination") : null) ||
+      (entry.event_type === "owner_withdrawal" ? u("ownerPersonal") : null) ||
+      (outgoing ? u("customerOutside") : u("outsideAccount"));
+    return { source, destination };
+  };
   return (
     <section className="panel">
       <div className="panel-header">
@@ -3897,8 +4497,8 @@ function TransactionsView({
         </button>
       </div>
       <div className="balance-list">
-        {entries.length ? (
-          entries.map((entry) => (
+        {visibleEntries.length ? (
+          visibleEntries.map((entry) => (
             <button
               className="balance-row"
               key={entry.id}
@@ -3911,13 +4511,20 @@ function TransactionsView({
                 {entry.status === "posted" ? "✓" : "↺"}
               </span>
               <span className="balance-name">
-                <b>{entry.memo || u("recordedTransaction")}</b>
+                <b>{transactionName(entry)}</b>
                 <small>
-                  {new Date(entry.occurred_at).toLocaleString(language)}
+                  {new Date(entry.occurred_at).toLocaleString(language, { hour12: false })} · {entry.immutable_reference?.slice(0, 18) ?? entry.id.slice(0, 12)}
+                </small>
+                <small className="transaction-flow-line">
+                  {moneyFlow(entry).source} → {moneyFlow(entry).destination}
                 </small>
               </span>
               <strong>
-                {entry.status === "posted" ? t("posted") : entry.status}
+                {entry.amount && entry.currency_code
+                  ? `${entry.amount} ${entry.currency_code}`
+                  : entry.status === "posted"
+                    ? t("posted")
+                    : entry.status}
               </strong>
             </button>
           ))
@@ -3944,6 +4551,11 @@ function TransactionsView({
           <p>
             {u("originalReference")}: {selected.id.slice(0, 12)}
           </p>
+          <div className="money-flow-summary">
+            <span><small>{u("sourceAccount")}</small><b>{moneyFlow(selected).source}</b></span>
+            <strong aria-hidden="true">→</strong>
+            <span><small>{u("destinationAccount")}</small><b>{moneyFlow(selected).destination}</b></span>
+          </div>
           <label>
             {t("note")}
             <input
@@ -3966,21 +4578,80 @@ function TransactionsView({
 function RatesView({
   language,
   organizationId,
+  branchId,
+  canManage,
   onDashboard,
+  onToast,
 }: {
   language: Language;
   organizationId: string | null;
+  branchId: string | null;
+  canManage: boolean;
   onDashboard: () => void;
+  onToast: (message: string) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [history, setHistory] = useState<RateHistoryRecord[]>([]);
+  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [sourceCurrency, setSourceCurrency] = useState("USD");
+  const [buyRate, setBuyRate] = useState("");
+  const [sellRateValue, setSellRateValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const loadRates = useCallback(async () => {
+    if (!organizationId || organizationId === "inspection") return;
+    const [historyResult, currencyResult] = await Promise.all([
+      listRateHistory(organizationId),
+      listCurrencyCatalog(organizationId),
+    ]);
+    if (historyResult.data) setHistory(historyResult.data);
+    if (currencyResult.data) {
+      setCatalog(currencyResult.data);
+      const enabled = currencyResult.data.find(
+        (item) => item.enabled && item.code !== "AFN",
+      );
+      if (enabled)
+        setSourceCurrency((current) =>
+          currencyResult.data?.some(
+            (item) => item.code === current && item.enabled,
+          )
+            ? current
+            : enabled.code,
+        );
+    }
+    if (historyResult.error || currencyResult.error)
+      onToast(ux(language, "couldNotLoad"));
+  }, [language, onToast, organizationId]);
   useEffect(() => {
-    if (organizationId && organizationId !== "inspection")
-      void listRateHistory(organizationId).then((result) => {
-        if (result.data) setHistory(result.data);
-      });
-  }, [organizationId]);
+    if (organizationId === "inspection") {
+      setCatalog(inspectionCurrencies);
+      return;
+    }
+    void loadRates();
+  }, [loadRates, organizationId]);
+  const saveRate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId) return;
+    setBusy(true);
+    const result = await setExchangeRate({
+      organizationId,
+      branchId,
+      sourceCurrency,
+      targetCurrency: "AFN",
+      buyRate,
+      sellRate: sellRateValue,
+    });
+    setBusy(false);
+    if (result.error) {
+      onToast(u("rateSaveFailed"));
+      return;
+    }
+    setBuyRate("");
+    setSellRateValue("");
+    onToast(u("rateSaved"));
+    await loadRates();
+  };
+  const current = history[0];
   return (
     <section className="panel">
       <div className="panel-header">
@@ -3997,14 +4668,14 @@ function RatesView({
         <div className="rate-title">
           <span className="rate-live" />
           <div>
-            <b>USD / AFN</b>
+            <b>{current ? `${current.from_currency} / ${current.to_currency}` : u("noCurrentRate")}</b>
             <small>{u("rateHistory")}</small>
           </div>
         </div>
         <label>
           {t("buyRate")}
           <input
-            value={history[0]?.buy_rate ?? ""}
+            value={current?.buy_rate ?? ""}
             readOnly
             placeholder={u("liveRate")}
           />
@@ -4012,12 +4683,48 @@ function RatesView({
         <label>
           {t("sellRate")}
           <input
-            value={history[0]?.sell_rate ?? ""}
+            value={current?.sell_rate ?? ""}
             readOnly
             placeholder={u("liveRate")}
           />
         </label>
       </div>
+      {canManage ? (
+        <form className="rate-management-form" onSubmit={saveRate}>
+          <div>
+            <h2>{u("setShopRate")}</h2>
+            <p>{u("setShopRateIntro")}</p>
+          </div>
+          <label>
+            {u("foreignCurrency")}
+            <select
+              value={sourceCurrency}
+              onChange={(event) => setSourceCurrency(event.target.value)}
+            >
+              {catalog
+                .filter((item) => item.enabled && item.code !== "AFN")
+                .map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.code} · {currencyName(language, item)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            {t("buyRate")}
+            <input required min="0.000001" step="any" inputMode="decimal" value={buyRate} onChange={(event) => setBuyRate(event.target.value)} placeholder={u("ratePerUnitPlaceholder")} />
+          </label>
+          <label>
+            {t("sellRate")}
+            <input required min="0.000001" step="any" inputMode="decimal" value={sellRateValue} onChange={(event) => setSellRateValue(event.target.value)} placeholder={u("ratePerUnitPlaceholder")} />
+          </label>
+          <button className="primary-action" type="submit" disabled={busy}>
+            {busy ? u("posting") : u("saveShopRate")}
+          </button>
+        </form>
+      ) : (
+        <div className="empty-live">{u("ownerOnlyRates")}</div>
+      )}
       <div className="balance-list">
         {history.length ? (
           history.map((item) => (
@@ -4030,7 +4737,7 @@ function RatesView({
                 </b>
                 <small>
                   {u("effectiveFrom")}{" "}
-                  {new Date(item.effective_from).toLocaleString(language)} ·{" "}
+                  {new Date(item.effective_from).toLocaleString(language, { hour12: false })} ·{" "}
                   {item.to_currency}
                 </small>
               </span>
@@ -4053,12 +4760,16 @@ function ReportsView({
   language,
   trades,
   organizationId,
+  organizationName,
+  branchName,
   onDashboard,
   onToast,
 }: {
   language: Language;
   trades: Trade[];
   organizationId: string | null;
+  organizationName: string;
+  branchName: string;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -4068,11 +4779,21 @@ function ReportsView({
   const [status, setStatus] = useState("All");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  useEffect(() => {
+    if (organizationId === "inspection") {
+      setCatalog(inspectionCurrencies);
+      return;
+    }
+    void listCurrencyCatalog(organizationId).then((result) => {
+      if (result.data) setCatalog(result.data);
+    });
+  }, [organizationId]);
   const rows = trades.map((trade) => ({
     entryId: `trade_${trade.id}`,
     occurredAt: trade.time,
     type: trade.direction,
-    branchId: "Kabul Central",
+    branchId: branchName,
     status: trade.status.toLowerCase(),
     realizedProfit: "0",
   }));
@@ -4090,7 +4811,7 @@ function ReportsView({
     }
     const result = await recordReportExport({
       organization_id: organizationId,
-      report_name: "Recent Activity",
+      report_name: u("recentActivity"),
       format,
       filters: { scope: "loaded_activity" },
     });
@@ -4105,9 +4826,9 @@ function ReportsView({
     if (allowed) {
       const { shareReportViaWhatsApp } = await loadExports();
       shareReportViaWhatsApp({
-        reportName: "Recent Activity",
+        reportName: u("recentActivity"),
         reference: filteredRows[0]?.entryId ?? "snapshot",
-        businessName: "Kabul Central Exchange",
+        businessName: organizationName,
       });
       onToast(u("shareOpened"));
     }
@@ -4190,9 +4911,11 @@ function ReportsView({
             onChange={(event) => setCurrency(event.target.value)}
           >
             <option value="All">{u("all")}</option>
-            <option>AFN</option>
-            <option>USD</option>
-            <option>EUR</option>
+            {catalog.filter((item) => item.enabled).map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.code} · {currencyName(language, item)}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -4214,7 +4937,7 @@ function ReportsView({
           onClick={() =>
             downloadPdf(
               filteredRows,
-              "Kabul Central Exchange",
+              organizationName,
               u("recentActivity"),
             )
           }
@@ -4229,7 +4952,7 @@ function ReportsView({
           onClick={() =>
             printThermalReceipt(
               {
-                businessName: "Kabul Central Exchange",
+                businessName: organizationName,
                 reference: filteredRows[0]?.entryId ?? "snapshot",
                 type: filteredRows[0]?.type ?? u("statement"),
                 amount: filteredRows[0]?.realizedProfit ?? "0",
@@ -4253,7 +4976,7 @@ function ReportsView({
           onClick={() =>
             printThermalReceipt(
               {
-                businessName: "Kabul Central Exchange",
+                businessName: organizationName,
                 reference: filteredRows[0]?.entryId ?? "snapshot",
                 type: filteredRows[0]?.type ?? u("statement"),
                 amount: filteredRows[0]?.realizedProfit ?? "0",
@@ -4308,24 +5031,42 @@ function DebtsView({
   const [counterpartyId, setCounterpartyId] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("AFN");
+  const [baseAmount, setBaseAmount] = useState("");
+  const [moneyAccountId, setMoneyAccountId] = useState("");
+  const [accounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const [selectedDebt, setSelectedDebt] = useState<DebtRecord | null>(null);
   const [settlementAmount, setSettlementAmount] = useState("");
+  const [settlementBaseAmount, setSettlementBaseAmount] = useState("");
+  const [settlementAccountId, setSettlementAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
     void Promise.all([
       listDebts(organizationId),
       listCounterparties(organizationId),
-    ]).then(([debtResult, peopleResult]) => {
+      listMoneyAccounts(organizationId),
+      listCurrencyCatalog(organizationId),
+    ]).then(([debtResult, peopleResult, accountResult, currencyResult]) => {
       if (debtResult.data) setDebts(debtResult.data);
       if (peopleResult.data) setPeople(peopleResult.data);
+      if (accountResult.data) {
+        setAccounts(accountResult.data);
+        setMoneyAccountId((current) => current || accountResult.data?.[0]?.id || "");
+        setSettlementAccountId((current) => current || accountResult.data?.[0]?.id || "");
+      }
+      if (currencyResult.data) setCatalog(currencyResult.data);
     });
   }, [organizationId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!organizationId || !branchId || !counterpartyId) {
+    if (!organizationId || !branchId || !counterpartyId || !moneyAccountId) {
       onToast(
-        counterpartyId ? u("businessSetupRequired") : u("choosePersonFirst"),
+        !counterpartyId
+          ? u("choosePersonFirst")
+          : !moneyAccountId
+            ? u("chooseMoneyAccount")
+            : u("businessSetupRequired"),
       );
       return;
     }
@@ -4337,7 +5078,11 @@ function DebtsView({
       direction,
       currency,
       amount,
-      location: "Main Counter",
+      base_amount: currency === "AFN" ? amount : baseAmount,
+      source_money_account_id:
+        direction === "receivable" ? moneyAccountId : undefined,
+      destination_money_account_id:
+        direction === "payable" ? moneyAccountId : undefined,
       client_command_id: crypto.randomUUID(),
     });
     setBusy(false);
@@ -4345,16 +5090,32 @@ function DebtsView({
     if (!result.error) {
       setCounterpartyId("");
       setAmount("");
+      setBaseAmount("");
     }
   };
   const settle = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedDebt) return;
+    if (!settlementAccountId) {
+      onToast(u("chooseMoneyAccount"));
+      return;
+    }
     setBusy(true);
     const result = await settleDebt({
       debt_id: selectedDebt.id,
       amount: settlementAmount,
-      location: "Main Counter",
+      base_amount:
+        selectedDebt.currency_code === "AFN"
+          ? settlementAmount
+          : settlementBaseAmount,
+      source_money_account_id:
+        selectedDebt.direction === "payable"
+          ? settlementAccountId
+          : undefined,
+      destination_money_account_id:
+        selectedDebt.direction === "receivable"
+          ? settlementAccountId
+          : undefined,
       client_command_id: crypto.randomUUID(),
     });
     setBusy(false);
@@ -4362,6 +5123,7 @@ function DebtsView({
     if (!result.error) {
       setSelectedDebt(null);
       setSettlementAmount("");
+      setSettlementBaseAmount("");
       if (organizationId) {
         const refreshed = await listDebts(organizationId);
         if (refreshed.data) setDebts(refreshed.data);
@@ -4424,13 +5186,39 @@ function DebtsView({
             {t("currency")}
             <select
               value={currency}
-              onChange={(event) => setCurrency(event.target.value)}
+              onChange={(event) => {
+                setCurrency(event.target.value);
+                setBaseAmount("");
+              }}
             >
-              <option>AFN</option>
-              <option>USD</option>
-              <option>EUR</option>
+              {catalog.filter((item) => item.enabled).map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.code} · {currencyName(language, item)}
+                </option>
+              ))}
             </select>
           </label>
+        </div>
+        {currency !== "AFN" && (
+          <label>
+            {u("valueInBaseCurrency")}
+            <input required min="0.01" step="0.01" inputMode="decimal" value={baseAmount} onChange={(event) => setBaseAmount(event.target.value)} placeholder="0.00 AFN" />
+            <small>{u("baseValueHelp")}</small>
+          </label>
+        )}
+        <label>
+          {direction === "receivable" ? u("sourceAccount") : u("destinationAccount")}
+          <select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}>
+            <option value="">{u("chooseMoneyAccount")}</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>{account.name}</option>
+            ))}
+          </select>
+        </label>
+        <div className="money-flow-summary">
+          <span><small>{u("sourceAccount")}</small><b>{direction === "receivable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseSourceAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
+          <strong aria-hidden="true">→</strong>
+          <span><small>{u("destinationAccount")}</small><b>{direction === "payable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
         </div>
         <button className="primary-action full" type="submit" disabled={busy}>
           {busy ? u("posting") : u("postDebt")} <span>→</span>
@@ -4445,6 +5233,7 @@ function DebtsView({
               onClick={() => {
                 setSelectedDebt(debt);
                 setSettlementAmount(debt.outstanding_amount);
+                setSettlementBaseAmount("");
               }}
             >
               <span className="currency-badge usd">{debt.currency_code}</span>
@@ -4497,6 +5286,21 @@ function DebtsView({
               onChange={(event) => setSettlementAmount(event.target.value)}
             />
           </label>
+          {selectedDebt.currency_code !== "AFN" && (
+            <label>
+              {u("valueInBaseCurrency")}
+              <input required min="0.01" step="0.01" inputMode="decimal" value={settlementBaseAmount} onChange={(event) => setSettlementBaseAmount(event.target.value)} placeholder="0.00 AFN" />
+            </label>
+          )}
+          <label>
+            {selectedDebt.direction === "receivable" ? u("destinationAccount") : u("sourceAccount")}
+            <select required value={settlementAccountId} onChange={(event) => setSettlementAccountId(event.target.value)}>
+              <option value="">{u("chooseMoneyAccount")}</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>{account.name}</option>
+              ))}
+            </select>
+          </label>
           <button className="primary-action full" type="submit" disabled={busy}>
             {busy ? u("settling") : u("savePayment")} <span>→</span>
           </button>
@@ -4524,15 +5328,23 @@ function ReconciliationView({
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const [afn, setAfn] = useState("");
-  const [usd, setUsd] = useState("");
+  const [counted, setCounted] = useState<Record<string, string>>({});
+  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [expected, setExpected] = useState<Record<string, string>>({});
   useEffect(() => {
-    if (organizationId && organizationId !== "inspection" && cashboxId)
-      void listCashboxBalances(organizationId, cashboxId).then((result) => {
-        if (result.data)
+    if (organizationId === "inspection") {
+      setCatalog(inspectionCurrencies);
+      setExpected({ AFN: "1250000", USD: "18000" });
+      return;
+    }
+    if (organizationId && cashboxId)
+      void Promise.all([
+        listCashboxBalances(organizationId, cashboxId),
+        listCurrencyCatalog(organizationId),
+      ]).then(([result, currencyResult]) => {
+        if (result.data) {
           setExpected(
             Object.fromEntries(
               result.data.map((item) => [
@@ -4541,7 +5353,9 @@ function ReconciliationView({
               ]),
             ),
           );
-        if (result.error) onToast(ux(language, "couldNotLoad"));
+        }
+        if (currencyResult.data) setCatalog(currencyResult.data);
+        if (result.error || currencyResult.error) onToast(ux(language, "couldNotLoad"));
       });
   }, [cashboxId, language, onToast, organizationId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -4555,10 +5369,9 @@ function ReconciliationView({
       organization_id: organizationId,
       branch_id: branchId,
       cashbox_id: cashboxId,
-      counts: [
-        { currency: "AFN", counted_amount: afn },
-        { currency: "USD", counted_amount: usd },
-      ],
+      counts: catalog
+        .filter((item) => item.enabled)
+        .map((item) => ({ currency: item.code, counted_amount: counted[item.code] || "0" })),
       variance_reason: reason,
     });
     setBusy(false);
@@ -4566,6 +5379,7 @@ function ReconciliationView({
   };
   const variance = (currency: string, counted: string) =>
     new Decimal(counted || "0").minus(expected[currency] ?? "0").toFixed(2);
+  const countedCurrencies = catalog.filter((item) => item.enabled);
   return (
     <section className="panel">
       <div className="panel-header">
@@ -4579,54 +5393,37 @@ function ReconciliationView({
         </button>
       </div>
       <div className="balance-list">
-        <div className="balance-row">
-          <span className="currency-badge usd">AFN</span>
-          <span className="balance-name">
-            <b>{u("expectedVsCounted")}</b>
-            <small>
-              {u("expectedAmount")}: {expected.AFN ?? u("loading")}
-            </small>
-          </span>
-          <strong>
-            {u("variance")} {variance("AFN", afn)}
-          </strong>
-        </div>
-        <div className="balance-row">
-          <span className="currency-badge usd">USD</span>
-          <span className="balance-name">
-            <b>{u("expectedVsCounted")}</b>
-            <small>
-              {u("expectedAmount")}: {expected.USD ?? u("loading")}
-            </small>
-          </span>
-          <strong>
-            {u("variance")} {variance("USD", usd)}
-          </strong>
-        </div>
+        {countedCurrencies.map((currency) => (
+          <div className="balance-row" key={currency.code}>
+            <span className="currency-badge usd">{currency.code}</span>
+            <span className="balance-name">
+              <b>{u("expectedVsCounted")}</b>
+              <small>
+                {u("expectedAmount")}: {expected[currency.code] ?? "0.00"}
+              </small>
+            </span>
+            <strong>
+              {u("variance")} {variance(currency.code, counted[currency.code] || "0")}
+            </strong>
+          </div>
+        ))}
       </div>
       <form className="trade-modal" onSubmit={submit}>
-        <label>
-          {t("countedAfn")}
-          <input
-            required
-            min="0"
-            step="0.01"
-            value={afn}
-            onChange={(event) => setAfn(event.target.value)}
-            placeholder="0.00"
-          />
-        </label>
-        <label>
-          {t("countedUsd")}
-          <input
-            required
-            min="0"
-            step="0.01"
-            value={usd}
-            onChange={(event) => setUsd(event.target.value)}
-            placeholder="0.00"
-          />
-        </label>
+        {countedCurrencies.map((currency) => (
+          <label key={currency.code}>
+            {u("countedAmount")} · {currency.code} · {currencyName(language, currency)}
+            <input
+              required
+              min="0"
+              step={currency.minor_unit === 0 ? "1" : "0.01"}
+              value={counted[currency.code] || ""}
+              onChange={(event) =>
+                setCounted((current) => ({ ...current, [currency.code]: event.target.value }))
+              }
+              placeholder="0.00"
+            />
+          </label>
+        ))}
         <label>
           {u("differenceReason")}
           <input
@@ -4664,18 +5461,39 @@ function HawalaView({
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
   const [fee, setFee] = useState("0");
+  const [currency, setCurrency] = useState("AFN");
+  const [baseAmount, setBaseAmount] = useState("");
+  const [feeBaseAmount, setFeeBaseAmount] = useState("0");
+  const [moneyAccountId, setMoneyAccountId] = useState("");
+  const [accounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (organizationId && organizationId !== "inspection")
-      void listHawalaTransfers(organizationId).then((result) => {
+    if (organizationId === "inspection") {
+      setCatalog(inspectionCurrencies);
+      setAccounts([{ id: "inspection-cashbox", name: ux(language, "previewCashboxName"), account_type: "cashbox", branch_id: "inspection-branch", cashbox_id: "inspection-cashbox-id", reference_label: null, active: true, balances: [] }]);
+      setMoneyAccountId("inspection-cashbox");
+      return;
+    }
+    if (organizationId)
+      void Promise.all([
+        listHawalaTransfers(organizationId),
+        listMoneyAccounts(organizationId),
+        listCurrencyCatalog(organizationId),
+      ]).then(([result, accountResult, currencyResult]) => {
         if (result.data) setTransfers(result.data);
+        if (accountResult.data) {
+          setAccounts(accountResult.data);
+          setMoneyAccountId((current) => current || accountResult.data?.[0]?.id || "");
+        }
+        if (currencyResult.data) setCatalog(currencyResult.data);
       });
-  }, [organizationId]);
+  }, [language, organizationId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!organizationId || !branchId) {
-      onToast(u("activeBranchRequired"));
+    if (!organizationId || !branchId || !moneyAccountId) {
+      onToast(moneyAccountId ? u("activeBranchRequired") : u("chooseMoneyAccount"));
       return;
     }
     setBusy(true);
@@ -4683,11 +5501,13 @@ function HawalaView({
       organization_id: organizationId,
       branch_id: branchId,
       beneficiary_name: beneficiary,
-      origin_location: "Main Counter",
       destination_location: destination,
-      currency: "AFN",
+      currency,
       amount,
       fee,
+      base_amount: currency === "AFN" ? amount : baseAmount,
+      fee_base_amount: currency === "AFN" ? fee : feeBaseAmount,
+      destination_money_account_id: moneyAccountId,
       reference_code: reference,
       client_command_id: crypto.randomUUID(),
     });
@@ -4698,6 +5518,8 @@ function HawalaView({
       setDestination("");
       setAmount("");
       setFee("0");
+      setBaseAmount("");
+      setFeeBaseAmount("0");
       setReference("");
       if (organizationId) {
         const refreshed = await listHawalaTransfers(organizationId);
@@ -4738,7 +5560,7 @@ function HawalaView({
         </label>
         <div className="form-grid">
           <label>
-            {u("amountAfn")}
+            {t("amount")}
             <input
               required
               min="0.01"
@@ -4749,7 +5571,7 @@ function HawalaView({
             />
           </label>
           <label>
-            {u("feeAfn")}
+            {t("fee")}
             <input
               min="0"
               step="0.01"
@@ -4757,6 +5579,49 @@ function HawalaView({
               onChange={(event) => setFee(event.target.value)}
             />
           </label>
+        </div>
+        <label>
+          {t("currency")}
+          <select
+            value={currency}
+            onChange={(event) => {
+              setCurrency(event.target.value);
+              setBaseAmount("");
+              setFeeBaseAmount("0");
+            }}
+          >
+            {catalog.filter((item) => item.enabled).map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.code} · {currencyName(language, item)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {currency !== "AFN" && (
+          <div className="form-grid">
+            <label>
+              {u("hawalaBaseAmount")}
+              <input required min="0.01" step="0.01" inputMode="decimal" value={baseAmount} onChange={(event) => setBaseAmount(event.target.value)} placeholder="0.00 AFN" />
+            </label>
+            <label>
+              {u("hawalaFeeBaseAmount")}
+              <input required min="0" step="0.01" inputMode="decimal" value={feeBaseAmount} onChange={(event) => setFeeBaseAmount(event.target.value)} placeholder="0.00 AFN" />
+            </label>
+          </div>
+        )}
+        <label>
+          {u("destinationAccount")}
+          <select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}>
+            <option value="">{u("chooseDestinationAccount")}</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>{account.name}</option>
+            ))}
+          </select>
+        </label>
+        <div className="money-flow-summary">
+          <span><small>{u("sourceAccount")}</small><b>{u("hawalaCustomer")}</b></span>
+          <strong aria-hidden="true">→</strong>
+          <span><small>{u("destinationAccount")}</small><b>{accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount")}</b></span>
         </div>
         <label>
           {t("referenceCode")}
@@ -4799,6 +5664,7 @@ function OnboardingScreen({
   language,
   businessName,
   currencies,
+  catalog,
   cashboxName,
   busy,
   onLanguageChange,
@@ -4810,6 +5676,7 @@ function OnboardingScreen({
   language: Language;
   businessName: string;
   currencies: string[];
+  catalog: CurrencyCatalogRecord[];
   cashboxName: string;
   busy: boolean;
   onLanguageChange: (language: Language) => void;
@@ -4820,7 +5687,7 @@ function OnboardingScreen({
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const available = [
+  const featuredCodes = [
     "AFN",
     "USD",
     "EUR",
@@ -4831,6 +5698,15 @@ function OnboardingScreen({
     "TRY",
     "GBP",
   ];
+  const available = catalog.length ? catalog : inspectionCurrencies;
+  const featured = featuredCodes
+    .map((code) => available.find((currency) => currency.code === code))
+    .filter((currency): currency is CurrencyCatalogRecord => Boolean(currency));
+  const additional = available.filter(
+    (currency) =>
+      !featuredCodes.includes(currency.code) &&
+      !currencies.includes(currency.code),
+  );
   const toggleCurrency = (currency: string) =>
     onCurrenciesChange(
       currencies.includes(currency)
@@ -4875,18 +5751,34 @@ function OnboardingScreen({
           </label>
           <fieldset className="currency-choices">
             <legend>{u("currenciesQuestion")}</legend>
-            {available.map((currency) => (
-              <label key={currency}>
+            {featured.map((currency) => (
+              <label key={currency.code}>
                 <input
                   type="checkbox"
-                  checked={currencies.includes(currency)}
-                  disabled={currency === "AFN"}
-                  onChange={() => toggleCurrency(currency)}
+                  checked={currencies.includes(currency.code)}
+                  disabled={currency.code === "AFN"}
+                  onChange={() => toggleCurrency(currency.code)}
                 />
-                {currency}
+                {currency.code} · {currencyName(language, currency)}
               </label>
             ))}
           </fieldset>
+          <label>
+            {u("addWorldCurrency")}
+            <select
+              value=""
+              onChange={(event) => {
+                if (event.target.value) toggleCurrency(event.target.value);
+              }}
+            >
+              <option value="">{u("chooseWorldCurrency")}</option>
+              {additional.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} · {currencyName(language, currency)}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             {u("mainCashboxName")}
             <input

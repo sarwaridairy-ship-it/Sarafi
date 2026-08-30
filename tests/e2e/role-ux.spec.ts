@@ -34,6 +34,16 @@ test.describe("role-aware workspace presentation", () => {
     await expect(
       page.getByRole("button", { name: /Import data/ }),
     ).not.toBeVisible();
+    await page.getByRole("button", { name: /My money/ }).click();
+    await expect(
+      page.getByRole("button", { name: "Add money account" }),
+    ).not.toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /CNY used by this shop/ })).toBeDisabled();
+    await expect(
+      page.getByText(
+        "Only the owner can add or change money accounts. Employees can use only the accounts assigned to them.",
+      ),
+    ).toBeVisible();
   });
 
   test("viewer is visibly read-only and cannot open financial entry controls", async ({

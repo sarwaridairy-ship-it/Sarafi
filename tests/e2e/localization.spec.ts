@@ -9,6 +9,12 @@ const allowedLatinWords = new Set([
   "AFN",
   "USD",
   "EUR",
+  "AED",
+  "PKR",
+  "GBP",
+  "SAR",
+  "CNY",
+  "INR",
   "CSV",
   "PDF",
   "WhatsApp",
@@ -170,3 +176,35 @@ test("switching from Dari to Pashto replaces, rather than mixes, translated copy
     page.getByText("فعالیت اخیر", { exact: true }),
   ).not.toBeVisible();
 });
+
+for (const locale of [
+  {
+    code: "fa-AF",
+    money: "پول من",
+    accounts: "صندوق‌ها و حساب‌های پولی",
+    currencies: "اسعار مورد استفاده صرافی",
+    search: "پیدا کردن اسعار",
+    addAccount: "افزودن حساب پولی",
+  },
+  {
+    code: "ps-AF",
+    money: "زما پیسې",
+    accounts: "د پیسو صندوقونه او حسابونه",
+    currencies: "د صرافۍ کارېدونکي اسعار",
+    search: "اسعار پیدا کول",
+    addAccount: "د پیسو حساب زیاتول",
+  },
+] as const) {
+  test(`${locale.code} money controls use local wording`, async ({ page }) => {
+    await page.goto("/");
+    await page
+      .getByRole("combobox", { name: "Change language" })
+      .selectOption(locale.code);
+    await page.getByRole("button", { name: new RegExp(locale.money) }).click();
+    await expect(page.getByRole("heading", { name: locale.accounts })).toBeVisible();
+    await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: locale.search })).toBeVisible();
+    await expect(page.getByRole("button", { name: locale.addAccount })).toBeVisible();
+    await expectNoEnglishLeak(page, `${locale.code} money controls`);
+  });
+}

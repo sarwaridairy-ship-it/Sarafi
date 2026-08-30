@@ -401,7 +401,7 @@ export function ReceiptSuccessDialog({ language, businessName, trade, onPrint, o
           <DetailRow label={p(language, "shopGives")} value={`${trade.givenAmount} ${trade.givenCurrency}`} />
           <DetailRow label={p(language, "shopReceives")} value={`${trade.receivedAmount} ${trade.receivedCurrency}`} />
           <DetailRow label={p(language, "customerRate")} value={trade.rate} />
-          <time>{new Date(trade.occurredAt).toLocaleString(language)}</time>
+          <time>{new Date(trade.occurredAt).toLocaleString(language, { hour12: false })}</time>
         </div>
         <div className="receipt-actions">
           <button className="export-button" onClick={() => onPrint("58mm")}><AppIcon name="print" size={17} />{p(language, "print58")}</button>

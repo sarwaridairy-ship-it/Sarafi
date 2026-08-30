@@ -9,7 +9,7 @@ const fileEnv = readFileSync(source, 'utf8').split(/\r?\n/).filter((line) => lin
   return values
 }, {})
 const env = { ...fileEnv, ...process.env }
-const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SARAFI_E2E_CASHIER_A_EMAIL', 'SARAFI_E2E_CASHIER_A_PASSWORD', 'SARAFI_E2E_CASHIER_B_EMAIL', 'SARAFI_E2E_CASHIER_B_PASSWORD', 'BUSINESS_A_ID', 'BRANCH_A1_ID', 'CASHBOX_A1_ID']
+const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SARAFI_E2E_CASHIER_A_EMAIL', 'SARAFI_E2E_CASHIER_A_PASSWORD', 'BUSINESS_A_ID', 'BRANCH_A1_ID', 'CASHBOX_A1_ID']
 for (const key of required) if (!env[key]) throw new Error(`Missing Step 16 fixture setting: ${key}`)
 
 const client = () => createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
@@ -52,31 +52,38 @@ const getSnapshot = async (instance) => {
   return { journal: journal.data, events: events.data, receipts: receipts.data, state: state.data, debit: lines.reduce((sum, line) => sum + Number(line.base_debit ?? 0), 0), credit: lines.reduce((sum, line) => sum + Number(line.base_credit ?? 0), 0) }
 }
 const cashierA = await signIn(env.SARAFI_E2E_CASHIER_A_EMAIL, env.SARAFI_E2E_CASHIER_A_PASSWORD)
-const cashierB = await signIn(env.SARAFI_E2E_CASHIER_B_EMAIL, env.SARAFI_E2E_CASHIER_B_PASSWORD)
 const deviceA = await registerDevice(cashierA, 'CASHIER_A')
-const deviceB = await registerDevice(cashierB, 'CASHIER_B')
+const deviceB = await registerDevice(cashierA, 'CASHIER_A_SECOND_DEVICE')
 const before = await getSnapshot(cashierA)
+const soldCurrency = env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD'
+const availableBefore = Number(
+  before.state.find((row) => row.currency_code === soldCurrency)?.quantity ?? 0,
+)
+if (!Number.isFinite(availableBefore) || availableBefore <= 0)
+  throw new Error(`Step 16 requires positive ${soldCurrency} inventory`)
+const competingAmount = (availableBefore * 0.75).toFixed(12)
+const retryAmount = (availableBefore * 0.001).toFixed(12)
 const raceIds = [randomUUID(), randomUUID()]
-const race = await Promise.all([rpc(cashierA, { ...command(raceIds[0], '8000'), device_id: deviceA }), rpc(cashierB, { ...command(raceIds[1], '7000'), device_id: deviceB })])
+const race = await Promise.all([rpc(cashierA, { ...command(raceIds[0], competingAmount), device_id: deviceA }), rpc(cashierA, { ...command(raceIds[1], competingAmount), device_id: deviceB })])
 const successfulRacePosts = race.filter((result) => !result.error)
 const racePassed = successfulRacePosts.length === 1
-record('Concurrent $8k + $7k sale cannot overspend inventory', racePassed, `successful_posts=${successfulRacePosts.length}; ${race.map((result) => result.error?.message ?? result.data?.id).join(' | ')}`)
+record('Concurrent sales cannot overspend available inventory', racePassed, `available=${availableBefore}; each_sale=${competingAmount}; successful_posts=${successfulRacePosts.length}; ${race.map((result) => result.error?.message ?? result.data?.id).join(' | ')}`)
 
 const retryId = randomUUID()
-const first = await rpc(cashierA, { ...command(retryId), device_id: deviceA })
-const retry = await Promise.all([rpc(cashierA, { ...command(retryId), device_id: deviceA }), rpc(cashierB, { ...command(retryId), device_id: deviceB })])
+const first = await rpc(cashierA, { ...command(retryId, retryAmount), device_id: deviceA })
+const retry = await Promise.all([rpc(cashierA, { ...command(retryId, retryAmount), device_id: deviceA }), rpc(cashierA, { ...command(retryId, retryAmount), device_id: deviceB })])
 const retryIds = [first.data?.id, ...retry.map((result) => result.data?.id)].filter(Boolean)
 record('Retry after committed timeout produces one posting', new Set(retryIds).size === 1 && retry.every((result) => !result.error), retryIds.join(','))
 
 const sameId = randomUUID()
-const duplicate = await Promise.all([rpc(cashierA, { ...command(sameId), device_id: deviceA }), rpc(cashierA, { ...command(sameId), device_id: deviceA }), rpc(cashierB, { ...command(sameId), device_id: deviceB })])
+const duplicate = await Promise.all([rpc(cashierA, { ...command(sameId, retryAmount), device_id: deviceA }), rpc(cashierA, { ...command(sameId, retryAmount), device_id: deviceA }), rpc(cashierA, { ...command(sameId, retryAmount), device_id: deviceB })])
 const duplicateIds = duplicate.map((result) => result.data?.id).filter(Boolean)
 record('Same idempotency key across devices has one economic effect', new Set(duplicateIds).size <= 1 && duplicate.every((result) => !result.error), duplicateIds.join(','))
 
 const after = await getSnapshot(cashierA)
 const uniqueCommandIds = new Set(after.events.map((event) => event.client_command_id)).size === after.events.length
 const balanced = after.debit === after.credit
-const state = after.state.find((row) => row.currency_code === (env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD'))
+const state = after.state.find((row) => row.currency_code === soldCurrency)
 record('Journal remains balanced', balanced, `debit=${after.debit}; credit=${after.credit}`)
 record('No duplicate receipt/event exists', uniqueCommandIds && new Set(after.receipts.map((receipt) => receipt.client_command_id)).size === after.receipts.length, `events=${after.events.length}; receipts=${after.receipts.length}`)
 record('No prohibited negative inventory exists', !state || Number(state.quantity) >= 0, `quantity=${state?.quantity ?? 'missing'}`)

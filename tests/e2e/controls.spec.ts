@@ -144,10 +144,71 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByRole("combobox", { name: "Currency" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Money comes from" }),
+    ).toHaveValue("inspection-cashbox");
+    await expect(page.locator(".money-flow-summary")).toContainText(
+      "Main Counter",
+    );
+    await expect(page.locator(".money-flow-summary")).toContainText("Expense");
     await page.getByRole("button", { name: "Close operation" }).click();
     await expect(
       page.getByRole("heading", { name: "Expense" }),
     ).not.toBeVisible();
+  });
+
+  test("transfer visibly connects two different money accounts", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /More actions/ }).click();
+    await page.getByRole("button", { name: /^Transfer cash/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Transfer cash", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Money comes from" }),
+    ).toHaveValue("inspection-cashbox");
+    await expect(
+      page.getByRole("combobox", { name: "Money goes to" }),
+    ).toHaveValue("inspection-safe");
+    const flow = page.locator(".money-flow-summary");
+    await expect(flow).toContainText("Main Counter");
+    await expect(flow).toContainText("Main Safe");
+    await page
+      .getByRole("combobox", { name: "Money goes to" })
+      .selectOption("inspection-cashbox");
+    await page.getByRole("textbox", { name: "Amount", exact: true }).fill("100");
+    await page.getByRole("button", { name: /Post operation/ }).click();
+    await expect(
+      page.getByText("Choose two different accounts for this transfer."),
+    ).toBeVisible();
+  });
+
+  test("foreign-currency operations require their AFN book value", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /More actions/ }).click();
+    await page.getByRole("button", { name: "Expense" }).click();
+    await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
+    await expect(
+      page.getByRole("textbox", { name: /Value in AFN/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Currencies are never added together without a value/),
+    ).toBeVisible();
+  });
+
+  test("transaction history shows the source and destination for each movement", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /Transactions/ }).click();
+    const rows = page.locator(".balance-row");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0).locator(".transaction-flow-line")).toContainText(
+      "Main Counter → Expense",
+    );
+    await expect(rows.nth(1).locator(".transaction-flow-line")).toContainText(
+      "Customer or outside party → Main Counter",
+    );
   });
 
   test("language selection switches RTL and survives reload", async ({
@@ -231,10 +292,10 @@ test.describe("workspace controls", () => {
       page.getByRole("heading", { name: "Check cashbox", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("textbox", { name: "Counted AFN" }),
+      page.getByRole("textbox", { name: /Counted amount · AFN/ }),
     ).toBeVisible();
     await expect(
-      page.getByRole("textbox", { name: "Counted USD" }),
+      page.getByRole("textbox", { name: /Counted amount · USD/ }),
     ).toBeVisible();
     await expect(
       page.getByRole("textbox", { name: "Reason for the difference" }),
@@ -518,6 +579,22 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByRole("heading", { name: "Where is my money?" }),
     ).toBeVisible();
+    await expect(page.locator(".account-card")).toHaveCount(3);
+    await expect(page.getByRole("heading", { name: "Money accounts" })).toBeVisible();
+    await page.getByRole("button", { name: "Add money account" }).click();
+    await expect(page.getByRole("textbox", { name: "Account name" })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Account type" })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Currencies used by this shop" }),
+    ).toBeVisible();
+    await page.getByRole("textbox", { name: "Find a currency" }).fill("CNY");
+    await expect(page.locator(".currency-catalog-item")).toHaveCount(1);
+    await expect(page.locator(".currency-catalog-item")).toContainText(
+      "Chinese Yuan",
+    );
+    await page.getByRole("textbox", { name: "Find a currency" }).fill("");
+    await expect(page.locator(".currency-catalog-item")).toHaveCount(9);
     await expect(
       page.getByRole("button", { name: "By currency" }),
     ).toBeVisible();

@@ -710,6 +710,9 @@ td {
 }
 
 .trade-modal {
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 15px;
   box-shadow: 0 30px 90px rgba(5, 26, 21, 0.32);
@@ -1639,6 +1642,7 @@ td {
   .receipt-actions { grid-template-columns: 1fr; }
   .receipt-actions .primary-action { grid-column: auto; }
   .modal-backdrop { padding: 12px; }
+  .trade-modal { max-height: calc(100dvh - 24px); }
   .toast { right: 12px; bottom: 86px; left: 12px; max-width: none; }
 }
 
@@ -1661,4 +1665,90 @@ td {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+.money-flow-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.75rem;
+  margin: 0.4rem 0 0.9rem;
+}
+
+.money-flow-summary > span {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: var(--surface-soft, #f7f9f8);
+}
+
+.money-flow-summary small,
+.account-card p,
+.account-balances span,
+.owner-control-note { color: var(--muted); }
+
+.money-flow-summary b { overflow-wrap: anywhere; }
+.money-flow-summary > strong { align-self: center; color: var(--green, #176b50); font-size: 1.2rem; }
+.trade-account-flow { margin-top: 0.8rem; padding: 0.85rem; border: 1px solid var(--line); border-radius: 0.9rem; background: #fbfcfb; }
+.trade-account-flow h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.trade-account-flow p { margin: 0; color: var(--muted); font-size: 0.82rem; }
+
+.account-control-panel,
+.currency-control-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fff;
+}
+
+.compact-header { align-items: end; margin-bottom: 0.9rem; }
+.account-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.75rem; }
+.account-card { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 0.9rem; background: linear-gradient(145deg, #fff, #f7faf8); }
+.account-card h3 { margin: 0.5rem 0 0.2rem; overflow-wrap: anywhere; }
+.account-kind { display: inline-flex; padding: 0.25rem 0.55rem; border-radius: 999px; color: #155d47; background: #e8f5ef; font-size: 0.75rem; font-weight: 750; }
+.account-kind.bank,
+.account-kind.mobile_money { color: #285287; background: #eaf1fa; }
+.account-balances { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+.account-balances b { padding: 0.35rem 0.55rem; border-radius: 0.55rem; background: #eef3f0; font-size: 0.82rem; }
+
+.inline-management-form,
+.rate-management-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.rate-management-form { grid-template-columns: minmax(200px, 1.3fr) repeat(3, minmax(150px, 1fr)) auto; margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: #fff; }
+.inline-management-form label,
+.rate-management-form label,
+.currency-search { display: grid; gap: 0.35rem; }
+.currency-catalog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 0.55rem; max-height: 23rem; overflow: auto; padding: 0.1rem; }
+.currency-catalog-item { display: grid; grid-template-columns: 2.15rem minmax(0, 1fr) auto; align-items: center; gap: 0.55rem; min-width: 0; padding: 0.65rem; border: 1px solid var(--line); border-radius: 0.75rem; background: #fff; }
+.currency-catalog-item.enabled { border-color: #8cc6ae; background: #f1faf6; }
+.currency-catalog-item > span:nth-child(2) { display: grid; min-width: 0; }
+.currency-catalog-item small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.currency-symbol { display: grid; place-items: center; width: 2.15rem; height: 2.15rem; border-radius: 0.6rem; background: #eef3f0; font-weight: 800; }
+.currency-search { min-width: min(18rem, 100%); }
+.owner-control-note { margin: 0.8rem 0 0; font-size: 0.86rem; }
+
+@media (max-width: 850px) {
+  .inline-management-form,
+  .rate-management-form { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 560px) {
+  .money-flow-summary,
+  .inline-management-form,
+  .rate-management-form { grid-template-columns: 1fr; }
+  .money-flow-summary > strong { justify-self: center; transform: rotate(90deg); }
+  .compact-header { align-items: stretch; }
+  .currency-search { min-width: 0; }
 }

@@ -19,6 +19,8 @@
     "security:approval": "node scripts/security/run-step15-approval-certification.mjs",
     "security:offline": "node scripts/security/run-offline-retirement.mjs",
     "security:step17": "node scripts/security/run-step17-reconciliation.mjs",
+    "security:money-accounts": "node scripts/security/run-money-accounts-acceptance.mjs",
+    "security:team": "node scripts/security/run-team-invitation-acceptance.mjs",
     "performance:step18": "npm run build && node scripts/performance/check-step18.mjs",
     "preview": "vite preview"
   },
