@@ -175,6 +175,44 @@ function currencyName(language: Language, currency: CurrencyCatalogRecord) {
       : currency.name_en;
 }
 
+function inspectionMoneyAccounts(language: Language): MoneyAccountRecord[] {
+  return [
+    {
+      id: "inspection-cashbox",
+      name: ux(language, "previewCashboxName"),
+      account_type: "cashbox",
+      branch_id: "inspection-branch",
+      cashbox_id: "inspection-cashbox-id",
+      reference_label: null,
+      active: true,
+      balances: [
+        { currency: "AFN", amount: "1250000" },
+        { currency: "USD", amount: "18000" },
+      ],
+    },
+    {
+      id: "inspection-safe",
+      name: ux(language, "previewSafeName"),
+      account_type: "safe",
+      branch_id: "inspection-branch",
+      cashbox_id: null,
+      reference_label: null,
+      active: true,
+      balances: [{ currency: "AFN", amount: "450000" }],
+    },
+    {
+      id: "inspection-bank",
+      name: ux(language, "previewBankName"),
+      account_type: "bank",
+      branch_id: null,
+      cashbox_id: null,
+      reference_label: ux(language, "previewBankReference"),
+      active: true,
+      balances: [{ currency: "AFN", amount: "300000" }],
+    },
+  ];
+}
+
 function App() {
   validateClientEnvironment();
   const inspectionMode =
@@ -255,10 +293,18 @@ function App() {
   const [cashboxId, setCashboxId] = useState<string | null>(
     inspectionMode ? "inspection-cashbox-id" : null,
   );
-  const [currencyCatalog, setCurrencyCatalog] = useState<
+  const [loadedCurrencyCatalog, setCurrencyCatalog] = useState<
     CurrencyCatalogRecord[]
   >([]);
-  const [moneyAccounts, setMoneyAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [loadedMoneyAccounts, setMoneyAccounts] = useState<MoneyAccountRecord[]>([]);
+  const currencyCatalog = inspectionMode
+    ? inspectionCurrencies
+    : loadedCurrencyCatalog;
+  const moneyAccounts = inspectionMode
+    ? inspectionMoneyAccounts(language)
+    : organizationId
+      ? loadedMoneyAccounts
+      : [];
   const [moneyContextRefresh, setMoneyContextRefresh] = useState(0);
   const [organizationLoading, setOrganizationLoading] =
     useState(!inspectionMode);
@@ -506,45 +552,7 @@ function App() {
   }, [inspectionMode, organizationId]);
 
   useEffect(() => {
-    if (inspectionMode) {
-      setCurrencyCatalog(inspectionCurrencies);
-      setMoneyAccounts([
-        {
-          id: "inspection-cashbox",
-          name: ux(language, "previewCashboxName"),
-          account_type: "cashbox",
-          branch_id: "inspection-branch",
-          cashbox_id: "inspection-cashbox-id",
-          reference_label: null,
-          active: true,
-          balances: [
-            { currency: "AFN", amount: "1250000" },
-            { currency: "USD", amount: "18000" },
-          ],
-        },
-        {
-          id: "inspection-safe",
-          name: ux(language, "previewSafeName"),
-          account_type: "safe",
-          branch_id: "inspection-branch",
-          cashbox_id: null,
-          reference_label: null,
-          active: true,
-          balances: [{ currency: "AFN", amount: "450000" }],
-        },
-        {
-          id: "inspection-bank",
-          name: ux(language, "previewBankName"),
-          account_type: "bank",
-          branch_id: null,
-          cashbox_id: null,
-          reference_label: ux(language, "previewBankReference"),
-          active: true,
-          balances: [{ currency: "AFN", amount: "300000" }],
-        },
-      ]);
-      return;
-    }
+    if (inspectionMode) return;
     void listCurrencyCatalog(organizationId).then((result) => {
       if (result.data) {
         setCurrencyCatalog(result.data);
@@ -557,10 +565,7 @@ function App() {
       }
       if (result.error && organizationId) setToast(ux(language, "couldNotLoad"));
     });
-    if (!organizationId) {
-      setMoneyAccounts([]);
-      return;
-    }
+    if (!organizationId) return;
     void listMoneyAccounts(organizationId).then((result) => {
       if (result.data) setMoneyAccounts(result.data);
       if (result.error) setToast(ux(language, "couldNotLoad"));
@@ -3612,8 +3617,14 @@ function MoneyLocationView({
   const [view, setView] = useState<"currency" | "location">("currency");
   const [currency, setCurrency] = useState("ALL");
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const [accounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
-  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [loadedAccounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const accounts = organizationId === "inspection"
+    ? inspectionMoneyAccounts(language)
+    : loadedAccounts;
+  const catalog = organizationId === "inspection"
+    ? inspectionCurrencies
+    : loadedCatalog;
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [accountName, setAccountName] = useState("");
   const [accountType, setAccountType] = useState<
@@ -3625,16 +3636,7 @@ function MoneyLocationView({
   const [loading, setLoading] = useState(organizationId !== "inspection");
   useEffect(() => {
     if (!organizationId) return;
-    if (organizationId === "inspection") {
-      setCatalog(inspectionCurrencies);
-      setAccounts([
-        { id: "inspection-cashbox", name: ux(language, "previewCashboxName"), account_type: "cashbox", branch_id: "inspection-branch", cashbox_id: "inspection-cashbox-id", reference_label: null, active: true, balances: [{ currency: "AFN", amount: "1250000" }, { currency: "USD", amount: "18000" }] },
-        { id: "inspection-safe", name: ux(language, "previewSafeName"), account_type: "safe", branch_id: "inspection-branch", cashbox_id: null, reference_label: null, active: true, balances: [{ currency: "AFN", amount: "450000" }] },
-        { id: "inspection-bank", name: ux(language, "previewBankName"), account_type: "bank", branch_id: null, cashbox_id: null, reference_label: ux(language, "previewBankReference"), active: true, balances: [{ currency: "AFN", amount: "300000" }] },
-      ]);
-      setLoading(false);
-      return;
-    }
+    if (organizationId === "inspection") return;
     void Promise.all([
       getOwnerDashboard(organizationId),
       listLocationEvidence(organizationId),
@@ -4587,7 +4589,10 @@ function RatesView({
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [history, setHistory] = useState<RateHistoryRecord[]>([]);
-  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const catalog = organizationId === "inspection"
+    ? inspectionCurrencies
+    : loadedCatalog;
   const [sourceCurrency, setSourceCurrency] = useState("USD");
   const [buyRate, setBuyRate] = useState("");
   const [sellRateValue, setSellRateValue] = useState("");
@@ -4617,12 +4622,30 @@ function RatesView({
       onToast(ux(language, "couldNotLoad"));
   }, [language, onToast, organizationId]);
   useEffect(() => {
-    if (organizationId === "inspection") {
-      setCatalog(inspectionCurrencies);
-      return;
-    }
-    void loadRates();
-  }, [loadRates, organizationId]);
+    if (!organizationId || organizationId === "inspection") return;
+    void Promise.all([
+      listRateHistory(organizationId),
+      listCurrencyCatalog(organizationId),
+    ]).then(([historyResult, currencyResult]) => {
+      if (historyResult.data) setHistory(historyResult.data);
+      if (currencyResult.data) {
+        setCatalog(currencyResult.data);
+        const enabled = currencyResult.data.find(
+          (item) => item.enabled && item.code !== "AFN",
+        );
+        if (enabled)
+          setSourceCurrency((current) =>
+            currencyResult.data?.some(
+              (item) => item.code === current && item.enabled,
+            )
+              ? current
+              : enabled.code,
+          );
+      }
+      if (historyResult.error || currencyResult.error)
+        onToast(ux(language, "couldNotLoad"));
+    });
+  }, [language, onToast, organizationId]);
   const saveRate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!organizationId) return;
@@ -4773,12 +4796,12 @@ function ReportsView({
   const [status, setStatus] = useState("All");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const catalog = organizationId === "inspection"
+    ? inspectionCurrencies
+    : loadedCatalog;
   useEffect(() => {
-    if (organizationId === "inspection") {
-      setCatalog(inspectionCurrencies);
-      return;
-    }
+    if (organizationId === "inspection") return;
     void listCurrencyCatalog(organizationId).then((result) => {
       if (result.data) setCatalog(result.data);
     });
@@ -5323,16 +5346,18 @@ function ReconciliationView({
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [counted, setCounted] = useState<Record<string, string>>({});
-  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [expected, setExpected] = useState<Record<string, string>>({});
+  const [loadedExpected, setExpected] = useState<Record<string, string>>({});
+  const catalog = organizationId === "inspection"
+    ? inspectionCurrencies
+    : loadedCatalog;
+  const expected = organizationId === "inspection"
+    ? { AFN: "1250000", USD: "18000" }
+    : loadedExpected;
   useEffect(() => {
-    if (organizationId === "inspection") {
-      setCatalog(inspectionCurrencies);
-      setExpected({ AFN: "1250000", USD: "18000" });
-      return;
-    }
+    if (organizationId === "inspection") return;
     if (organizationId && cashboxId)
       void Promise.all([
         listCashboxBalances(organizationId, cashboxId),
@@ -5458,18 +5483,21 @@ function HawalaView({
   const [currency, setCurrency] = useState("AFN");
   const [baseAmount, setBaseAmount] = useState("");
   const [feeBaseAmount, setFeeBaseAmount] = useState("0");
-  const [moneyAccountId, setMoneyAccountId] = useState("");
-  const [accounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
-  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [moneyAccountId, setMoneyAccountId] = useState(
+    organizationId === "inspection" ? "inspection-cashbox" : "",
+  );
+  const [loadedAccounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const accounts = organizationId === "inspection"
+    ? inspectionMoneyAccounts(language)
+    : loadedAccounts;
+  const catalog = organizationId === "inspection"
+    ? inspectionCurrencies
+    : loadedCatalog;
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (organizationId === "inspection") {
-      setCatalog(inspectionCurrencies);
-      setAccounts([{ id: "inspection-cashbox", name: ux(language, "previewCashboxName"), account_type: "cashbox", branch_id: "inspection-branch", cashbox_id: "inspection-cashbox-id", reference_label: null, active: true, balances: [] }]);
-      setMoneyAccountId("inspection-cashbox");
-      return;
-    }
+    if (organizationId === "inspection") return;
     if (organizationId)
       void Promise.all([
         listHawalaTransfers(organizationId),
