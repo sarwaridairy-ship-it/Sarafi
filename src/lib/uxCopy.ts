@@ -3,6 +3,8 @@ import type { Language } from "./i18n";
 const copy = {
   en: {
     sarafiTagline: "Digital daftar for Sarafi shops",
+    openingLabel: "SARAFI opening screen",
+    skipOpening: "Skip",
     owner: "Owner",
     cashier: "Cashier",
     manager: "Manager",
@@ -436,6 +438,8 @@ const copy = {
   },
   "fa-AF": {
     sarafiTagline: "دفتر دیجیتلی برای صرافی‌ها",
+    openingLabel: "صفحه آغاز صرافی",
+    skipOpening: "رد کردن",
     owner: "مالک",
     cashier: "صندوق‌دار",
     manager: "مدیر",
@@ -858,6 +862,8 @@ const copy = {
   },
   "ps-AF": {
     sarafiTagline: "د صرافیو لپاره ډیجیټلي دفتر",
+    openingLabel: "د صرافي د پیل پرده",
+    skipOpening: "تېرول",
     owner: "مالک",
     cashier: "صندوق‌دار",
     manager: "مدیر",

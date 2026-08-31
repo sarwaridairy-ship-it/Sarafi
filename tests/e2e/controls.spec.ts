@@ -1,6 +1,72 @@
 import { expect, test } from "@playwright/test";
 
+const productionCsp =
+  "default-src 'self'; base-uri 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; manifest-src 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:";
+
 test.describe("workspace controls", () => {
+  test("opening animation completes once and hands off to the real sign-in", async ({
+    page,
+  }) => {
+    await page.route("**/*", async (route) => {
+      if (!route.request().isNavigationRequest()) {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      await route.fulfill({
+        response,
+        headers: {
+          ...response.headers(),
+          "content-security-policy": productionCsp,
+          "x-frame-options": "DENY",
+        },
+      });
+    });
+    await page.goto("/?public=1&opening=replay");
+    await expect(
+      page.getByRole("main", { name: "SARAFI opening" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Skip" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Welcome back" }),
+    ).toBeVisible({ timeout: 8000 });
+    await expect(
+      page.getByRole("main", { name: "SARAFI opening" }),
+    ).toHaveCount(0);
+
+    await page.goto("/?public=1");
+    await expect(
+      page.getByRole("heading", { name: "Welcome back" }),
+    ).toBeVisible();
+  });
+
+  test("opening animation can be skipped and respects reduced motion", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/?public=1&opening=replay");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      )
+      .toBe(true);
+    await page.getByRole("button", { name: "Skip" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Welcome back" }),
+    ).toBeVisible();
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/?public=1&opening=replay&motion=reduce");
+    await expect(
+      page.getByRole("heading", { name: "Welcome back" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("main", { name: "SARAFI opening" }),
+    ).toHaveCount(0);
+  });
+
   test("first-time visitor can explain the product and choose a language", async ({
     page,
   }) => {

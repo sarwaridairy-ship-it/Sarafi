@@ -82,6 +82,7 @@ import {
 import { OfflineDraftBook } from "./lib/offline";
 import { indexedDbOfflineStore } from "./lib/offlineStore";
 import { ImportWorkspace } from "./ImportWorkspace";
+import { OpeningExperience } from "./OpeningExperience";
 import {
   AppIcon,
   ComplianceView,
@@ -91,6 +92,35 @@ import {
 } from "./ProfessionalWorkspace";
 
 const loadExports = () => import("./lib/exports");
+
+const openingSessionKey = "sarafi-opening-seen";
+
+function shouldShowOpening(inspectionMode: boolean): boolean {
+  const params = new URLSearchParams(window.location.search);
+  const replayRequested = params.get("opening") === "replay";
+  if (
+    inspectionMode ||
+    (import.meta.env.MODE === "e2e" && !replayRequested) ||
+    params.get("opening") === "skip" ||
+    params.has("invite") ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  )
+    return false;
+  if (replayRequested) return true;
+  try {
+    return window.sessionStorage.getItem(openingSessionKey) !== "1";
+  } catch {
+    return true;
+  }
+}
+
+function rememberOpening(): void {
+  try {
+    window.sessionStorage.setItem(openingSessionKey, "1");
+  } catch {
+    // The handoff still works when storage is unavailable.
+  }
+}
 
 function localizedAuthError(
   language: Language,
@@ -221,6 +251,13 @@ function App() {
       (import.meta.env.DEV &&
         import.meta.env.VITE_AUTH_GATE_DISABLED === "true"));
   const supabaseConfigured = Boolean(readPublicSupabaseConfig());
+  const [showOpening, setShowOpening] = useState(() =>
+    shouldShowOpening(inspectionMode),
+  );
+  const completeOpening = useCallback(() => {
+    rememberOpening();
+    setShowOpening(false);
+  }, []);
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [showTrade, setShowTrade] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -1079,6 +1116,10 @@ function App() {
     moneyAccounts.find((account) => account.account_type === "cashbox")?.name ??
     u("activeCashboxAccount");
 
+  if (showOpening)
+    return (
+      <OpeningExperience language={language} onComplete={completeOpening} />
+    );
   if (!user && !inspectionMode)
     return (
       <AuthScreen
