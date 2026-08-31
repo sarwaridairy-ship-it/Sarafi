@@ -22,7 +22,7 @@ test.describe("workspace controls", () => {
         },
       });
     });
-    await page.goto("/?public=1&opening=replay");
+    await page.goto("/?public=1&opening=replay&openingSpeed=fast");
     await expect(
       page.getByRole("main", { name: "SARAFI opening" }),
     ).toBeVisible();
@@ -45,9 +45,8 @@ test.describe("workspace controls", () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/?public=1&opening=replay");
-    await expect(
-      page.getByRole("main", { name: "SARAFI opening screen" }),
-    ).toBeVisible();
+    await expect(page).toHaveURL(/\/sarafi-opening\.html\?/);
+    await expect(page.locator("#openingMain")).toBeVisible();
     await expect
       .poll(() =>
         page.evaluate(
@@ -68,6 +67,38 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByRole("main", { name: "SARAFI opening" }),
     ).toHaveCount(0);
+  });
+
+  test("opening preserves the complete supplied story and designed login transition", async ({
+    page,
+  }) => {
+    await page.goto("/sarafi-opening.html?language=fa-AF&frame=0.52");
+    await expect(
+      page.getByRole("main", { name: "صفحه آغاز صرافی" }),
+    ).toBeVisible();
+    await expect(page.locator("#paperLayer .paper")).toHaveCount(6);
+    await expect
+      .poll(() =>
+        page.locator("#paperLayer").evaluate((element) =>
+          Number((element as SVGElement).style.opacity),
+        ),
+      )
+      .toBeGreaterThan(0);
+    await expect(page.getByText("نرخ‌های متغیر و سود نامشخص")).toHaveCount(1);
+
+    await page.goto("/sarafi-opening.html?language=fa-AF&frame=0.90");
+    await expect(page.getByText("دفتر هوشمند صرافی")).toBeVisible();
+
+    await page.goto("/sarafi-opening.html?language=fa-AF&frame=1");
+    await expect(page.getByText("به صرافی خوش آمدید")).toBeVisible();
+    await expect(page.getByText("ورود به حساب")).toBeVisible();
+    await expect
+      .poll(() =>
+        page.locator("#authPage").evaluate((element) =>
+          Number((element as SVGElement).style.opacity),
+        ),
+      )
+      .toBeGreaterThan(0.99);
   });
 
   test("first-time visitor can explain the product and choose a language", async ({

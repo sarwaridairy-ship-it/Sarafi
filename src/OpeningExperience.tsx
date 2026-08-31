@@ -11,11 +11,13 @@ export function OpeningExperience({
 }) {
   useEffect(() => {
     const returnUrl = new URL(window.location.href);
+    const requestedSpeed = returnUrl.searchParams.get("openingSpeed");
     returnUrl.searchParams.delete("opening");
-    returnUrl.searchParams.set("opening", "skip");
+    returnUrl.searchParams.delete("openingSpeed");
 
     const openingUrl = new URL("/sarafi-opening.html", window.location.origin);
     openingUrl.searchParams.set("language", language);
+    if (requestedSpeed === "fast") openingUrl.searchParams.set("speed", "fast");
     openingUrl.searchParams.set(
       "return",
       `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`,

@@ -98,10 +98,13 @@ const openingSessionKey = "sarafi-opening-seen";
 function shouldShowOpening(inspectionMode: boolean): boolean {
   const params = new URLSearchParams(window.location.search);
   const replayRequested = params.get("opening") === "replay";
+  const handoffRequested = ["skip", "handoff"].includes(
+    params.get("opening") ?? "",
+  );
   if (
     inspectionMode ||
     (import.meta.env.MODE === "e2e" && !replayRequested) ||
-    params.get("opening") === "skip" ||
+    handoffRequested ||
     params.has("invite") ||
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
   )
@@ -254,8 +257,28 @@ function App() {
   const [showOpening, setShowOpening] = useState(() =>
     shouldShowOpening(inspectionMode),
   );
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!["skip", "handoff"].includes(url.searchParams.get("opening") ?? ""))
+      return;
+    rememberOpening();
+    url.searchParams.delete("opening");
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, []);
   const completeOpening = useCallback(() => {
     rememberOpening();
+    const url = new URL(window.location.href);
+    url.searchParams.delete("opening");
+    url.searchParams.delete("openingSpeed");
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
     setShowOpening(false);
   }, []);
   const [activeNav, setActiveNav] = useState("Dashboard");

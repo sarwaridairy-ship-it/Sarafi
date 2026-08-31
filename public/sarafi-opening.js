@@ -3,19 +3,117 @@
     const requestedLanguage = params.get('language');
     const language = requestedLanguage === 'en' || requestedLanguage === 'ps-AF' ? requestedLanguage : 'fa-AF';
     const copy = {
-      en: { label: 'SARAFI opening screen', skip: 'Skip', tagline: 'Digital daftar for Sarafi shops' },
-      'fa-AF': { label: 'صفحه آغاز صرافی', skip: 'رد کردن', tagline: 'دفتر دیجیتلی برای صرافی‌ها' },
-      'ps-AF': { label: 'د صرافي د پیل پرده', skip: 'تېرول', tagline: 'د صرافیو لپاره ډیجیټلي دفتر' },
+      en: {
+        label: 'SARAFI opening screen',
+        description: 'Two workers assemble the SARAFI mark while six common Sarafi-shop problems become one secure digital system.',
+        skip: 'Skip',
+        tagline: 'Smart digital daftar for Sarafi shops',
+        cardHeader: 'Sarafi shop challenge',
+        core: 'Challenges',
+        cards: [
+          ['Scattered handwritten records', 'Transactions get lost in notebooks', 'and finding an account becomes difficult.'],
+          ['Calculation and exchange errors', 'Manual buying, selling and profit calculations', 'can easily create mistakes.'],
+          ['Changing rates and unclear profit', 'Rate changes make real profit and loss', 'difficult to measure.'],
+          ['Forgotten debts and receivables', 'Due dates and customer balances', 'are not followed up on time.'],
+          ['Incomplete records and reports', 'Daily and monthly reporting', 'and finding old records is difficult.'],
+          ['Risk of losing information', 'Paper books can be damaged', 'and have no secure backup.'],
+        ],
+        auth: {
+          welcome: 'Welcome to SARAFI', subtitle: 'Simple, accurate and secure transaction management',
+          login: 'Sign in', register: 'Register', modeLabel: 'Sign in or register', formLabel: 'Sign-in form',
+          identity: 'Mobile number or email', identityPlaceholder: 'Enter your number or email',
+          password: 'Password', forgot: 'Forgot your password?', loginButton: 'Sign in to your account', registerButton: 'Create a new account',
+        },
+      },
+      'fa-AF': {
+        label: 'صفحه آغاز صرافی',
+        description: 'دو کارگر نشان صرافی را می‌سازند و شش مشکل رایج صرافی به یک سیستم دیجیتلی امن تبدیل می‌شود.',
+        skip: 'رد کردن',
+        tagline: 'دفتر هوشمند صرافی',
+        cardHeader: 'مشکل صرافی‌ها',
+        core: 'مشکل‌ها',
+        cards: [
+          ['ثبت دستی و پراگنده', 'معاملات در دفترها گم می‌شود', 'و یافتن حساب دشوار می‌گردد.'],
+          ['خطای حساب و تبدیل اسعار', 'محاسبهٔ دستی در خرید، فروش', 'و سود، اشتباه ایجاد می‌کند.'],
+          ['نرخ‌های متغیر و سود نامشخص', 'تغییر نرخ، سنجش سود و زیان', 'واقعی را دشوار می‌سازد.'],
+          ['بدهی و طلب فراموش‌شده', 'سررسیدها و باقی‌حساب مشتریان', 'به‌موقع پیگیری نمی‌شود.'],
+          ['سوابق و گزارش‌های ناقص', 'ساخت گزارش روزانه و ماهانه', 'و یافتن سابقه دشوار است.'],
+          ['خطر گم‌شدن اطلاعات', 'دفتر کاغذی آسیب می‌بیند', 'و نسخهٔ پشتیبان ندارد.'],
+        ],
+        auth: {
+          welcome: 'به صرافی خوش آمدید', subtitle: 'مدیریت ساده، دقیق و مصئون معاملات',
+          login: 'ورود', register: 'ثبت‌نام', modeLabel: 'ورود یا ثبت‌نام', formLabel: 'فرم ورود',
+          identity: 'شمارهٔ موبایل یا ایمیل', identityPlaceholder: 'شماره یا ایمیل خود را وارد کنید',
+          password: 'رمز عبور', forgot: 'رمز عبور را فراموش کرده‌اید؟', loginButton: 'ورود به حساب', registerButton: 'ایجاد حساب تازه',
+        },
+      },
+      'ps-AF': {
+        label: 'د صرافي د پیل پرده',
+        description: 'دوه کارګران د صرافي نښه جوړوي او د صرافیو شپږې عامې ستونزې په یوه خوندي ډیجیټلي سیستم بدلېږي.',
+        skip: 'تېرول',
+        tagline: 'د صرافیو هوښیار ډیجیټلي دفتر',
+        cardHeader: 'د صرافیو ستونزې',
+        core: 'ستونزې',
+        cards: [
+          ['لاسي او ګډوډ ثبتونه', 'معاملې په کتابونو کې ورکېږي', 'او د حساب موندل ستونزمن کېږي.'],
+          ['د حساب او اسعارو د بدلون تېروتنې', 'په پېر، پلور او ګټه کې لاسي حساب', 'په اسانه تېروتنه رامنځته کوي.'],
+          ['بدلېدونکي نرخونه او نامعلومه ګټه', 'د نرخ بدلون د رښتینې ګټې او زیان', 'اندازه کول ستونزمنوي.'],
+          ['هېر شوي پورونه او طلبونه', 'د مشتریانو نېټې او پاتې حسابونه', 'پر وخت نه تعقیبېږي.'],
+          ['نیمګړي سوابق او راپورونه', 'ورځني او میاشتني راپورونه جوړول', 'او پخوانی حساب موندل ستونزمن دي.'],
+          ['د معلوماتو د ورکېدو خطر', 'کاغذي کتاب زیانمنېدای شي', 'او خوندي شاتړ نه لري.'],
+        ],
+        auth: {
+          welcome: 'صرافۍ ته ښه راغلاست', subtitle: 'د معاملو ساده، کره او خوندي مدیریت',
+          login: 'ننوتل', register: 'نوی حساب', modeLabel: 'ننوتل یا نوی حساب', formLabel: 'د ننوتلو فورمه',
+          identity: 'د موبایل شمېره یا برېښنالیک', identityPlaceholder: 'شمېره یا برېښنالیک ولیکئ',
+          password: 'پټنوم', forgot: 'پټنوم مو هېر شوی؟', loginButton: 'حساب ته ننوتل', registerButton: 'نوی حساب جوړول',
+        },
+      },
     };
     const localized = copy[language];
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'en' ? 'ltr' : 'rtl';
     document.title = localized.label;
     document.getElementById('openingMain').setAttribute('aria-label', localized.label);
+    document.getElementById('desc').textContent = localized.description;
     document.getElementById('skipOpening').textContent = localized.skip;
     const tagline = document.getElementById('brandTagline');
     tagline.textContent = localized.tagline;
     tagline.setAttribute('direction', language === 'en' ? 'ltr' : 'rtl');
+
+    const papers = [...document.querySelectorAll('#paperLayer .paper')];
+    papers.forEach((paper, index) => {
+      const text = [...paper.querySelectorAll('text')];
+      text[0].textContent = language === 'en' ? String(index + 1) : ['۱','۲','۳','۴','۵','۶'][index];
+      text[1].textContent = localized.cardHeader;
+      text[2].textContent = localized.cards[index][0];
+      text[3].textContent = localized.cards[index][1];
+      text[4].textContent = localized.cards[index][2];
+      if (language !== 'fa-AF') {
+        text[2].setAttribute('font-size', language === 'en' ? '31' : '30');
+        text[3].setAttribute('font-size', '22');
+        text[4].setAttribute('font-size', '22');
+      }
+    });
+    document.getElementById('corePaperText').textContent = localized.core;
+    const authText = {
+      authWelcome: localized.auth.welcome, authSubtitle: localized.auth.subtitle,
+      authLoginTab: localized.auth.login, authRegisterTab: localized.auth.register,
+      authIdentityLabel: localized.auth.identity, authIdentityPlaceholder: localized.auth.identityPlaceholder,
+      authPasswordLabel: localized.auth.password, authForgot: localized.auth.forgot,
+      authLoginButton: localized.auth.loginButton, authRegisterButton: localized.auth.registerButton,
+    };
+    Object.entries(authText).forEach(([id, value]) => { document.getElementById(id).textContent = value; });
+    document.getElementById('authModeGroup').setAttribute('aria-label', localized.auth.modeLabel);
+    document.getElementById('authFormGroup').setAttribute('aria-label', localized.auth.formLabel);
+    if (language === 'en') {
+      ['authIdentityLabel', 'authPasswordLabel', 'authForgot'].forEach(id => {
+        const element = document.getElementById(id); element.setAttribute('x', '208'); element.setAttribute('text-anchor', 'start'); element.setAttribute('direction', 'ltr');
+      });
+      const placeholder = document.getElementById('authIdentityPlaceholder');
+      placeholder.setAttribute('x', '244'); placeholder.setAttribute('text-anchor', 'start'); placeholder.setAttribute('direction', 'ltr');
+      document.getElementById('authSubtitle').setAttribute('font-size', '21');
+    }
 
     let returnUrl;
     try {
@@ -25,14 +123,20 @@
       returnUrl = new URL('/', location.origin);
     }
     returnUrl.searchParams.delete('opening');
-    returnUrl.searchParams.set('opening', 'skip');
-    const completeOpening = () => {
+    returnUrl.searchParams.set('opening', 'handoff');
+    let completionStarted = false;
+    const completeOpening = (fade = true) => {
+      if (completionStarted) return;
+      completionStarted = true;
       try { sessionStorage.setItem('sarafi-opening-seen', '1'); } catch { /* Continue without storage. */ }
-      location.replace(`${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`);
+      const navigate = () => location.replace(`${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`);
+      if (!fade) { navigate(); return; }
+      document.getElementById('openingMain').classList.add('is-handing-off');
+      window.setTimeout(navigate, 360);
     };
     document.getElementById('skipOpening').addEventListener('click', completeOpening);
     if (matchMedia('(prefers-reduced-motion: reduce)').matches && !params.has('frame')) {
-      completeOpening();
+      completeOpening(false);
       return;
     }
 
@@ -153,13 +257,16 @@
       arm(worker,{x:-13+shoulderX,y:-91-bob},targetB,false);arm(worker,{x:10+shoulderX,y:-86-bob},targetF,true);
       worker.gripB.style.opacity=.82;worker.gripF.style.opacity=.82;
     }
-    const papers=[];
     const pieceRotation=(point,travel,progress)=>{
       const settle=1-smoother(clamp((progress-.80)/.20));
       return(clamp(point.angle*.07,-4,4)+.72*Math.sin(travel/78*Math.PI*2))*settle;
     };
-    const duration=4600;
-    const timeline=progress=>{const value=clamp(progress);if(value<=.68)return smoother(value/.68)*.35;return .735+smoother((value-.68)/.32)*.14};
+    const designDuration=18000,paperSpeed=.90,paperStartTime=designDuration*.37,paperEndTime=designDuration*.735,paperRealEnd=paperStartTime+(paperEndTime-paperStartTime)/paperSpeed,fullDuration=designDuration+(paperRealEnd-paperEndTime);
+    const fastPlayback=params.get('speed')==='fast';
+    const duration=fastPlayback?950:fullDuration;
+    const finalHold=fastPlayback?100:1300;
+    const timeline=progress=>{const elapsed=clamp(progress)*fullDuration;if(elapsed<=paperStartTime)return elapsed/designDuration;if(elapsed<=paperRealEnd)return(paperStartTime+(elapsed-paperStartTime)*paperSpeed)/designDuration;return(paperEndTime+(elapsed-paperRealEnd))/designDuration};
+    document.documentElement.style.setProperty('--opening-duration',`${(duration+finalHold)/1000}s`);
     const frameParam=params.get('frame'),frameNumber=frameParam===null?null:Number(frameParam),fixed=frameNumber!==null&&Number.isFinite(frameNumber)?clamp(frameNumber):null;
     const pathLength=path.getTotalLength();path.style.strokeDasharray=String(pathLength);glowPath.style.strokeDasharray=String(pathLength);
 
@@ -217,8 +324,8 @@
       if(fixed!==null){render(fixed);svg.dataset.animationState='fixed';svg.dataset.animationProgress=String(fixed);return}
       let startedAt=null,completed=false;
       render(0);svg.dataset.animationState='playing';svg.dataset.animationProgress='0';
-      const finish=()=>{if(completed)return;completed=true;render(1);svg.dataset.animationProgress='1.0000';svg.dataset.animationState='complete';window.setTimeout(completeOpening,450)};
-      window.setTimeout(finish,duration+100);
+      const finish=()=>{if(completed)return;completed=true;render(1);svg.dataset.animationProgress='1.0000';svg.dataset.animationState='complete';window.setTimeout(()=>completeOpening(true),finalHold)};
+      window.setTimeout(finish,duration+200);
       const tick=now=>{
         if(completed)return;
         if(startedAt===null)startedAt=now;

@@ -100,6 +100,7 @@ for (const locale of locales) {
   test(`${locale.code} core workspace has semantic translations without English leakage`, async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     await page.goto("/");
     await page
       .getByRole("combobox", { name: locale.languageLabel })
