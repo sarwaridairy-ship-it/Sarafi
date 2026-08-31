@@ -1,4 +1,41 @@
 (() => {
+    const params = new URLSearchParams(location.search);
+    const requestedLanguage = params.get('language');
+    const language = requestedLanguage === 'en' || requestedLanguage === 'ps-AF' ? requestedLanguage : 'fa-AF';
+    const copy = {
+      en: { label: 'SARAFI opening screen', skip: 'Skip', tagline: 'Digital daftar for Sarafi shops' },
+      'fa-AF': { label: 'صفحه آغاز صرافی', skip: 'رد کردن', tagline: 'دفتر دیجیتلی برای صرافی‌ها' },
+      'ps-AF': { label: 'د صرافي د پیل پرده', skip: 'تېرول', tagline: 'د صرافیو لپاره ډیجیټلي دفتر' },
+    };
+    const localized = copy[language];
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'en' ? 'ltr' : 'rtl';
+    document.title = localized.label;
+    document.getElementById('openingMain').setAttribute('aria-label', localized.label);
+    document.getElementById('skipOpening').textContent = localized.skip;
+    const tagline = document.getElementById('brandTagline');
+    tagline.textContent = localized.tagline;
+    tagline.setAttribute('direction', language === 'en' ? 'ltr' : 'rtl');
+
+    let returnUrl;
+    try {
+      returnUrl = new URL(params.get('return') || '/', location.origin);
+      if (returnUrl.origin !== location.origin) throw new Error('Cross-origin return blocked');
+    } catch {
+      returnUrl = new URL('/', location.origin);
+    }
+    returnUrl.searchParams.delete('opening');
+    returnUrl.searchParams.set('opening', 'skip');
+    const completeOpening = () => {
+      try { sessionStorage.setItem('sarafi-opening-seen', '1'); } catch { /* Continue without storage. */ }
+      location.replace(`${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`);
+    };
+    document.getElementById('skipOpening').addEventListener('click', completeOpening);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches && !params.has('frame')) {
+      completeOpening();
+      return;
+    }
+
     const svg = document.getElementById('stage');
     const ns = 'http://www.w3.org/2000/svg';
     const path = document.getElementById('pricePath');
@@ -123,7 +160,7 @@
     };
     const duration=4600;
     const timeline=progress=>{const value=clamp(progress);if(value<=.68)return smoother(value/.68)*.35;return .735+smoother((value-.68)/.32)*.14};
-    const frameParam=new URLSearchParams(location.search).get('frame'),frameNumber=frameParam===null?null:Number(frameParam),fixed=frameNumber!==null&&Number.isFinite(frameNumber)?clamp(frameNumber):null;
+    const frameParam=params.get('frame'),frameNumber=frameParam===null?null:Number(frameParam),fixed=frameNumber!==null&&Number.isFinite(frameNumber)?clamp(frameNumber):null;
     const pathLength=path.getTotalLength();path.style.strokeDasharray=String(pathLength);glowPath.style.strokeDasharray=String(pathLength);
 
     function render(progress){
@@ -180,7 +217,7 @@
       if(fixed!==null){render(fixed);svg.dataset.animationState='fixed';svg.dataset.animationProgress=String(fixed);return}
       let startedAt=null,completed=false;
       render(0);svg.dataset.animationState='playing';svg.dataset.animationProgress='0';
-      const finish=()=>{if(completed)return;completed=true;render(1);svg.dataset.animationProgress='1.0000';svg.dataset.animationState='complete';window.parent.postMessage({type:'sarafi-opening-complete'},window.parent.location.origin)};
+      const finish=()=>{if(completed)return;completed=true;render(1);svg.dataset.animationProgress='1.0000';svg.dataset.animationState='complete';window.setTimeout(completeOpening,450)};
       window.setTimeout(finish,duration+100);
       const tick=now=>{
         if(completed)return;

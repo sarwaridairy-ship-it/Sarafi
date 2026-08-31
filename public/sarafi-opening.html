@@ -10,14 +10,20 @@
     body{display:grid;place-items:center}
     main{width:100vw;height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 50% 48%,#12344c 0,#061725 48%,#020914 100%)}
     svg{display:block;width:min(100vw,56.25vh);height:min(100vh,177.7778vw);aspect-ratio:9/16}
-    #paperLayer,#authPage,#brandName{display:none}
+    #paperLayer,#authPage{display:none}
+    #skipOpening{position:fixed;z-index:3;top:max(18px,env(safe-area-inset-top));inset-inline-end:max(18px,env(safe-area-inset-right));min-width:68px;min-height:42px;padding:8px 16px;border:1px solid rgba(184,211,207,.38);border-radius:999px;color:#d5e8e4;background:rgba(2,9,20,.62);font:700 13px "Segoe UI",Tahoma,Arial,sans-serif;backdrop-filter:blur(10px);cursor:pointer}
+    #skipOpening:hover,#skipOpening:focus-visible{border-color:#eac969;color:#fff3c9;outline:2px solid rgba(234,201,105,.3);outline-offset:3px}
+    #openingProgress{position:fixed;z-index:3;right:50%;bottom:max(24px,env(safe-area-inset-bottom));width:min(42vw,180px);height:2px;overflow:hidden;transform:translateX(50%);border-radius:999px;background:rgba(185,213,207,.18)}
+    #openingProgress::after{position:absolute;inset:0;content:"";transform:scaleX(0);transform-origin:left;border-radius:inherit;background:linear-gradient(90deg,#168f86,#f1ce70);animation:progress 4.6s linear forwards}
+    [dir="rtl"] #openingProgress::after{transform-origin:right}
+    @keyframes progress{to{transform:scaleX(1)}}
   </style>
 </head>
 <body>
-<main aria-label="Sarafi app opening animation">
+<main id="openingMain" aria-label="SARAFI opening screen">
 <svg id="stage" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" role="img" aria-labelledby="title desc">
   <title id="title">Sarafi opening animation</title>
-  <desc id="desc">Two small articulated workers carry separate Sarafi logo pieces along a rising trading-chart path. Large Dari problem cards shrink into the logo, the chart disappears, and the completed mark transitions into a Dari sign-in screen.</desc>
+  <desc id="desc">Two workers assemble the SARAFI mark along a rising currency chart before the secure sign-in screen opens.</desc>
   <defs>
     <radialGradient id="bg" cx="50%" cy="46%" r="76%"><stop stop-color="#153b53"/><stop offset=".48" stop-color="#081b2b"/><stop offset="1" stop-color="#020914"/></radialGradient>
     <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#92702e"/><stop offset=".43" stop-color="#f2d17c"/><stop offset="1" stop-color="#b98d3d"/></linearGradient>
@@ -170,10 +176,12 @@
   <g id="centerPiece" opacity="0" filter="url(#shadow)"><use href="#assetCenter"/></g>
   <g id="brandName" opacity="0" text-anchor="middle" font-family="DejaVu Sans,Tahoma,Arial,sans-serif">
     <text x="540" y="1378" fill="#f4d478" font-family="Arial,sans-serif" font-size="76" font-weight="900" letter-spacing="14">SARAFI</text>
-    <text x="540" y="1436" fill="#9bb7c3" font-size="24" font-weight="700" direction="rtl">دفتر هوشمند صرافی</text>
+    <text id="brandTagline" x="540" y="1436" fill="#9bb7c3" font-size="24" font-weight="700" direction="rtl">دفتر دیجیتلی برای صرافی‌ها</text>
   </g>
 </svg>
 </main>
+<button id="skipOpening" type="button">رد کردن</button>
+<span id="openingProgress" aria-hidden="true"></span>
 
 <script src="/sarafi-opening.js" defer></script>
 </body>

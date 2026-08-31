@@ -45,6 +45,9 @@ test.describe("workspace controls", () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/?public=1&opening=replay");
+    await expect(
+      page.getByRole("main", { name: "SARAFI opening screen" }),
+    ).toBeVisible();
     await expect
       .poll(() =>
         page.evaluate(
