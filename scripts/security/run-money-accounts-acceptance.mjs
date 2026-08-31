@@ -19,6 +19,8 @@ for (const key of [
   'SARAFI_E2E_OWNER_A_PASSWORD',
   'SARAFI_E2E_MANAGER_A_EMAIL',
   'SARAFI_E2E_MANAGER_A_PASSWORD',
+  'SARAFI_E2E_OWNER_B_EMAIL',
+  'SARAFI_E2E_OWNER_B_PASSWORD',
   'BUSINESS_A_ID',
   'BUSINESS_B_ID',
   'BRANCH_A1_ID',
@@ -59,9 +61,17 @@ const expectDenied = async (test, operation) => {
   else fail(test, 'Operation was unexpectedly allowed')
   return result
 }
+const expectRpcRevoked = async (test, operation) => {
+  const result = await operation()
+  if (result.error && /permission denied|could not find the function/i.test(result.error.message))
+    pass(test, result.error.message)
+  else fail(test, result.error?.message ?? 'Internal RPC was unexpectedly callable')
+  return result
+}
 
 const owner = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A_PASSWORD)
 const manager = await signIn(env.SARAFI_E2E_MANAGER_A_EMAIL, env.SARAFI_E2E_MANAGER_A_PASSWORD)
+const ownerB = await signIn(env.SARAFI_E2E_OWNER_B_EMAIL, env.SARAFI_E2E_OWNER_B_PASSWORD)
 const anonymous = makeClient()
 
 await expectDenied('Anonymous cannot list money accounts', () =>
@@ -73,6 +83,19 @@ await expectDenied('Owner cannot cross into another organization', () =>
 await expectDenied('Clients cannot read the money account table directly', () =>
   owner.from('money_accounts').select('*').eq('organization_id', env.BUSINESS_A_ID),
 )
+
+const businessBAccounts = await ownerB.rpc('get_money_accounts', { target_org: env.BUSINESS_B_ID })
+const businessBAccount = businessBAccounts.data?.[0]
+if (businessBAccount) {
+  await expectRpcRevoked('Internal balance helper is not a client RPC', () =>
+    owner.rpc('require_money_account_balance', {
+      target_org: env.BUSINESS_B_ID,
+      target_account: businessBAccount.id,
+      target_currency: 'AFN',
+      required_amount: 0,
+    }),
+  )
+} else fail('Internal balance helper is not a client RPC', businessBAccounts.error?.message ?? 'Business B has no test account')
 
 let accountList = await expectAllowed('Owner can list usable money accounts', () =>
   owner.rpc('get_money_accounts', { target_org: env.BUSINESS_A_ID }),

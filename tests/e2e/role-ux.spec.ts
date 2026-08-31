@@ -38,7 +38,8 @@ test.describe("role-aware workspace presentation", () => {
     await expect(
       page.getByRole("button", { name: "Add money account" }),
     ).not.toBeVisible();
-    await expect(page.getByRole("checkbox", { name: /CNY used by this shop/ })).toBeDisabled();
+    await expect(page.locator(".currency-manager")).not.toBeVisible();
+    await expect(page.getByText("Currencies ready to use", { exact: true })).toBeVisible();
     await expect(
       page.getByText(
         "Only the owner can add or change money accounts. Employees can use only the accounts assigned to them.",

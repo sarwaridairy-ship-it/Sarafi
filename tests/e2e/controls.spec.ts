@@ -588,6 +588,9 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByRole("heading", { name: "Currencies used by this shop" }),
     ).toBeVisible();
+    await page.locator(".currency-manager > summary").click();
+    await expect(page.getByText("Base currency", { exact: true })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /AFN used by this shop/ })).toHaveCount(0);
     await page.getByRole("textbox", { name: "Find a currency" }).fill("CNY");
     await expect(page.locator(".currency-catalog-item")).toHaveCount(1);
     await expect(page.locator(".currency-catalog-item")).toContainText(

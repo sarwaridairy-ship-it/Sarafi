@@ -1211,6 +1211,8 @@ function App() {
             <button
               className={activeNav === item ? "nav-item active" : "nav-item"}
               disabled={item === "Trade" && !canPostFinancial}
+              aria-describedby={item === "Trade" && !canPostFinancial ? "posting-access-note" : undefined}
+              title={item === "Trade" && !canPostFinancial ? u("readOnlyRoleNotice") : undefined}
               key={item}
               onClick={(event) => {
                 openSection(item);
@@ -1352,6 +1354,8 @@ function App() {
           <button
             className={activeNav === item ? "active" : ""}
             disabled={item === "Trade" && !canPostFinancial}
+            aria-describedby={item === "Trade" && !canPostFinancial ? "posting-access-note" : undefined}
+            title={item === "Trade" && !canPostFinancial ? u("readOnlyRoleNotice") : undefined}
             key={item}
             onClick={(event) => {
               openSection(item);
@@ -1490,8 +1494,8 @@ function App() {
           )}
           {dashboardView && (
             <>
-              <section className="welcome">
-                <div>
+              <section className="welcome dashboard-welcome">
+                <div className="dashboard-welcome-copy">
                   <p className="kicker" dir="ltr">
                     {dashboardDate}
                   </p>
@@ -1499,8 +1503,22 @@ function App() {
                     {t("goodMorning")}
                   </h1>
                   <p className="subtitle">{t("businessStand")}</p>
+                  <div className="dashboard-connection" role="status">
+                    <span className={`sync-dot ${online ? "online" : "offline"}`} />
+                    <span>{online ? t("connected") : t("stillOffline")}</span>
+                    <small>{supabaseConfigured ? u("connectionNotice") : t("localWorkspace")}</small>
+                  </div>
+                  {!canPostFinancial && (
+                    <p className="role-access-note" id="posting-access-note">
+                      {u("readOnlyRoleNotice")}
+                    </p>
+                  )}
                 </div>
                 <div className="action-wrap">
+                  <div className="dashboard-action-heading">
+                    <b>{u("startTransaction")}</b>
+                    <small>{u("chooseDailyAction")}</small>
+                  </div>
                   <div
                     className="primary-actions"
                     aria-label={u("coreCashierActions")}
@@ -1508,6 +1526,8 @@ function App() {
                     <button
                       disabled={!online || !canPostFinancial}
                       className="primary-action"
+                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
+                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
                       onClick={(event) => {
                         openTrade("BUY_FX", event.currentTarget);
                       }}
@@ -1517,6 +1537,8 @@ function App() {
                     <button
                       disabled={!online || !canPostFinancial}
                       className="primary-action"
+                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
+                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
                       onClick={(event) => {
                         openTrade("SELL_FX", event.currentTarget);
                       }}
@@ -1526,6 +1548,8 @@ function App() {
                     <button
                       disabled={!online || !canPostFinancial}
                       className="primary-action"
+                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
+                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
                       onClick={(event) => {
                         openTrade("EXCHANGE_FX", event.currentTarget);
                       }}
@@ -1534,14 +1558,18 @@ function App() {
                     </button>
                     <button
                       disabled={!online || !canPostFinancial}
-                      className="primary-action"
+                      className="primary-action daily-secondary"
+                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
+                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
                       onClick={() => openOperation("RECEIVE_MONEY")}
                     >
                       {t("receive")}
                     </button>
                     <button
                       disabled={!online || !canPostFinancial}
-                      className="primary-action"
+                      className="primary-action daily-secondary"
+                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
+                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
                       onClick={() => openOperation("PAY_MONEY")}
                     >
                       {t("pay")}
@@ -1550,6 +1578,8 @@ function App() {
                   <button
                     className="secondary-action"
                     disabled={!canPostFinancial}
+                    aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
+                    title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
                     onClick={() => setShowActions(!showActions)}
                     aria-expanded={showActions}
                   >
@@ -1602,26 +1632,12 @@ function App() {
                   )}
                 </div>
               </section>
-              <div className="notice">
-                <span className={`sync-dot ${online ? "online" : "offline"}`} />
-                <span>
-                  <b>{online ? t("online") : t("stillOffline")}</b> ·{" "}
-                  {supabaseConfigured
-                    ? u("connectionNotice")
-                    : t("localWorkspace")}{" "}
-                  ·{" "}
-                  {online
-                    ? `${t("lastSync")}: ${t("justNow")}`
-                    : u("postingPaused")}
-                </span>
-                <button
-                  onClick={() =>
-                    setToast(online ? t("connected") : t("offlineMode"))
-                  }
-                >
-                  {online ? t("connected") : t("offlineMode")}
-                </button>
-              </div>
+              {!online && (
+                <div className="notice" role="alert">
+                  <span className="sync-dot offline" />
+                  <span><b>{t("stillOffline")}</b> · {u("postingPaused")}</span>
+                </div>
+              )}
               {dashboardError && (
                 <div className="notice error" role="alert">
                   {dashboardError}
@@ -1632,7 +1648,7 @@ function App() {
                   </button>
                 </div>
               )}
-              <section className="rate-strip">
+              <section className="rate-strip dashboard-rate-strip">
                 <div className="rate-title">
                   <span className="rate-live" />{" "}
                   <div>
@@ -1743,62 +1759,11 @@ function App() {
                     {hidden || dashboard?.realized_profit || "—"}
                   </strong>
                   <div className="metric-foot">
-                    <span>{t("ledgerDerivedAfn")}</span>
+                    <span>
+                      {t("operatingExpenses")}: {hidden || dashboard?.expenses || "—"}
+                    </span>
                   </div>
                 </article>
-                <article className="metric-card">
-                  <div className="card-head">
-                    <span>{t("commissionIncome")}</span>
-                    <span className="card-symbol profit">✦</span>
-                  </div>
-                  <strong className="profit-text">
-                    {hidden || dashboard?.commission_income || "—"}
-                  </strong>
-                  <div className="metric-foot">
-                    <span>{t("ledgerDerivedAfn")}</span>
-                  </div>
-                </article>
-                <article className="metric-card">
-                  <div className="card-head">
-                    <span>{t("operatingExpenses")}</span>
-                    <span className="card-symbol">↘</span>
-                  </div>
-                  <strong>{hidden || dashboard?.expenses || "—"}</strong>
-                  <div className="metric-foot">
-                    <span>{t("ledgerDerivedAfn")}</span>
-                  </div>
-                </article>
-              </section>
-              <section className="live-business">
-                <div>
-                  <span className="live-pulse" /> <b>{t("liveBusiness")}</b>
-                  <small>
-                    {dashboard
-                      ? `${t("lastSync")}: ${new Date(
-                          dashboard.fresh_at,
-                        ).toLocaleTimeString(language, { hour12: false })}`
-                      : t("awaitingLiveLedger")}
-                  </small>
-                </div>
-                <div>
-                  <strong>{dashboard?.pending_approvals ?? "—"}</strong>
-                  <small>{t("pending")}</small>
-                </div>
-                <div>
-                  <strong>
-                    {dashboard?.reconciliation_differences ?? "—"}
-                  </strong>
-                  <small>{t("reconciliation")}</small>
-                </div>
-                <div>
-                  <strong>{dashboard?.net_result ?? "—"}</strong>
-                  <small>{t("netPosition")} AFN</small>
-                </div>
-                <button
-                  onClick={() => setDashboardRefresh((value) => value + 1)}
-                >
-                  {t("refreshLiveView")} →
-                </button>
               </section>
               <section className="dashboard-grid">
                 <article className="panel balances">
@@ -3795,6 +3760,7 @@ function MoneyLocationView({
       currencyName(language, item).toLowerCase().includes(query)
     );
   });
+  const enabledCatalog = catalog.filter((item) => item.enabled);
   const accountTypeLabel = (type: MoneyAccountRecord["account_type"]) =>
     u(`accountType_${type}` as Parameters<typeof ux>[1]);
   return (
@@ -3896,45 +3862,6 @@ function MoneyLocationView({
             </button>
           </form>
         )}
-      </section>
-      <section className="currency-control-panel">
-        <div className="panel-header compact-header">
-          <div>
-            <h2>{u("shopCurrenciesTitle")}</h2>
-            <p>{u("shopCurrenciesIntro")}</p>
-          </div>
-          <label className="currency-search">
-            <span>{u("searchCurrency")}</span>
-            <input
-              value={currencySearch}
-              onChange={(event) => setCurrencySearch(event.target.value)}
-              placeholder={u("searchCurrencyPlaceholder")}
-            />
-          </label>
-        </div>
-        <div className="currency-catalog-grid">
-          {visibleCatalog.map((item) => (
-            <label className={`currency-catalog-item ${item.enabled ? "enabled" : ""}`} key={item.code}>
-              <span className="currency-symbol">{item.symbol}</span>
-              <span>
-                <b>{item.code}</b>
-                <small>{currencyName(language, item)}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={item.enabled}
-                disabled={!canManage || item.code === "AFN"}
-                onChange={(event) =>
-                  void toggleOrganizationCurrency(item.code, event.target.checked)
-                }
-                aria-label={`${item.code} ${u("usedInShop")}`}
-              />
-            </label>
-          ))}
-        </div>
-        <p className="owner-control-note">
-          {canManage ? u("currencyOwnerHelp") : u("ownerOnlyCurrencies")}
-        </p>
       </section>
       <div className="rate-strip">
         <label>
@@ -4064,6 +3991,73 @@ function MoneyLocationView({
           </div>
         </div>
       )}
+      <section className="currency-control-panel currency-summary-panel">
+        <div className="panel-header compact-header">
+          <div>
+            <p className="kicker">{u("enabledCurrencies")}</p>
+            <h2>{u("shopCurrenciesTitle")}</h2>
+            <p>{u("shopCurrenciesIntro")}</p>
+          </div>
+        </div>
+        <div className="enabled-currency-list" aria-label={u("enabledCurrencies")}>
+          {enabledCatalog.map((item) => (
+            <span className="enabled-currency" key={item.code}>
+              <b>{item.code}</b>
+              <small>{currencyName(language, item)}</small>
+            </span>
+          ))}
+        </div>
+        {canManage ? (
+          <details className="currency-manager">
+            <summary>
+              <span><AppIcon name="settings" size={18} />{u("manageCurrencies")}</span>
+              <small>{enabledCatalog.length} / {catalog.length}</small>
+            </summary>
+            <div className="currency-manager-body">
+              <div className="currency-manager-heading">
+                <div>
+                  <h3>{u("manageCurrencies")}</h3>
+                  <p>{u("manageCurrenciesIntro")}</p>
+                </div>
+                <label className="currency-search">
+                  <span>{u("searchCurrency")}</span>
+                  <input
+                    value={currencySearch}
+                    onChange={(event) => setCurrencySearch(event.target.value)}
+                    placeholder={u("searchCurrencyPlaceholder")}
+                  />
+                </label>
+              </div>
+              <div className="currency-catalog-grid">
+                {visibleCatalog.map((item) => (
+                  <label className={`currency-catalog-item ${item.enabled ? "enabled" : ""}`} key={item.code}>
+                    <span className="currency-symbol">{item.symbol}</span>
+                    <span>
+                      <b>{item.code}</b>
+                      <small>{currencyName(language, item)}</small>
+                    </span>
+                    {item.code === "AFN" ? (
+                      <span className="base-currency-label">{u("baseCurrency")}</span>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={item.enabled}
+                        onChange={(event) =>
+                          void toggleOrganizationCurrency(item.code, event.target.checked)
+                        }
+                        aria-label={`${item.code} ${u("usedInShop")}`}
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+              <p className="owner-control-note">{u("currencyOwnerHelp")}</p>
+            </div>
+          </details>
+        ) : (
+          <p className="owner-control-note">{u("ownerOnlyCurrencies")}</p>
+        )}
+      </section>
     </section>
   );
 }
@@ -5857,10 +5851,7 @@ function AuthScreen({
           <div className="auth-capabilities">
             <span>{t("buySell")}</span>
             <span>{t("myMoney")}</span>
-            <span>{t("trackDebts")}</span>
-            <span>{t("controlCashboxes")}</span>
             <span>{t("employeeActivity")}</span>
-            <span>{t("todayReports")}</span>
           </div>
         </section>
         <section className="auth-card">

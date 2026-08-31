@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       promote:
-        description: 'Promote this exact commit to production after review'
+        description: "Promote this exact commit to production after review"
         required: true
-        default: 'false'
+        default: "false"
         type: boolean
 
 permissions:
@@ -24,7 +24,17 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run smoke
-      - run: npx supabase db lint --local
+      - name: Initialize isolated local database configuration
+        run: npx supabase init --yes
+      - name: Start isolated local database
+        run: npx supabase start --yes
+      - name: Apply every migration from zero
+        run: npx supabase db reset --local --no-seed
+      - name: Lint the migrated database
+        run: npx supabase db lint --local --level error
+      - name: Stop isolated local database
+        if: always()
+        run: npx supabase stop --no-backup
       - run: npm run build
 
   production-promotion:
@@ -39,6 +49,30 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - name: Production promotion gate
-        run: echo "Configure the protected hosting provider promotion for this exact verified commit."
+      - name: Verify production deployment credentials
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+      - name: Pull protected production settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx vercel@54.18.7 pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build the verified production artifact
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx vercel@54.18.7 build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy the verified artifact to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx vercel@54.18.7 deploy --prebuilt --prod --token="$VERCEL_TOKEN"

@@ -24,6 +24,11 @@ const copy = {
     changeLanguage: "Change language",
     openHelp: "Open help",
     coreCashierActions: "Daily cashier actions",
+    startTransaction: "Record a new transaction",
+    chooseDailyAction:
+      "Choose what happened. SARAFI will guide you through the remaining steps.",
+    readOnlyRoleNotice:
+      "This access is for review only. Ask the owner for permission if you need to record or change money.",
     liveBuyRate: "Current buy rate",
     liveSellRate: "Current sell rate",
     liveRate: "Current rate",
@@ -99,6 +104,11 @@ const copy = {
     ownerOnlyAccounts: "Only the owner can add or change money accounts. Employees can use only the accounts assigned to them.",
     shopCurrenciesTitle: "Currencies used by this shop",
     shopCurrenciesIntro: "The global catalog is available. Turn on only the currencies your shop actually buys, sells, receives, or pays.",
+    enabledCurrencies: "Currencies ready to use",
+    manageCurrencies: "Manage currencies",
+    manageCurrenciesIntro:
+      "Owner setup: search the world catalog and turn currencies on or off.",
+    baseCurrency: "Base currency",
     searchCurrency: "Find a currency",
     searchCurrencyPlaceholder: "Code or name, for example CNY",
     usedInShop: "used by this shop",
@@ -447,6 +457,11 @@ const copy = {
     changeLanguage: "تغییر زبان",
     openHelp: "باز کردن راهنما",
     coreCashierActions: "کارهای روزمره صندوق‌دار",
+    startTransaction: "ثبت یک کار جدید",
+    chooseDailyAction:
+      "کاری را که انجام شده انتخاب کنید؛ SARAFI مرحله‌به‌مرحله راهنمایی می‌کند.",
+    readOnlyRoleNotice:
+      "این دسترسی فقط برای دیدن است. برای ثبت یا تغییر پول از مالک اجازه بخواهید.",
     liveBuyRate: "نرخ فعلی خرید",
     liveSellRate: "نرخ فعلی فروش",
     liveRate: "نرخ فعلی",
@@ -519,6 +534,11 @@ const copy = {
     ownerOnlyAccounts: "فقط مالک می‌تواند حساب پولی را اضافه یا تغییر دهد. کارمندان تنها از حساب‌های تعیین‌شده استفاده می‌کنند.",
     shopCurrenciesTitle: "اسعار مورد استفاده صرافی",
     shopCurrenciesIntro: "فهرست جهانی در دسترس است. فقط اسعار خرید، فروش، دریافت یا پرداخت صرافی را فعال کنید.",
+    enabledCurrencies: "اسعار آماده برای استفاده",
+    manageCurrencies: "مدیریت اسعار",
+    manageCurrenciesIntro:
+      "تنظیمات مالک: اسعار مورد نیاز صرافی را در فهرست جهانی جستجو و فعال یا غیرفعال کنید.",
+    baseCurrency: "اسعار اصلی",
     searchCurrency: "پیدا کردن اسعار",
     searchCurrencyPlaceholder: "کُد یا نام؛ مثلاً CNY",
     usedInShop: "مورد استفاده صرافی",
@@ -859,6 +879,11 @@ const copy = {
     changeLanguage: "ژبه بدلول",
     openHelp: "لارښود پرانیستل",
     coreCashierActions: "د صندوق‌دار ورځني کارونه",
+    startTransaction: "نوی کار ثبت کړئ",
+    chooseDailyAction:
+      "هغه کار وټاکئ چې شوی دی؛ SARAFI به مو پاتې پړاوونو کې لارښوونه وکړي.",
+    readOnlyRoleNotice:
+      "دا واک یوازې د کتلو لپاره دی. د پیسو د ثبت یا بدلون لپاره له مالک څخه اجازه وغواړئ.",
     liveBuyRate: "د پېرود اوسنی نرخ",
     liveSellRate: "د پلور اوسنی نرخ",
     liveRate: "اوسنی نرخ",
@@ -931,6 +956,11 @@ const copy = {
     ownerOnlyAccounts: "یوازې مالک د پیسو حساب زیاتولی یا بدلولی شي. کارکوونکي یوازې ټاکل شوي حسابونه کارولی شي.",
     shopCurrenciesTitle: "د صرافۍ کارېدونکي اسعار",
     shopCurrenciesIntro: "نړیوال لېست شته. یوازې هغه اسعار فعال کړئ چې صرافي یې اخلي، پلوري، ترلاسه کوي یا ورکوي.",
+    enabledCurrencies: "د کار لپاره چمتو اسعار",
+    manageCurrencies: "اسعار اداره کړئ",
+    manageCurrenciesIntro:
+      "د مالک امستنې: په نړیوال لېست کې اسعار ولټوئ او فعال یا غیرفعال یې کړئ.",
+    baseCurrency: "اصلي اسعار",
     searchCurrency: "اسعار پیدا کول",
     searchCurrencyPlaceholder: "کوډ یا نوم؛ لکه CNY",
     usedInShop: "په صرافۍ کې کارېږي",

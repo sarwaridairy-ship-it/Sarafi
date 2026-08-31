@@ -183,6 +183,7 @@ for (const locale of [
     money: "پول من",
     accounts: "صندوق‌ها و حساب‌های پولی",
     currencies: "اسعار مورد استفاده صرافی",
+    manage: "مدیریت اسعار",
     search: "پیدا کردن اسعار",
     addAccount: "افزودن حساب پولی",
   },
@@ -191,6 +192,7 @@ for (const locale of [
     money: "زما پیسې",
     accounts: "د پیسو صندوقونه او حسابونه",
     currencies: "د صرافۍ کارېدونکي اسعار",
+    manage: "اسعار اداره کړئ",
     search: "اسعار پیدا کول",
     addAccount: "د پیسو حساب زیاتول",
   },
@@ -203,6 +205,7 @@ for (const locale of [
     await page.getByRole("button", { name: new RegExp(locale.money) }).click();
     await expect(page.getByRole("heading", { name: locale.accounts })).toBeVisible();
     await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();
+    await page.locator(".currency-manager > summary").filter({ hasText: locale.manage }).click();
     await expect(page.getByRole("textbox", { name: locale.search })).toBeVisible();
     await expect(page.getByRole("button", { name: locale.addAccount })).toBeVisible();
     await expectNoEnglishLeak(page, `${locale.code} money controls`);

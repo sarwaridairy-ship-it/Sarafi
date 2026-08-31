@@ -21,8 +21,20 @@ jobs:
       - run: npm run e2e
       - name: Performance and import checks
         run: npm run performance:step18 && npm test -- src/domain/imports.test.ts
+      - name: Check whether authenticated browser fixtures are configured
+        id: authenticated_fixtures
+        env:
+          SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
+          SARAFI_E2E_PASSWORD: ${{ secrets.SARAFI_E2E_PASSWORD }}
+          SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
+        run: |
+          if [[ -n "$SARAFI_E2E_EMAIL" && -n "$SARAFI_E2E_PASSWORD" && -n "$SARAFI_E2E_ORGANIZATION_ID" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Authenticated security journeys
-        if: ${{ secrets.SARAFI_E2E_EMAIL != '' && secrets.SARAFI_E2E_PASSWORD != '' && secrets.SARAFI_E2E_ORGANIZATION_ID != '' }}
+        if: steps.authenticated_fixtures.outputs.ready == 'true'
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
