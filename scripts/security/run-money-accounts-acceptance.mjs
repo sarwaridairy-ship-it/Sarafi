@@ -84,6 +84,19 @@ await expectDenied('Clients cannot read the money account table directly', () =>
   owner.from('money_accounts').select('*').eq('organization_id', env.BUSINESS_A_ID),
 )
 
+await expectDenied('Anonymous cannot audit the journal', () =>
+  anonymous.rpc('get_journal_balance_audit', { target_org: env.BUSINESS_A_ID }),
+)
+await expectDenied('Owner cannot audit another organization journal', () =>
+  owner.rpc('get_journal_balance_audit', { target_org: env.BUSINESS_B_ID }),
+)
+const journalAudit = await expectAllowed('Owner can audit the exact organization journal balance', () =>
+  owner.rpc('get_journal_balance_audit', { target_org: env.BUSINESS_A_ID }),
+)
+if (journalAudit.data?.balanced === true && journalAudit.data?.imbalanced_entry_count === 0)
+  pass('Exact organization journal audit is balanced', `entries=${journalAudit.data.entry_count}`)
+else fail('Exact organization journal audit is balanced', JSON.stringify(journalAudit.data))
+
 const businessBAccounts = await ownerB.rpc('get_money_accounts', { target_org: env.BUSINESS_B_ID })
 const businessBAccount = businessBAccounts.data?.[0]
 if (businessBAccount) {

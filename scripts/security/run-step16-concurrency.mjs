@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import Decimal from 'decimal.js'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 
@@ -35,34 +36,43 @@ const registerDevice = async (instance, label) => {
 const command = (id, soldAmount = '0.01') => ({
   organization_id: env.BUSINESS_A_ID, branch_id: env.BRANCH_A1_ID, cashbox_id: env.CASHBOX_A1_ID,
   side: 'sell_fx', sold_currency: env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD', bought_currency: env.SARAFI_STEP16_BOUGHT_CURRENCY ?? 'AFN',
-  sold_amount: soldAmount, bought_amount: soldAmount, sold_base_value: soldAmount, bought_base_value: String(Number(soldAmount) + 1),
+  sold_amount: soldAmount, bought_amount: soldAmount, sold_base_value: soldAmount, bought_base_value: new Decimal(soldAmount).plus(1).toString(),
   base_currency: env.SARAFI_STEP16_BASE_CURRENCY ?? 'AFN', client_command_id: id,
 })
 const rpc = (instance, payload) => instance.rpc('record_fx_trade', { command: payload })
 const getSnapshot = async (instance) => {
-  const [journal, events, receipts, state] = await Promise.all([
+  const [journal, events, receipts, state, balanceAudit] = await Promise.all([
     instance.from('journal_entries').select('id, journal_lines(native_debit,native_credit,base_debit,base_credit)').eq('organization_id', env.BUSINESS_A_ID),
     instance.from('financial_events').select('id, client_command_id').eq('organization_id', env.BUSINESS_A_ID),
     instance.from('command_receipts').select('client_command_id,journal_entry_id').eq('organization_id', env.BUSINESS_A_ID),
     instance.from('fx_inventory_cost_state').select('currency_code,quantity,carrying_base_value').eq('organization_id', env.BUSINESS_A_ID),
+    instance.rpc('get_journal_balance_audit', { target_org: env.BUSINESS_A_ID }),
   ])
-  const errors = [journal, events, receipts, state].filter((result) => result.error)
+  const errors = [journal, events, receipts, state, balanceAudit].filter((result) => result.error)
   if (errors.length) throw new Error(errors.map((result) => result.error.message).join('; '))
   const lines = journal.data.flatMap((entry) => entry.journal_lines ?? [])
-  return { journal: journal.data, events: events.data, receipts: receipts.data, state: state.data, debit: lines.reduce((sum, line) => sum + Number(line.base_debit ?? 0), 0), credit: lines.reduce((sum, line) => sum + Number(line.base_credit ?? 0), 0) }
+  return {
+    journal: journal.data,
+    events: events.data,
+    receipts: receipts.data,
+    state: state.data,
+    debit: lines.reduce((sum, line) => sum.plus(line.base_debit ?? 0), new Decimal(0)),
+    credit: lines.reduce((sum, line) => sum.plus(line.base_credit ?? 0), new Decimal(0)),
+    balanceAudit: balanceAudit.data,
+  }
 }
 const cashierA = await signIn(env.SARAFI_E2E_CASHIER_A_EMAIL, env.SARAFI_E2E_CASHIER_A_PASSWORD)
 const deviceA = await registerDevice(cashierA, 'CASHIER_A')
 const deviceB = await registerDevice(cashierA, 'CASHIER_A_SECOND_DEVICE')
 const before = await getSnapshot(cashierA)
 const soldCurrency = env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD'
-const availableBefore = Number(
+const availableBefore = new Decimal(
   before.state.find((row) => row.currency_code === soldCurrency)?.quantity ?? 0,
 )
-if (!Number.isFinite(availableBefore) || availableBefore <= 0)
+if (!availableBefore.isFinite() || availableBefore.lte(0))
   throw new Error(`Step 16 requires positive ${soldCurrency} inventory`)
-const competingAmount = (availableBefore * 0.75).toFixed(12)
-const retryAmount = (availableBefore * 0.001).toFixed(12)
+const competingAmount = availableBefore.mul('0.75').toFixed(12)
+const retryAmount = availableBefore.mul('0.001').toFixed(12)
 const raceIds = [randomUUID(), randomUUID()]
 const race = await Promise.all([rpc(cashierA, { ...command(raceIds[0], competingAmount), device_id: deviceA }), rpc(cashierA, { ...command(raceIds[1], competingAmount), device_id: deviceB })])
 const successfulRacePosts = race.filter((result) => !result.error)
@@ -82,11 +92,15 @@ record('Same idempotency key across devices has one economic effect', new Set(du
 
 const after = await getSnapshot(cashierA)
 const uniqueCommandIds = new Set(after.events.map((event) => event.client_command_id)).size === after.events.length
-const balanced = after.debit === after.credit
+const balanced = after.balanceAudit?.balanced === true && after.balanceAudit?.imbalanced_entry_count === 0
 const state = after.state.find((row) => row.currency_code === soldCurrency)
-record('Journal remains balanced', balanced, `debit=${after.debit}; credit=${after.credit}`)
+record(
+  'Journal remains balanced',
+  balanced,
+  `server_debit=${after.balanceAudit?.total_debit}; server_credit=${after.balanceAudit?.total_credit}; entries=${after.balanceAudit?.entry_count}; imbalanced_entries=${after.balanceAudit?.imbalanced_entry_count}`,
+)
 record('No duplicate receipt/event exists', uniqueCommandIds && new Set(after.receipts.map((receipt) => receipt.client_command_id)).size === after.receipts.length, `events=${after.events.length}; receipts=${after.receipts.length}`)
-record('No prohibited negative inventory exists', !state || Number(state.quantity) >= 0, `quantity=${state?.quantity ?? 'missing'}`)
+record('No prohibited negative inventory exists', !state || new Decimal(state.quantity).gte(0), `quantity=${state?.quantity ?? 'missing'}`)
 record('Single economic effect per successful command', after.receipts.every((receipt) => after.events.some((event) => event.client_command_id === receipt.client_command_id)), `before_events=${before.events.length}; after_events=${after.events.length}`)
 
 const report = { project: new URL(env.SUPABASE_URL).hostname, generated_at: new Date().toISOString(), passed: results.filter((result) => result.result === 'PASS').length, failed: results.filter((result) => result.result === 'FAIL').length, results }
