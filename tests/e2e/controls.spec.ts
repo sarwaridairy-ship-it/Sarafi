@@ -652,7 +652,7 @@ test.describe("workspace controls", () => {
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByText("Owner")).toBeVisible();
+    await expect(page.getByText("Owner", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Customers & debts/ }).click();
     await expect(page.getByRole("button", { name: "Add debt" })).toBeVisible();
     await page.getByRole("button", { name: /Back to Home/ }).click();
@@ -680,6 +680,7 @@ test.describe("workspace controls", () => {
       page.getByRole("heading", { name: "Where is my money?" }),
     ).toBeVisible();
     await expect(page.locator(".account-card")).toHaveCount(3);
+    await page.locator(".money-place-manager > summary").click();
     await expect(page.getByRole("heading", { name: "Money accounts" })).toBeVisible();
     await page.getByRole("button", { name: "Add money account" }).click();
     await expect(page.getByRole("textbox", { name: "Account name" })).toBeVisible();
@@ -705,9 +706,8 @@ test.describe("workspace controls", () => {
     await expect(page.getByRole("button", { name: "By location" })).toHaveClass(
       /active/,
     );
-    await expect(
-      page.getByRole("heading", { name: "Where this amount came from" }),
-    ).toBeVisible();
+    await page.locator(".money-columns .balance-list button.balance-row").first().click();
+    await expect(page.getByRole("heading", { name: /Where this amount came from/ })).toBeVisible();
   });
 
   test("People supports search and statement views", async ({ page }) => {
@@ -722,6 +722,44 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByText("No person matches this search."),
     ).toBeVisible();
+  });
+
+  test("a customer can be created and immediately selected in a trade", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /Customers & debts/ }).click();
+    await page.getByRole("button", { name: "Add customer" }).click();
+    await page.getByRole("textbox", { name: "Customer or Saraf name" }).fill("Hamid Exchange");
+    await page.getByRole("combobox", { name: "Type" }).selectOption("saraf");
+    await page.getByRole("button", { name: "Save customer" }).click();
+    await expect(page.getByText("Hamid Exchange", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /Back to Home/ }).click();
+    await page.getByRole("button", { name: "Buy currency", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Customer" })).toContainText("Hamid Exchange");
+  });
+
+  test("owner can open the plan and payment portal", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".sidebar nav").getByRole("button", { name: /More/ }).click();
+    await page.getByRole("button", { name: "Plan & payment", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Plan and payment" })).toBeVisible();
+    await expect(page.getByText("Small shop", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send for activation" })).toBeVisible();
+  });
+
+  test("owner sign-up is explicit and asks for password confirmation", async ({ page }) => {
+    await page.goto("/?public=1&opening=skip");
+    await page.getByRole("button", { name: "Create an account" }).click();
+    await expect(page.getByText("Creating a new Sarafi business", { exact: true })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Full name" })).toBeVisible();
+    await expect(page.getByLabel("Confirm password")).toBeVisible();
+    await expect(page.getByText(/Employees create or use their account from the owner’s invitation link/)).toBeVisible();
+  });
+
+  test("platform administrator has a separate sign-in gate", async ({ page }) => {
+    await page.goto("/platform-admin");
+    await expect(page.getByRole("heading", { name: "Platform administrator" })).toBeVisible();
+    await expect(page.getByText(/Business owners and employees sign in on the main page/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create an account" })).toHaveCount(0);
   });
 
   test("Buy, Sell, and Exchange open distinct FX forms", async ({ page }) => {

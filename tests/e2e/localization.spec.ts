@@ -204,6 +204,7 @@ for (const locale of [
       .getByRole("combobox", { name: "Change language" })
       .selectOption(locale.code);
     await page.getByRole("button", { name: new RegExp(locale.money) }).click();
+    await page.locator(".money-place-manager > summary").click();
     await expect(page.getByRole("heading", { name: locale.accounts })).toBeVisible();
     await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();
     await page.locator(".currency-manager > summary").filter({ hasText: locale.manage }).click();

@@ -35,6 +35,7 @@ test.describe("role-aware workspace presentation", () => {
       page.getByRole("button", { name: /Import data/ }),
     ).not.toBeVisible();
     await page.getByRole("button", { name: /My money/ }).click();
+    await page.locator(".money-place-manager > summary").click();
     await expect(
       page.getByRole("button", { name: "Add money account" }),
     ).not.toBeVisible();
@@ -75,5 +76,27 @@ test.describe("role-aware workspace presentation", () => {
     await expect(
       page.getByRole("button", { name: /^Check cashbox/ }),
     ).not.toBeVisible();
+  });
+
+  for (const [role, heading] of [
+    ["owner", "Owner control center"],
+    ["manager", "Daily operations"],
+    ["accountant", "Accounts and reports"],
+    ["cashier", "My counter today"],
+    ["compliance_officer", "Compliance review"],
+    ["viewer", "Read-only review"],
+  ] as const) {
+    test(`${role} receives a clearly named role workspace`, async ({ page }) => {
+      await page.goto(`/?role=${role}`);
+      await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+    });
+  }
+
+  test("accountant can review reports but cannot post transactions", async ({ page }) => {
+    await page.goto("/?role=accountant");
+    await expect(page.getByRole("button", { name: "Buy currency", exact: true })).toBeDisabled();
+    await page.locator(".sidebar nav").getByRole("button", { name: /More/ }).click();
+    await expect(page.getByRole("button", { name: "Reports", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Team & Devices/ })).toHaveCount(0);
   });
 });

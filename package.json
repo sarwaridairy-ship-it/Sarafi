@@ -21,6 +21,7 @@
     "security:step17": "node scripts/security/run-step17-reconciliation.mjs",
     "security:money-accounts": "node scripts/security/run-money-accounts-acceptance.mjs",
     "security:team": "node scripts/security/run-team-invitation-acceptance.mjs",
+    "security:premium-web": "node scripts/security/run-premium-web-acceptance.mjs",
     "performance:step18": "npm run build && node scripts/performance/check-step18.mjs",
     "preview": "vite preview"
   },

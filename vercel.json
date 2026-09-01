@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/platform-admin",
+      "destination": "/index.html"
+    },
+    {
       "source": "/supabase/:path*",
       "destination": "https://vbvwuqzqtcorassvotke.supabase.co/:path*"
     }

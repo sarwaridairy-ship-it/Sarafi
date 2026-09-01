@@ -6,9 +6,9 @@ import { validateDocumentFile, type DocumentType } from './integrations'
 export type RpcResult<T> = { data: T | null; error: string | null }
 export type DashboardSnapshot = { transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string; currency: string; quantity: string }>; receivables: Array<{ currency: string; amount: string }>; payables: Array<{ currency: string; amount: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
 export type DebtRecord = { id: string; counterparty_id: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null }
-export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string }
+export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string; phone?: string | null; notes?: string | null }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string }
-export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null }
+export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null; counterparty_name?: string | null; employee_name?: string | null; given_amount?: string | null; given_currency?: string | null; received_amount?: string | null; received_currency?: string | null }
 export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string }
 export type CashboxBalanceRecord = { currency_code: string; expected_amount: string }
 export type CounterpartyStatementRecord = { id: string; occurred_at: string; event_type: string; reference: string; status: string; memo: string | null; direction: 'receivable' | 'payable' | null; currency_code: string | null; amount: string | null }
@@ -19,6 +19,17 @@ export type TeamScopeRecord = { id: string; name: string; branch_id?: string }
 export type TeamMemberRecord = { id: string; display_name: string; email: string; role_code: string; active: boolean; mfa_required: boolean; joined_at: string; is_current_user: boolean; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
 export type TeamInvitationRecord = { id: string; display_name: string; email: string; role_code: string; mfa_required: boolean; status: string; created_at: string; expires_at: string; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
 export type DeviceRecord = { id: string; friendly_name: string; status: string; last_seen_at: string; revoked_at: string | null; member_name: string }
+export type LinkedDeviceRecord = { id: string; friendly_name: string; status: 'trusted' | 'untrusted' | 'revoked'; last_seen_at: string; revoked_at: string | null }
+export type WorkspaceContextRecord = {
+  membership_id: string
+  organization_id: string
+  organization_name: string
+  role_code: string
+  mfa_required: boolean
+  branches: Array<{ id: string; name: string }>
+  cashboxes: Array<{ id: string; name: string; branch_id: string }>
+  subscription: { status?: string; period_end?: string | null; plan_code?: string }
+}
 export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null }
 export type TeamControlPlane = { members: TeamMemberRecord[]; invitations: TeamInvitationRecord[]; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[]; devices: DeviceRecord[]; approvals: ApprovalRecord[] }
 export type CreatedTeamInvitation = { id: string; invite_token: string; email: string; display_name: string; role_code: string; expires_at: string }
@@ -206,6 +217,64 @@ export async function listCounterparties(organizationId: string): Promise<RpcRes
   return { data: result.data as CounterpartyRecord[] | null, error: result.error?.message ?? null }
 }
 
+export async function createCounterparty(input: {
+  organizationId: string
+  displayName: string
+  counterpartyType: 'customer' | 'saraf' | 'hawala_partner' | 'supplier' | 'employee' | 'other'
+  phone?: string
+  notes?: string
+}): Promise<RpcResult<CounterpartyRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_counterparty', {
+    target_org: input.organizationId,
+    display_name_input: input.displayName.trim(),
+    counterparty_type_input: input.counterpartyType,
+    phone_input: input.phone?.trim() || null,
+    notes_input: input.notes?.trim() || null,
+  })
+  return { data: result.data as CounterpartyRecord | null, error: result.error?.message ?? null }
+}
+
+export async function getMyWorkspaceContext(): Promise<RpcResult<WorkspaceContextRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_my_workspace_context')
+  return { data: result.data as WorkspaceContextRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function registerBrowserDevice(input: {
+  organizationId: string
+  branchId?: string | null
+  friendlyName: string
+  fingerprintHash: string
+}): Promise<RpcResult<LinkedDeviceRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('register_device', {
+    target_org: input.organizationId,
+    friendly_name_input: input.friendlyName,
+    fingerprint_hash_input: input.fingerprintHash,
+    app_version_input: 'sarafi-web',
+    target_branch: input.branchId ?? null,
+  })
+  return { data: result.data as LinkedDeviceRecord | null, error: result.error?.message ?? null }
+}
+
+export async function trustTeamDevice(deviceId: string, reason: string): Promise<RpcResult<LinkedDeviceRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('trust_device', { target_device: deviceId, reason_input: reason.trim() })
+  return { data: result.data as LinkedDeviceRecord | null, error: result.error?.message ?? null }
+}
+
+export async function revokeTeamDevice(deviceId: string, reason: string): Promise<RpcResult<LinkedDeviceRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('revoke_device', { target_device: deviceId, reason_input: reason.trim() })
+  return { data: result.data as LinkedDeviceRecord | null, error: result.error?.message ?? null }
+}
+
 export async function recordHawalaSend(command: Record<string, unknown>): Promise<RpcResult<HawalaTransferRecord>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
@@ -270,6 +339,8 @@ export async function requestReversal(command: Record<string, unknown>): Promise
 export async function listJournalEntries(organizationId: string): Promise<RpcResult<JournalRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
+  const history = await client.rpc('get_transaction_history', { target_org: organizationId, page_size: 50 })
+  if (!history.error) return { data: history.data as JournalRecord[] | null, error: null }
   const [result, cashboxes] = await Promise.all([
     client.from('journal_entries').select('id,status,memo,occurred_at,branch_id,financial_events!inner(event_type,immutable_reference,metadata)').eq('organization_id', organizationId).order('occurred_at', { ascending: false }).limit(100),
     client.from('cashboxes').select('id,name').eq('organization_id', organizationId),

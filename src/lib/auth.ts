@@ -45,11 +45,11 @@ export async function signInWithPassword(email: string, password: string): Promi
   return { user: result.data.user, sessionActive: Boolean(result.data.session), ...authFailure(result.error) }
 }
 
-export async function signUpWithPassword(email: string, password: string): Promise<DetailedAuthResult> {
+export async function signUpWithPassword(email: string, password: string, fullName?: string): Promise<DetailedAuthResult> {
   const { client, error } = clientOrError()
   if (!client) return { user: null, sessionActive: false, error, errorCode: 'supabase_not_configured', status: null }
   let result
-  try { result = await withTimeout(client.auth.signUp({ email: email.trim(), password })) } catch (requestError) { return { user: null, sessionActive: false, ...requestFailure(requestError, 'Sign-up request failed') } }
+  try { result = await withTimeout(client.auth.signUp({ email: email.trim(), password, options: { data: { display_name: fullName?.trim() || undefined } } })) } catch (requestError) { return { user: null, sessionActive: false, ...requestFailure(requestError, 'Sign-up request failed') } }
   return { user: result.data.user, sessionActive: Boolean(result.data.session), ...authFailure(result.error) }
 }
 

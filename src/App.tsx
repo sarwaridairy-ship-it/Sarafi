@@ -15,10 +15,13 @@ import {
   listMoneyAccounts,
   getReceiptForJournalEntry,
   getOwnerDashboard,
+  getWorkspaceSettings,
   getTeamControlPlane,
+  getMyWorkspaceContext,
   acceptTeamInvitation,
   cancelTeamInvitation,
   createTeamInvitation,
+  createCounterparty,
   getPrivateCounterpartyDocuments,
   getPrivateDocumentUrl,
   listCashboxBalances,
@@ -39,9 +42,12 @@ import {
   setOrganizationCurrency,
   setExchangeRate,
   recordReportExport,
+  registerBrowserDevice,
+  revokeTeamDevice,
   requestReversal,
   settleDebt,
   updateTeamMembership,
+  trustTeamDevice,
   uploadPrivateCounterpartyDocument,
   type DashboardSnapshot,
   type CounterpartyRecord,
@@ -57,10 +63,13 @@ import {
   type TeamScopeRecord,
   type CreatedTeamInvitation,
   type DeviceRecord,
+  type LinkedDeviceRecord,
+  type WorkspaceContextRecord,
   type ApprovalRecord,
   type PrivateDocumentRecord,
 } from "./lib/financialApi";
 import { getSupabaseClient } from "./lib/supabase";
+import { businessDateInTimeZone } from "./lib/businessTime";
 import { createBusiness } from "./lib/onboarding";
 import {
   sendPasswordReset,
@@ -90,12 +99,29 @@ import {
   SettingsView,
   type CompletedTrade,
 } from "./ProfessionalWorkspace";
+import { BillingView, PlatformAdminConsole } from "./PlatformWorkspace";
 
 const loadExports = () => import("./lib/exports");
 
 const openingSessionKey = "sarafi-opening-seen";
 
+function formatFinancialAmount(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  try {
+    const rounded = new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    if (!rounded.isFinite()) return String(value);
+    const fixed = rounded.isZero() ? "0.00" : rounded.toFixed(2);
+    const negative = fixed.startsWith("-");
+    const unsigned = negative ? fixed.slice(1) : fixed;
+    const [whole, fraction] = unsigned.split(".");
+    return `${negative ? "-" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
+  } catch {
+    return String(value);
+  }
+}
+
 function shouldShowOpening(inspectionMode: boolean): boolean {
+  if (window.location.pathname === "/platform-admin") return false;
   const params = new URLSearchParams(window.location.search);
   const replayRequested = params.get("opening") === "replay";
   const handoffRequested = ["skip", "handoff"].includes(
@@ -248,6 +274,7 @@ function inspectionMoneyAccounts(language: Language): MoneyAccountRecord[] {
 
 function App() {
   validateClientEnvironment();
+  const platformAdminRoute = window.location.pathname === "/platform-admin";
   const inspectionMode =
     !new URLSearchParams(window.location.search).has("public") &&
     (import.meta.env.MODE === "e2e" ||
@@ -323,6 +350,8 @@ function App() {
   const [tradeFee, setTradeFee] = useState("");
   const [tradeNote, setTradeNote] = useState("");
   const [tradeCounterparty, setTradeCounterparty] = useState("");
+  const [tradeCounterparties, setTradeCounterparties] = useState<CounterpartyRecord[]>([]);
+  const [counterpartyRefresh, setCounterpartyRefresh] = useState(0);
   const [tradeBusy, setTradeBusy] = useState(false);
   const [tradeReviewing, setTradeReviewing] = useState(false);
   const [completedTrade, setCompletedTrade] = useState<CompletedTrade | null>(
@@ -332,8 +361,8 @@ function App() {
   const [rate, setRateState] = useState(inspectionMode ? "70.25" : "");
   const setRate = (_value: string) => undefined;
   const [sellRate, setSellRate] = useState(inspectionMode ? "70.35" : "");
-  const [dashboardDate, setDashboardDate] = useState(
-    new Date().toISOString().slice(0, 10),
+  const [dashboardDate, setDashboardDate] = useState(() =>
+    businessDateInTimeZone(new Date(), "Asia/Kabul"),
   );
   const [toast, setToast] = useState("");
   const [showMoreNavigation, setShowMoreNavigation] = useState(false);
@@ -352,6 +381,13 @@ function App() {
   );
   const [cashboxId, setCashboxId] = useState<string | null>(
     inspectionMode ? "inspection-cashbox-id" : null,
+  );
+  const [workspaceContexts, setWorkspaceContexts] = useState<WorkspaceContextRecord[]>([]);
+  const [activeMembershipId, setActiveMembershipId] = useState("");
+  const [linkedDevice, setLinkedDevice] = useState<LinkedDeviceRecord | null>(
+    inspectionMode
+      ? { id: "inspection-device", friendly_name: "Inspection browser", status: "trusted", last_seen_at: new Date().toISOString(), revoked_at: null }
+      : null,
   );
   const [loadedCurrencyCatalog, setCurrencyCatalog] = useState<
     CurrencyCatalogRecord[]
@@ -405,6 +441,8 @@ function App() {
   );
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authFullName, setAuthFullName] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [authMessageKind, setAuthMessageKind] = useState<
     "error" | "success" | null
@@ -437,6 +475,7 @@ function App() {
       Import: u("importData"),
       Hawala: t("hawala"),
       Compliance: u("compliance"),
+      Billing: u("planPayment"),
     })[section] ?? section;
 
   useEffect(() => {
@@ -520,9 +559,7 @@ function App() {
   }, [inspectionMode]);
 
   useEffect(() => {
-    if (inspectionMode || !user) return;
-    const client = getSupabaseClient();
-    if (!client) return;
+    if (inspectionMode || platformAdminRoute || !user) return;
     let active = true;
     const loadMembership = async () => {
       setOrganizationLoading(true);
@@ -540,15 +577,13 @@ function App() {
           setToast(ux(language, "invitationAccepted"));
         }
       }
-      const membership = await client
-        .from("organization_memberships")
-        .select("organization_id,role_code")
-        .eq("user_id", user.id)
-        .eq("active", true)
-        .limit(1)
-        .maybeSingle();
+      const membership = await getMyWorkspaceContext();
       if (!active) return;
-      const data = membership.data;
+      const contexts = membership.data ?? [];
+      setWorkspaceContexts(contexts);
+      const savedMembership = window.localStorage.getItem("sarafi-active-membership");
+      const data = contexts.find((item) => item.membership_id === savedMembership) ?? contexts[0];
+      setActiveMembershipId(data?.membership_id ?? "");
       setOrganizationId(data?.organization_id ?? null);
       if (
         data?.role_code &&
@@ -563,52 +598,35 @@ function App() {
       )
         setWorkspaceRole(data.role_code as WorkspaceRole);
       if (!data?.organization_id) {
+        if (membership.error) setToast(ux(language, "couldNotLoad"));
         setOrganizationLoading(false);
         return;
       }
-      const organization = await client
-        .from("organizations")
-        .select("display_name")
-        .eq("id", data.organization_id)
-        .maybeSingle();
-      if (!active) return;
-      setOrganizationName(organization.data?.display_name ?? "");
+      setOrganizationName(data.organization_name);
+      const firstBranch = data.branches[0] ?? null;
+      const firstCashbox = data.cashboxes.find((item) => item.branch_id === firstBranch?.id) ?? data.cashboxes[0] ?? null;
+      setBranchId(firstBranch?.id ?? null);
+      setBranchName(firstBranch?.name ?? "");
+      setCashboxId(firstCashbox?.id ?? null);
       setOrganizationLoading(false);
     };
     void loadMembership();
     return () => {
       active = false;
     };
-  }, [inspectionMode, inviteToken, language, user]);
+  }, [inspectionMode, inviteToken, language, platformAdminRoute, user]);
 
   useEffect(() => {
-    if (inspectionMode) return;
     if (!organizationId) return;
-    const client = getSupabaseClient();
-    if (!client) return;
-    void client
-      .from("branches")
-      .select("id,name")
-      .eq("organization_id", organizationId)
-      .eq("active", true)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data: branch }) => {
-        setBranchId(branch?.id ?? null);
-        setBranchName(branch?.name ?? "");
-        if (!branch) return;
-        void client
-          .from("cashboxes")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .eq("branch_id", branch.id)
-          .eq("active", true)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle()
-          .then(({ data: cashbox }) => setCashboxId(cashbox?.id ?? null));
-      });
+    if (inspectionMode) {
+      // oxlint-disable-next-line react/set-state-in-effect -- Inspection mode mirrors Kabul's configured business date.
+      setDashboardDate(businessDateInTimeZone(new Date(), "Asia/Kabul"));
+      return;
+    }
+    void getWorkspaceSettings(organizationId).then((result) => {
+      if (!result.data?.timezone) return;
+      setDashboardDate(businessDateInTimeZone(new Date(), result.data.timezone));
+    });
   }, [inspectionMode, organizationId]);
 
   useEffect(() => {
@@ -631,6 +649,56 @@ function App() {
       if (result.error) setToast(ux(language, "couldNotLoad"));
     });
   }, [inspectionMode, language, moneyContextRefresh, organizationId]);
+
+  useEffect(() => {
+    if (inspectionMode || platformAdminRoute || !organizationId || !user) return;
+    let active = true;
+    const linkBrowser = async () => {
+      const seed = new TextEncoder().encode(`${organizationId}:${user.id}:${browserDeviceId}`);
+      const digest = await crypto.subtle.digest("SHA-256", seed);
+      const fingerprintHash = Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, "0"),
+      ).join("");
+      const friendlyName = language === "fa-AF"
+        ? "مرورگر فعلی صرافی"
+        : language === "ps-AF"
+          ? "د صرافۍ اوسنی ویب"
+          : "This SARAFI browser";
+      const result = await registerBrowserDevice({
+        organizationId,
+        branchId,
+        friendlyName,
+        fingerprintHash,
+      });
+      if (!active) return;
+      setLinkedDevice(result.data);
+      if (result.error) setToast(ux(language, "deviceLinkFailed"));
+    };
+    void linkBrowser();
+    return () => { active = false; };
+  }, [branchId, browserDeviceId, inspectionMode, language, organizationId, platformAdminRoute, user]);
+
+  // oxlint-disable-next-line react/set-state-in-effect -- The e2e inspection customer mirrors the selected interface language.
+  useEffect(() => {
+    if (!organizationId) return;
+    if (organizationId === "inspection") {
+      // oxlint-disable-next-line react/set-state-in-effect -- Keep the inspection-only customer label synchronized with the chosen language.
+      setTradeCounterparties((current) => {
+        const preview = {
+          id: "inspection-customer",
+          display_name: ux(language, "previewCustomer"),
+          counterparty_type: "customer",
+          risk_status: "standard",
+        };
+        const otherCustomers = current.filter((item) => item.id !== preview.id);
+        return [preview, ...otherCustomers];
+      });
+      return;
+    }
+    void listCounterparties(organizationId).then((result) => {
+      if (result.data) setTradeCounterparties(result.data);
+    });
+  }, [counterpartyRefresh, language, organizationId]);
 
   const enabledCurrencies = currencyCatalog.filter((item) => item.enabled);
   const enabledCurrencyCodes = enabledCurrencies.length
@@ -701,6 +769,11 @@ function App() {
 
   const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (authMode === "signUp" && (authFullName.trim().length < 2 || authPassword !== authConfirmPassword)) {
+      setAuthMessageKind("error");
+      setAuthMessage(authFullName.trim().length < 2 ? u("fullNameRequired") : u("passwordsDoNotMatch"));
+      return;
+    }
     setAuthBusy(true);
     setAuthMessage("");
     setAuthMessageKind(null);
@@ -708,7 +781,7 @@ function App() {
       authMode === "signIn"
         ? await signInWithPassword(authEmail, authPassword)
         : authMode === "signUp"
-          ? await signUpWithPassword(authEmail, authPassword)
+          ? await signUpWithPassword(authEmail, authPassword, authFullName)
           : { user: null, sessionActive: false, ...(await sendPasswordReset(authEmail, window.location.origin)) };
     setAuthBusy(false);
     if (result.user && result.sessionActive) setUser(result.user);
@@ -740,7 +813,11 @@ function App() {
       setToast(u("couldNotSave"));
       return;
     }
-    setOrganizationId(result.organizationId);
+    const contexts = await getMyWorkspaceContext();
+    const createdContext = contexts.data?.find((item) => item.organization_id === result.organizationId);
+    if (contexts.data) setWorkspaceContexts(contexts.data);
+    if (createdContext) chooseWorkspace(createdContext);
+    else setOrganizationId(result.organizationId);
   };
 
   const addTrade = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -801,6 +878,7 @@ function App() {
         sold_base_value: soldBaseValue,
         bought_base_value: boughtBaseValue,
         customer_rate: effectiveRate,
+        device_id: linkedDevice?.id || undefined,
         fee_amount: tradeFee || undefined,
         fee_currency: "AFN",
         counterparty_id: tradeCounterparty || undefined,
@@ -1005,6 +1083,7 @@ function App() {
         operationDestinationAccount || undefined,
       category: operationCategory,
       memo: operationMemo,
+      device_id: linkedDevice?.id || undefined,
       client_command_id: crypto.randomUUID(),
     });
     if (result.error) {
@@ -1021,6 +1100,23 @@ function App() {
     setShowActions(false);
     setShowMoreNavigation(false);
     setShowBranchMenu(false);
+  };
+
+  const chooseWorkspace = (context: WorkspaceContextRecord, nextBranchId?: string) => {
+    const nextBranch = context.branches.find((item) => item.id === nextBranchId) ?? context.branches[0] ?? null;
+    const nextCashbox = context.cashboxes.find((item) => item.branch_id === nextBranch?.id) ?? context.cashboxes[0] ?? null;
+    setActiveMembershipId(context.membership_id);
+    window.localStorage.setItem("sarafi-active-membership", context.membership_id);
+    setOrganizationId(context.organization_id);
+    setOrganizationName(context.organization_name);
+    if (["owner", "manager", "accountant", "cashier", "compliance_officer", "viewer"].includes(context.role_code))
+      setWorkspaceRole(context.role_code as WorkspaceRole);
+    setBranchId(nextBranch?.id ?? null);
+    setBranchName(nextBranch?.name ?? "");
+    setCashboxId(nextCashbox?.id ?? null);
+    setLinkedDevice(null);
+    setShowBranchMenu(false);
+    setActiveNav("Dashboard");
   };
 
   const handleSignOut = async () => {
@@ -1078,18 +1174,22 @@ function App() {
   const canPostFinancial =
     workspaceRole === "owner" ||
     workspaceRole === "manager" ||
-    workspaceRole === "accountant" ||
-    workspaceRole === "cashier";
-  const roleLabel = (
-    {
+    (workspaceRole === "cashier" && linkedDevice?.status === "trusted");
+  const cashierDeviceWaiting =
+    workspaceRole === "cashier" && linkedDevice?.status !== "trusted";
+  const postingAccessNotice = cashierDeviceWaiting
+    ? u("deviceAwaitingOwner")
+    : u("readOnlyRoleNotice");
+  const roleName = (role: string) =>
+    ({
       owner: u("owner"),
       manager: u("manager"),
       accountant: u("accountant"),
       cashier: u("cashier"),
       compliance_officer: u("complianceOfficer"),
       viewer: u("viewer"),
-    } satisfies Record<WorkspaceRole, string>
-  )[workspaceRole];
+    } satisfies Record<WorkspaceRole, string>)[role as WorkspaceRole] ?? role;
+  const roleLabel = roleName(workspaceRole);
   const operationLabel = (kind: OperationKind) =>
     ({
       RECEIVE_MONEY: t("receive"),
@@ -1139,6 +1239,39 @@ function App() {
     moneyAccounts.find((account) => account.account_type === "cashbox")?.name ??
     u("activeCashboxAccount");
 
+  if (platformAdminRoute) {
+    if (!user)
+      return (
+        <AuthScreen
+          language={language}
+          onLanguageChange={setLanguage}
+          mode="signIn"
+          email={authEmail}
+          password={authPassword}
+          fullName={authFullName}
+          confirmPassword={authConfirmPassword}
+          message={authMessage}
+          messageKind={authMessageKind}
+          busy={authBusy}
+          invitation={false}
+          adminPortal
+          onModeChange={() => undefined}
+          onEmailChange={setAuthEmail}
+          onPasswordChange={setAuthPassword}
+          onFullNameChange={setAuthFullName}
+          onConfirmPasswordChange={setAuthConfirmPassword}
+          onSubmit={submitAuth}
+        />
+      );
+    return (
+      <PlatformAdminConsole
+        language={language}
+        onLanguageChange={setLanguage}
+        onSignOut={() => void handleSignOut()}
+      />
+    );
+  }
+
   if (showOpening)
     return (
       <OpeningExperience language={language} onComplete={completeOpening} />
@@ -1155,6 +1288,8 @@ function App() {
         mode={authMode}
         email={authEmail}
         password={authPassword}
+        fullName={authFullName}
+        confirmPassword={authConfirmPassword}
         message={authMessage}
         messageKind={authMessageKind}
         busy={authBusy}
@@ -1174,6 +1309,8 @@ function App() {
           setAuthMessage("");
           setAuthMessageKind(null);
         }}
+        onFullNameChange={setAuthFullName}
+        onConfirmPasswordChange={setAuthConfirmPassword}
         onSubmit={submitAuth}
       />
     );
@@ -1252,18 +1389,24 @@ function App() {
         </button>
         {showBranchMenu && (
           <div className="action-menu branch-menu">
-            <button
-              onClick={() => {
-                setShowBranchMenu(false);
-                setToast(u("activeBranchSelected"));
-              }}
-            >
-              {inspectionMode
-                ? t("mainBranch")
-                : branchName || u("assignedBranch")}{" "}
-              <small>{t("activeBranch")}</small>
-              <span>✓</span>
-            </button>
+            {inspectionMode ? (
+              <button onClick={() => setShowBranchMenu(false)}>
+                {t("mainBranch")} <small>{t("activeBranch")}</small><span>✓</span>
+              </button>
+            ) : (
+              workspaceContexts.map((context) => (
+                <div className="workspace-switch-group" key={context.membership_id}>
+                  <p>{context.organization_name}</p>
+                  {context.branches.map((branch) => (
+                    <button key={branch.id} onClick={() => chooseWorkspace(context, branch.id)}>
+                      {branch.name}
+                      <small>{roleName(context.role_code)}</small>
+                      <span>{activeMembershipId === context.membership_id && branchId === branch.id ? "✓" : "→"}</span>
+                    </button>
+                  ))}
+                </div>
+              ))
+            )}
           </div>
         )}
         <p className="nav-label">{t("workspace")}</p>
@@ -1281,7 +1424,7 @@ function App() {
               className={activeNav === item ? "nav-item active" : "nav-item"}
               disabled={item === "Trade" && !canPostFinancial}
               aria-describedby={item === "Trade" && !canPostFinancial ? "posting-access-note" : undefined}
-              title={item === "Trade" && !canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+              title={item === "Trade" && !canPostFinancial ? postingAccessNotice : undefined}
               key={item}
               onClick={(event) => {
                 openSection(item);
@@ -1311,6 +1454,7 @@ function App() {
                 "Team & Devices",
                 "Settings",
                 "Compliance",
+                "Billing",
               ].includes(activeNav)
                 ? "nav-item active"
                 : "nav-item"
@@ -1361,6 +1505,12 @@ function App() {
                 {t("settings")}
                 <span>→</span>
               </button>
+              {workspaceRole === "owner" && (
+                <button onClick={() => openSection("Billing")}>
+                  {u("planPayment")}
+                  <span>→</span>
+                </button>
+              )}
               {(workspaceRole === "owner" ||
                 workspaceRole === "compliance_officer") && (
                 <>
@@ -1424,7 +1574,7 @@ function App() {
             className={activeNav === item ? "active" : ""}
             disabled={item === "Trade" && !canPostFinancial}
             aria-describedby={item === "Trade" && !canPostFinancial ? "posting-access-note" : undefined}
-            title={item === "Trade" && !canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+            title={item === "Trade" && !canPostFinancial ? postingAccessNotice : undefined}
             key={item}
             onClick={(event) => {
               openSection(item);
@@ -1480,6 +1630,11 @@ function App() {
           <button onClick={() => openSection("Settings")}>
             {t("settings")}
           </button>
+          {workspaceRole === "owner" && (
+            <button onClick={() => openSection("Billing")}>
+              {u("planPayment")}
+            </button>
+          )}
           {(workspaceRole === "owner" ||
             workspaceRole === "compliance_officer") && (
             <>
@@ -1550,7 +1705,7 @@ function App() {
               canManageTeam={workspaceRole === "owner"}
               canManageMoney={workspaceRole === "owner"}
               userId={user?.id ?? "inspection-user"}
-              deviceId={browserDeviceId}
+              deviceId={linkedDevice?.id ?? ""}
               branchId={branchId}
               cashboxId={cashboxId}
               onDashboard={() => openSection("Dashboard")}
@@ -1559,6 +1714,10 @@ function App() {
               onMoneyContextChanged={() =>
                 setMoneyContextRefresh((value) => value + 1)
               }
+              onCounterpartyChanged={(person) => {
+                if (person) setTradeCounterparties((current) => current.some((item) => item.id === person.id) ? current : [...current, person]);
+                setCounterpartyRefresh((value) => value + 1);
+              }}
             />
           )}
           {dashboardView && (
@@ -1579,7 +1738,7 @@ function App() {
                   </div>
                   {!canPostFinancial && (
                     <p className="role-access-note" id="posting-access-note">
-                      {u("readOnlyRoleNotice")}
+                      {postingAccessNotice}
                     </p>
                   )}
                 </div>
@@ -1596,7 +1755,7 @@ function App() {
                       disabled={!online || !canPostFinancial}
                       className="primary-action"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+                      title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={(event) => {
                         openTrade("BUY_FX", event.currentTarget);
                       }}
@@ -1607,7 +1766,7 @@ function App() {
                       disabled={!online || !canPostFinancial}
                       className="primary-action"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+                      title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={(event) => {
                         openTrade("SELL_FX", event.currentTarget);
                       }}
@@ -1618,7 +1777,7 @@ function App() {
                       disabled={!online || !canPostFinancial}
                       className="primary-action"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+                      title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={(event) => {
                         openTrade("EXCHANGE_FX", event.currentTarget);
                       }}
@@ -1629,7 +1788,7 @@ function App() {
                       disabled={!online || !canPostFinancial}
                       className="primary-action daily-secondary"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+                      title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={() => openOperation("RECEIVE_MONEY")}
                     >
                       {t("receive")}
@@ -1638,7 +1797,7 @@ function App() {
                       disabled={!online || !canPostFinancial}
                       className="primary-action daily-secondary"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+                      title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={() => openOperation("PAY_MONEY")}
                     >
                       {t("pay")}
@@ -1648,7 +1807,7 @@ function App() {
                     className="secondary-action"
                     disabled={!canPostFinancial}
                     aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                    title={!canPostFinancial ? u("readOnlyRoleNotice") : undefined}
+                    title={!canPostFinancial ? postingAccessNotice : undefined}
                     onClick={() => setShowActions(!showActions)}
                     aria-expanded={showActions}
                   >
@@ -1699,6 +1858,21 @@ function App() {
                       )}
                     </div>
                   )}
+                </div>
+              </section>
+              <section className={`role-home-card role-${workspaceRole}`}>
+                <div>
+                  <span>{roleLabel}</span>
+                  <h2>{u(`roleHomeTitle_${workspaceRole}` as Parameters<typeof ux>[1])}</h2>
+                  <p>{u(`roleHomeDescription_${workspaceRole}` as Parameters<typeof ux>[1])}</p>
+                </div>
+                <div className="role-home-links">
+                  {workspaceRole === "cashier" && <button onClick={() => openSection("Reconciliation")}>{u("cashierCloseShortcut")}</button>}
+                  {workspaceRole === "accountant" && <><button onClick={() => openSection("Reports")}>{t("reports")}</button><button onClick={() => openSection("Reconciliation")}>{t("reconciliation")}</button></>}
+                  {workspaceRole === "compliance_officer" && <button onClick={() => openSection("Compliance")}>{u("compliance")}</button>}
+                  {workspaceRole === "viewer" && <button onClick={() => openSection("Transactions")}>{t("transactions")}</button>}
+                  {workspaceRole === "manager" && <button onClick={() => openSection("Team & Devices")}>{t("teamDevices")}</button>}
+                  {workspaceRole === "owner" && <button onClick={() => openSection("Billing")}>{u("planPayment")}</button>}
                 </div>
               </section>
               {!online && (
@@ -1782,7 +1956,7 @@ function App() {
                   {t("history")} →
                 </button>
               </section>
-              <section className="metric-grid">
+              {workspaceRole !== "cashier" && workspaceRole !== "compliance_officer" && <section className="metric-grid">
                 <article className="metric-card hero-metric">
                   <div className="card-head">
                     <span>{t("netPosition")} AFN</span>
@@ -1794,7 +1968,7 @@ function App() {
                     </button>
                   </div>
                   <strong>
-                    {hidden || dashboard?.net_position_base || "—"}
+                    {hidden || (dashboard ? formatFinancialAmount(dashboard.net_position_base) : "—")}
                   </strong>
                   <div className="metric-foot">
                     <span>{t("ledgerDerivedAfn")}</span>
@@ -1810,7 +1984,7 @@ function App() {
                     <span>{t("todayVolume")}</span>
                     <span className="card-symbol">↗</span>
                   </div>
-                  <strong>{hidden || dashboard?.volume_base || "—"}</strong>
+                  <strong>{hidden || (dashboard ? formatFinancialAmount(dashboard.volume_base) : "—")}</strong>
                   <div className="metric-foot">
                     <span>
                       {dashboard
@@ -1825,15 +1999,15 @@ function App() {
                     <span className="card-symbol profit">✦</span>
                   </div>
                   <strong className="profit-text">
-                    {hidden || dashboard?.realized_profit || "—"}
+                    {hidden || (dashboard ? formatFinancialAmount(dashboard.realized_profit) : "—")}
                   </strong>
                   <div className="metric-foot">
                     <span>
-                      {t("operatingExpenses")}: {hidden || dashboard?.expenses || "—"}
+                      {t("operatingExpenses")}: {hidden || (dashboard ? formatFinancialAmount(dashboard.expenses) : "—")}
                     </span>
                   </div>
                 </article>
-              </section>
+              </section>}
               <section className="dashboard-grid">
                 <article className="panel balances">
                   <div className="panel-header">
@@ -1862,7 +2036,7 @@ function App() {
                             <b>{location.location_name}</b>
                             <small>{t("assetLocation")}</small>
                           </span>
-                          <strong>{hidden || location.quantity}</strong>
+                          <strong>{hidden || formatFinancialAmount(location.quantity)}</strong>
                         </div>
                       ))}
                     </div>
@@ -2029,6 +2203,11 @@ function App() {
                   onChange={(event) => setTradeCounterparty(event.target.value)}
                 >
                   <option value="">{t("walkInCustomer")}</option>
+                  {tradeCounterparties.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.display_name}
+                    </option>
+                  ))}
                 </select>
               </label>
               <div className="form-grid">
@@ -2527,6 +2706,7 @@ function WorkspaceView({
   onNavigate,
   onToast,
   onMoneyContextChanged,
+  onCounterpartyChanged,
 }: {
   language: Language;
   section: string;
@@ -2545,7 +2725,17 @@ function WorkspaceView({
   onNavigate: (section: string) => void;
   onToast: (message: string) => void;
   onMoneyContextChanged: () => void;
+  onCounterpartyChanged: (person?: CounterpartyRecord) => void;
 }) {
+  if (section === "Billing" && organizationId)
+    return (
+      <BillingView
+        language={language}
+        organizationId={organizationId}
+        onBack={onDashboard}
+        onToast={onToast}
+      />
+    );
   if (section === "Settings")
     return (
       <SettingsView
@@ -2594,6 +2784,7 @@ function WorkspaceView({
         onDashboard={onDashboard}
         onAddDebt={() => onNavigate("Debts")}
         onToast={onToast}
+        onCounterpartyChanged={onCounterpartyChanged}
       />
     );
   if (section === "Rates")
@@ -2901,6 +3092,8 @@ function TeamDevicesView({
       active: u("active"),
       suspended: u("suspended"),
       revoked: u("revoked"),
+      trusted: u("deviceTrusted"),
+      untrusted: u("deviceWaiting"),
       pending: t("pending"),
       approved: u("approved"),
       rejected: u("rejected"),
@@ -2980,6 +3173,8 @@ function TeamDevicesView({
   const [editActive, setEditActive] = useState(true);
   const [editReason, setEditReason] = useState("");
   const [editBusy, setEditBusy] = useState(false);
+  const [deviceReason, setDeviceReason] = useState("");
+  const [deviceBusy, setDeviceBusy] = useState("");
 
   const roleOptions = [
     "manager",
@@ -3251,6 +3446,34 @@ function TeamDevicesView({
     }
     setEditingMember(null);
     setRefresh((value) => value + 1);
+  };
+
+  const changeDevice = async (device: DeviceRecord, action: "trust" | "revoke") => {
+    if (!mfa.verified) {
+      onToast(u("secureTeamIntro"));
+      return;
+    }
+    if (deviceReason.trim().length < 2) {
+      onToast(u("deviceReasonRequired"));
+      return;
+    }
+    if (inspection) {
+      setDevices((current) => current.map((item) => item.id === device.id ? { ...item, status: action === "trust" ? "trusted" : "revoked", revoked_at: action === "revoke" ? new Date().toISOString() : null } : item));
+      setDeviceReason("");
+      return;
+    }
+    setDeviceBusy(device.id);
+    const result = action === "trust"
+      ? await trustTeamDevice(device.id, deviceReason)
+      : await revokeTeamDevice(device.id, deviceReason);
+    setDeviceBusy("");
+    if (result.error) {
+      onToast(result.error.includes("AAL2") ? u("secureTeamIntro") : u("teamSaveFailed"));
+      return;
+    }
+    setDeviceReason("");
+    setRefresh((value) => value + 1);
+    onToast(action === "trust" ? u("deviceApproved") : u("deviceRevoked"));
   };
 
   const scopeSummary = (
@@ -3584,7 +3807,10 @@ function TeamDevicesView({
 
       <div className="dashboard-grid team-secondary-grid">
         <div>
-          <h2>{u("registeredDevices")}</h2>
+          <div className="panel-header compact-header">
+            <div><h2>{u("registeredDevices")}</h2><p>{u("deviceControlIntro")}</p></div>
+            {canManage && <label>{u("accessChangeReason")}<input value={deviceReason} onChange={(event) => setDeviceReason(event.target.value)} placeholder={u("deviceReasonPlaceholder")} /></label>}
+          </div>
           <div className="balance-list">
             {devices.length ? (
               devices.map((device) => (
@@ -3600,11 +3826,11 @@ function TeamDevicesView({
                       {new Date(device.last_seen_at).toLocaleString(language, { hour12: false })}
                     </small>
                   </span>
-                  <strong>
-                    {device.revoked_at
-                      ? u("revoked")
-                      : statusName(device.status)}
-                  </strong>
+                  <div className="member-actions">
+                    <strong>{device.revoked_at ? u("revoked") : statusName(device.status)}</strong>
+                    {canManage && device.status === "untrusted" && <button className="text-button" disabled={deviceBusy === device.id} onClick={() => void changeDevice(device, "trust")}>{u("approveDevice")}</button>}
+                    {canManage && device.status === "trusted" && <button className="text-button danger" disabled={deviceBusy === device.id} onClick={() => void changeDevice(device, "revoke")}>{u("revokeDevice")}</button>}
+                  </div>
                 </div>
               ))
             ) : (
@@ -3698,6 +3924,87 @@ function MoneyLocationView({
   const [accountBusy, setAccountBusy] = useState(false);
   const [currencySearch, setCurrencySearch] = useState("");
   const [loading, setLoading] = useState(organizationId !== "inspection");
+  const inspection = organizationId === "inspection";
+  const previewSnapshot: DashboardSnapshot = {
+    transaction_count: 3,
+    buy_count: 1,
+    sell_count: 1,
+    exchange_count: 1,
+    volume_base: "255000",
+    realized_profit: "4200",
+    commission_income: "500",
+    expenses: "1200",
+    net_result: "3500",
+    net_position_base: "750000",
+    reconciliation_differences: "0",
+    pending_approvals: 0,
+    fresh_at: new Date().toISOString(),
+    positions: [
+      { currency: "AFN", quantity: "750000", carrying_base_value: "750000" },
+      { currency: "USD", quantity: "1800", carrying_base_value: "126450" },
+    ],
+    locations: [
+      {
+        location_id: "inspection-cashbox-id",
+        location_type: "cashbox",
+        location_name: ux(language, "previewCashboxName"),
+        currency: "AFN",
+        quantity: "125000",
+      },
+      {
+        location_id: "inspection-safe",
+        location_type: "account",
+        location_name: ux(language, "previewSafeName"),
+        currency: "AFN",
+        quantity: "325000",
+      },
+      {
+        location_id: "inspection-bank",
+        location_type: "bank",
+        location_name: ux(language, "previewBankName"),
+        currency: "AFN",
+        quantity: "300000",
+      },
+      {
+        location_id: "inspection-cashbox-id",
+        location_type: "cashbox",
+        location_name: ux(language, "previewCashboxName"),
+        currency: "USD",
+        quantity: "1800",
+      },
+    ],
+    receivables: [{ currency: "AFN", amount: "18000" }],
+    payables: [{ currency: "USD", amount: "250" }],
+    activity: [],
+  };
+  const previewEvidence: LocationEvidenceRecord[] = [
+    {
+      id: "inspection-evidence-afn",
+      journal_entry_id: "inspection-journal-afn",
+      currency_code: "AFN",
+      native_debit: "125000",
+      native_credit: "0",
+      occurred_at: new Date().toISOString(),
+      memo: ux(language, "recordedTransaction"),
+      location_id: "inspection-cashbox-id",
+      location_type: "cashbox",
+      location_name: ux(language, "previewCashboxName"),
+    },
+    {
+      id: "inspection-evidence-usd",
+      journal_entry_id: "inspection-journal-usd",
+      currency_code: "USD",
+      native_debit: "1800",
+      native_credit: "0",
+      occurred_at: new Date().toISOString(),
+      memo: ux(language, "recordedTransaction"),
+      location_id: "inspection-cashbox-id",
+      location_type: "cashbox",
+      location_name: ux(language, "previewCashboxName"),
+    },
+  ];
+  const visibleSnapshot = inspection ? previewSnapshot : snapshot;
+  const visibleEvidence = inspection ? previewEvidence : evidence;
   useEffect(() => {
     if (!organizationId) return;
     if (organizationId === "inspection") return;
@@ -3769,23 +4076,24 @@ function MoneyLocationView({
 
   const currencies = Array.from(
     new Set([
-      ...(snapshot?.positions ?? []).map((item) => item.currency),
-      ...evidence.map((item) => item.currency_code),
+      ...(visibleSnapshot?.positions ?? []).map((item) => item.currency),
+      ...visibleEvidence.map((item) => item.currency_code),
     ]),
   ).sort();
-  const visibleLocations = (snapshot?.locations ?? []).filter(
+  const visibleLocations = (visibleSnapshot?.locations ?? []).filter(
     (item) => currency === "ALL" || item.currency === currency,
   );
-  const filteredEvidence = evidence.filter(
+  const filteredEvidence = visibleEvidence.filter(
     (item) =>
+      Boolean(selectedLocation) &&
       (currency === "ALL" || item.currency_code === currency) &&
       (!selectedLocation || item.location_id === selectedLocation),
   );
   const exposure = (direction: "receivable" | "payable") => {
     const balances =
       direction === "receivable"
-        ? (snapshot?.receivables ?? [])
-        : (snapshot?.payables ?? []);
+        ? (visibleSnapshot?.receivables ?? [])
+        : (visibleSnapshot?.payables ?? []);
     const visible = balances.filter(
       (item) => currency === "ALL" || item.currency === currency,
     );
@@ -3795,9 +4103,9 @@ function MoneyLocationView({
       .join(" · ");
   };
   const selectedLocationName =
-    snapshot?.locations.find((item) => item.location_id === selectedLocation)
+    visibleSnapshot?.locations.find((item) => item.location_id === selectedLocation)
       ?.location_name ??
-    evidence.find((item) => item.location_id === selectedLocation)
+    visibleEvidence.find((item) => item.location_id === selectedLocation)
       ?.location_name ??
     "";
   const rows =
@@ -3807,7 +4115,7 @@ function MoneyLocationView({
           selectionKey: null,
           label: item,
           amount:
-            snapshot?.positions.find((position) => position.currency === item)
+            visibleSnapshot?.positions.find((position) => position.currency === item)
               ?.quantity ?? "0",
           currency: item,
         }))
@@ -3841,6 +4149,11 @@ function MoneyLocationView({
           {u("backHome")} →
         </button>
       </div>
+      <details className="money-place-manager" open={showAccountForm || undefined}>
+        <summary>
+          <span><AppIcon name="wallet" size={18} />{u("moneyAccountsTitle")}</span>
+          <small>{accounts.length} {u("moneyPlacesCount")}</small>
+        </summary>
       <section className="account-control-panel">
         <div className="panel-header compact-header">
           <div>
@@ -3868,7 +4181,7 @@ function MoneyLocationView({
                 {account.balances.length ? (
                   account.balances.map((balance) => (
                     <b key={`${account.id}-${balance.currency}`} dir="ltr">
-                      {new Decimal(balance.amount).toFixed(2)} {balance.currency}
+                      {formatFinancialAmount(balance.amount)} {balance.currency}
                     </b>
                   ))
                 ) : (
@@ -3929,6 +4242,7 @@ function MoneyLocationView({
           </form>
         )}
       </section>
+      </details>
       <div className="rate-strip">
         <label>
           {t("currency")}
@@ -3974,7 +4288,7 @@ function MoneyLocationView({
         </article>
         <article className="metric-card">
           <span>{u("postedRecords")}</span>
-          <strong>{evidence.length}</strong>
+          <strong>{visibleEvidence.length}</strong>
         </article>
       </div>
       {loading ? (
@@ -4003,7 +4317,7 @@ function MoneyLocationView({
                     </small>
                   </span>
                   <strong>
-                    {row.amount} {row.currency}
+                    {formatFinancialAmount(row.amount)} {row.currency}
                   </strong>
                 </button>
               ))
@@ -4011,8 +4325,8 @@ function MoneyLocationView({
               <div className="empty-live">{u("noMoney")}</div>
             )}
           </div>
-          <div className="panel evidence-panel">
-            <div className="panel-header">
+          <details className="panel evidence-panel" open={Boolean(selectedLocation)}>
+            <summary className="panel-header">
               <div>
                 <h2>
                   {selectedLocation
@@ -4021,7 +4335,7 @@ function MoneyLocationView({
                 </h2>
                 <p>{u("eachAmountSource")}</p>
               </div>
-            </div>
+            </summary>
             {filteredEvidence.length ? (
               <div className="balance-list">
                 {filteredEvidence.slice(0, 80).map((line) => (
@@ -4040,13 +4354,8 @@ function MoneyLocationView({
                       </small>
                     </span>
                     <strong>
-                      {Number(line.native_debit) - Number(line.native_credit) >=
-                      0
-                        ? "+"
-                        : ""}
-                      {(
-                        Number(line.native_debit) - Number(line.native_credit)
-                      ).toFixed(2)}
+                      {new Decimal(line.native_debit).minus(line.native_credit).gte(0) ? "+" : ""}
+                      {new Decimal(line.native_debit).minus(line.native_credit).toFixed(2)}
                     </strong>
                   </div>
                 ))}
@@ -4054,7 +4363,7 @@ function MoneyLocationView({
             ) : (
               <div className="empty-live">{u("selectLocation")}</div>
             )}
-          </div>
+          </details>
         </div>
       )}
       <section className="currency-control-panel currency-summary-panel">
@@ -4134,12 +4443,14 @@ function PeopleView({
   onDashboard,
   onAddDebt,
   onToast,
+  onCounterpartyChanged,
 }: {
   language: Language;
   organizationId: string | null;
   onDashboard: () => void;
   onAddDebt: () => void;
   onToast: (message: string) => void;
+  onCounterpartyChanged: (person?: CounterpartyRecord) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
@@ -4159,6 +4470,12 @@ function PeopleView({
     }>
   >([]);
   const [query, setQuery] = useState("");
+  const [showAddPerson, setShowAddPerson] = useState(false);
+  const [newPersonName, setNewPersonName] = useState("");
+  const [newPersonPhone, setNewPersonPhone] = useState("");
+  const [newPersonNotes, setNewPersonNotes] = useState("");
+  const [newPersonType, setNewPersonType] = useState<"customer" | "saraf" | "hawala_partner" | "supplier" | "employee" | "other">("customer");
+  const [personBusy, setPersonBusy] = useState(false);
   const [selected, setSelected] = useState<CounterpartyRecord | null>(null);
   const [documents, setDocuments] = useState<PrivateDocumentRecord[]>([]);
   const [documentType, setDocumentType] = useState<DocumentType>("tazkira");
@@ -4224,6 +4541,44 @@ function PeopleView({
     else if (result.data)
       window.open(result.data, "_blank", "noopener,noreferrer");
   };
+  const submitPerson = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId) return;
+    if (organizationId === "inspection") {
+      const created: CounterpartyRecord = {
+        id: crypto.randomUUID(),
+        display_name: newPersonName.trim(),
+        counterparty_type: newPersonType,
+        risk_status: "standard",
+      };
+      setPeople((current) => [...current, created]);
+      setShowAddPerson(false);
+      setNewPersonName("");
+      onCounterpartyChanged(created);
+      onToast(u("customerCreated"));
+      return;
+    }
+    setPersonBusy(true);
+    const result = await createCounterparty({
+      organizationId,
+      displayName: newPersonName,
+      counterpartyType: newPersonType,
+      phone: newPersonPhone,
+      notes: newPersonNotes,
+    });
+    setPersonBusy(false);
+    if (result.error || !result.data) {
+      onToast(u("customerCreateFailed"));
+      return;
+    }
+    setPeople((current) => [...current, result.data as CounterpartyRecord].sort((left, right) => left.display_name.localeCompare(right.display_name)));
+    setShowAddPerson(false);
+    setNewPersonName("");
+    setNewPersonPhone("");
+    setNewPersonNotes("");
+    onCounterpartyChanged(result.data as CounterpartyRecord);
+    onToast(u("customerCreated"));
+  };
   const filtered = people.filter((person) =>
     person.display_name
       .toLocaleLowerCase()
@@ -4252,6 +4607,9 @@ function PeopleView({
           <p>{u("peopleIntro")}</p>
         </div>
         <div className="activity-actions">
+          <button className="primary-action" onClick={() => setShowAddPerson((value) => !value)}>
+            {showAddPerson ? u("cancelAction") : u("addCustomer")}
+          </button>
           <button className="export-button" onClick={onAddDebt}>
             {u("addDebt")}
           </button>
@@ -4260,6 +4618,22 @@ function PeopleView({
           </button>
         </div>
       </div>
+      {showAddPerson && (
+        <form className="customer-create-form" onSubmit={submitPerson}>
+          <label>{u("customerName")}<input required minLength={2} maxLength={120} value={newPersonName} onChange={(event) => setNewPersonName(event.target.value)} /></label>
+          <label>{u("customerType")}<select value={newPersonType} onChange={(event) => setNewPersonType(event.target.value as typeof newPersonType)}>
+            <option value="customer">{u("customerTypeCustomer")}</option>
+            <option value="saraf">{u("customerTypeSaraf")}</option>
+            <option value="hawala_partner">{u("customerTypeHawala")}</option>
+            <option value="supplier">{u("customerTypeSupplier")}</option>
+            <option value="employee">{u("customerTypeEmployee")}</option>
+            <option value="other">{u("other")}</option>
+          </select></label>
+          <label>{u("phoneOptional")}<input inputMode="tel" dir="ltr" value={newPersonPhone} onChange={(event) => setNewPersonPhone(event.target.value)} /></label>
+          <label>{t("note")}<input value={newPersonNotes} onChange={(event) => setNewPersonNotes(event.target.value)} /></label>
+          <button className="primary-action" disabled={personBusy}>{personBusy ? u("posting") : u("saveCustomer")}</button>
+        </form>
+      )}
       <label>
         {u("searchPeople")}
         <input
@@ -4386,7 +4760,7 @@ function PeopleView({
               {debt.direction === "receivable"
                 ? u("theyOweUs")
                 : u("weOweThem")}{" "}
-              · {debt.outstanding_amount} {debt.currency_code}
+              · {formatFinancialAmount(debt.outstanding_amount)} {debt.currency_code}
               {debt.due_at
                 ? ` · ${u("due")} ${new Date(debt.due_at).toLocaleDateString(language)}`
                 : ""}
@@ -4412,7 +4786,7 @@ function PeopleView({
                 </span>
                 <strong>
                   {item.amount
-                    ? `${item.direction === "receivable" ? u("theyOweUs") : u("weOweThem")} ${item.amount} ${item.currency_code ?? ""}`
+                    ? `${item.direction === "receivable" ? u("theyOweUs") : u("weOweThem")} ${formatFinancialAmount(item.amount)} ${item.currency_code ?? ""}`
                     : item.status === "posted"
                       ? t("posted")
                       : item.status}
@@ -4460,6 +4834,7 @@ function TransactionsView({
             destination_account_name: null,
             currency_code: "AFN",
             amount: "2500.00",
+            employee_name: u("previewOwnerName"),
           },
           {
             id: "inspection-buy-entry",
@@ -4473,6 +4848,12 @@ function TransactionsView({
             destination_account_name: u("previewCashboxName"),
             currency_code: "USD",
             amount: "1000.00",
+            counterparty_name: u("previewCustomer"),
+            employee_name: u("previewCashierName"),
+            given_amount: "70250.00",
+            given_currency: "AFN",
+            received_amount: "1000.00",
+            received_currency: "USD",
           },
         ]
       : entries;
@@ -4578,10 +4959,18 @@ function TransactionsView({
                 <small className="transaction-flow-line">
                   {moneyFlow(entry).source} → {moneyFlow(entry).destination}
                 </small>
+                <small className="transaction-people-line">
+                  {u("customerLabel")}: {entry.counterparty_name || t("walkInCustomer")} · {u("employeeLabel")}: {entry.employee_name || u("teamMember")}
+                </small>
+                {entry.given_amount && entry.received_amount && (
+                  <small className="transaction-two-sides" dir="ltr">
+                    {u("weGaveLabel")}: {formatFinancialAmount(entry.given_amount)} {entry.given_currency} · {u("weReceivedLabel")}: {formatFinancialAmount(entry.received_amount)} {entry.received_currency}
+                  </small>
+                )}
               </span>
               <strong>
                 {entry.amount && entry.currency_code
-                  ? `${entry.amount} ${entry.currency_code}`
+                  ? `${formatFinancialAmount(entry.amount)} ${entry.currency_code}`
                   : entry.status === "posted"
                     ? t("posted")
                     : entry.status}
@@ -5735,7 +6124,7 @@ function HawalaView({
                   {transfer.reference_code} · {transfer.destination_location}
                 </small>
               </span>
-              <strong>{transfer.amount}</strong>
+              <strong>{formatFinancialAmount(transfer.amount)}</strong>
             </div>
           ))
         ) : (
@@ -5899,28 +6288,38 @@ function AuthScreen({
   onLanguageChange,
   mode,
   invitation,
+  adminPortal = false,
   email,
   password,
+  fullName = "",
+  confirmPassword = "",
   message,
   messageKind,
   busy,
   onModeChange,
   onEmailChange,
   onPasswordChange,
+  onFullNameChange = () => undefined,
+  onConfirmPasswordChange = () => undefined,
   onSubmit,
 }: {
   language: Language;
   onLanguageChange: (language: Language) => void;
   mode: "signIn" | "signUp" | "reset";
   invitation: boolean;
+  adminPortal?: boolean;
   email: string;
   password: string;
+  fullName?: string;
+  confirmPassword?: string;
   message: string;
   messageKind: "error" | "success" | null;
   busy: boolean;
   onModeChange: (mode: "signIn" | "signUp" | "reset") => void;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  onFullNameChange?: (value: string) => void;
+  onConfirmPasswordChange?: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
 }) {
   const reset = mode === "reset";
@@ -5971,7 +6370,9 @@ function AuthScreen({
           </fieldset>
           <p className="kicker">{t("secureAccess")}</p>
           <h1>
-            {reset
+            {adminPortal
+              ? u("platformAdministrator")
+              : reset
               ? t("resetPassword")
               : invitation
                 ? u("joinTeam")
@@ -5980,7 +6381,9 @@ function AuthScreen({
                 : t("welcomeBack")}
           </h1>
           <p className="auth-subtitle">
-            {reset
+            {adminPortal
+              ? u("platformAdministratorSignIn")
+              : reset
               ? t("resetSubtitle")
               : invitation
                 ? u("joinTeamSubtitle")
@@ -5988,7 +6391,19 @@ function AuthScreen({
                 ? t("signUpSubtitle")
                 : t("signInSubtitle")}
           </p>
+          {!adminPortal && !reset && (
+            <div className="auth-audience-note">
+              <b>{mode === "signUp" ? u("ownerSignupOnly") : u("everyoneSignsInHere")}</b>
+              <span>{mode === "signUp" ? u("workerUsesInvite") : u("signInRoleAutomatic")}</span>
+            </div>
+          )}
           <form onSubmit={onSubmit} aria-describedby={message ? "auth-feedback" : undefined}>
+            {mode === "signUp" && !adminPortal && (
+              <label>
+                {u("fullName")}
+                <input required minLength={2} autoComplete="name" value={fullName} onChange={(event) => onFullNameChange(event.target.value)} />
+              </label>
+            )}
             <label>
               {t("emailAddress")}
               <input
@@ -6012,6 +6427,12 @@ function AuthScreen({
                     mode === "signUp" ? "new-password" : "current-password"
                   }
                 />
+              </label>
+            )}
+            {mode === "signUp" && !adminPortal && (
+              <label>
+                {u("confirmPassword")}
+                <input type="password" required minLength={8} value={confirmPassword} onChange={(event) => onConfirmPasswordChange(event.target.value)} autoComplete="new-password" />
               </label>
             )}
             <button
@@ -6041,7 +6462,7 @@ function AuthScreen({
             </p>
           )}
           <div className="auth-links">
-            {!reset && (
+            {!reset && !adminPortal && (
               <button
                 type="button"
                 onClick={() =>
@@ -6051,7 +6472,7 @@ function AuthScreen({
                 {mode === "signIn" ? t("createAnAccount") : t("backToSignIn")}
               </button>
             )}
-            {mode === "signIn" && (
+            {mode === "signIn" && !adminPortal && (
               <button type="button" onClick={() => onModeChange("reset")}>
                 {t("forgotPassword")}
               </button>
