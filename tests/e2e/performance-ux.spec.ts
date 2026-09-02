@@ -69,9 +69,7 @@ test("core web journeys remain usable on a constrained connection", async ({
   );
   journeys.push(
     await timed("Buy", async () => {
-      await page
-        .getByRole("button", { name: "Buy currency", exact: true })
-        .click();
+      await page.locator(".trade-launch").click();
       await expect(
         page.getByRole("dialog", { name: /Buy currency/ }),
       ).toBeVisible();

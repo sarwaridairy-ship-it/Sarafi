@@ -14,6 +14,7 @@
     #skipOpening{position:fixed;z-index:3;top:max(18px,env(safe-area-inset-top));inset-inline-end:max(18px,env(safe-area-inset-right));min-width:68px;min-height:42px;padding:8px 16px;border:1px solid rgba(184,211,207,.38);border-radius:999px;color:#d5e8e4;background:rgba(2,9,20,.62);font:700 13px "Segoe UI",Tahoma,Arial,sans-serif;backdrop-filter:blur(10px);cursor:pointer}
     #skipOpening:hover,#skipOpening:focus-visible{border-color:#eac969;color:#fff3c9;outline:2px solid rgba(234,201,105,.3);outline-offset:3px}
     #openingProgress{position:fixed;z-index:3;right:50%;bottom:max(24px,env(safe-area-inset-bottom));width:min(42vw,180px);height:2px;overflow:hidden;transform:translateX(50%);border-radius:999px;background:rgba(185,213,207,.18)}
+    #authPage{display:none!important}
     #openingProgress::after{position:absolute;inset:0;content:"";transform:scaleX(0);transform-origin:left;border-radius:inherit;background:linear-gradient(90deg,#168f86,#f1ce70);animation:progress var(--opening-duration,20.1s) linear forwards}
     [dir="rtl"] #openingProgress::after{transform-origin:right}
     @keyframes progress{to{transform:scaleX(1)}}

@@ -9,6 +9,7 @@ const locales = [
     code: "en",
     slug: "en",
     authLanguage: "English",
+    trade: /New transaction/,
     buy: "Buy currency",
     sell: "Sell currency",
     money: /My money/,
@@ -21,6 +22,7 @@ const locales = [
     code: "fa-AF",
     slug: "dari",
     authLanguage: "دری",
+    trade: /معامله جدید/,
     buy: "خرید ارز",
     sell: "فروش ارز",
     money: /پول من/,
@@ -33,6 +35,7 @@ const locales = [
     code: "ps-AF",
     slug: "pashto",
     authLanguage: "پښتو",
+    trade: /نوې معامله/,
     buy: "د اسعارو پېرود",
     sell: "د اسعارو پلور",
     money: /زما پیسې/,
@@ -103,7 +106,8 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
             : /موږ ورکوو/,
       ],
     ] as const) {
-      await page.getByRole("button", { name: button, exact: true }).click();
+      await page.locator(".trade-launch").click();
+      await page.getByRole("tab", { name: button, exact: true }).click();
       await page
         .locator(".trade-modal")
         .getByRole("textbox", { name: inputLabel })

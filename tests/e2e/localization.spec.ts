@@ -109,7 +109,8 @@ for (const locale of locales) {
     await expect(page.getByRole("button", { name: locale.home })).toBeVisible();
     await expectNoEnglishLeak(page, `${locale.code} home`);
 
-    await page.getByRole("button", { name: locale.buy, exact: true }).click();
+    await page.locator(".trade-launch").click();
+    await page.getByRole("tab", { name: locale.buy, exact: true }).click();
     await expect(
       page.getByRole("heading", { name: locale.buyHeading }),
     ).toBeVisible();
@@ -147,7 +148,7 @@ for (const locale of locales) {
       [locale.hawala, locale.hawala],
     ] as const) {
       await moreButton.click();
-      await page
+      await page.locator(".navigation-menu")
         .getByRole("button", { name: new RegExp(`^${button}`) })
         .click();
       await expect(

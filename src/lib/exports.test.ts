@@ -1,5 +1,53 @@
 import { describe, expect, it } from "vitest";
-import { buildThermalReceiptHtml } from "./exports";
+import { buildDailyReportHtml, buildThermalReceiptHtml } from "./exports";
+
+describe("daily report rendering", () => {
+  it("renders a simple Dari A4 report with isolated money values", () => {
+    const html = buildDailyReportHtml({
+      rows: [{ entryId: "trade-1", occurredAt: "2026-09-03 09:30", type: "BUY_FX", branchId: "main", status: "posted", realizedProfit: "250" }],
+      businessName: "صرافی کابل <مرکز>",
+      branchName: "شعبه مرکزی",
+      reportName: "گزارش روزانه",
+      language: "fa-AF",
+      businessDate: "2026-09-03",
+      snapshot: {
+        transaction_count: 1,
+        volume_base: "70250",
+        realized_profit: "250",
+        expenses: "0",
+        net_position_base: "500000",
+        reconciliation_differences: "0",
+        locations: [{ location_name: "صندوق اصلی", currency: "AFN", quantity: "500000" }],
+        receivables: [{ currency: "AFN", amount: "10000" }],
+        payables: [],
+      },
+    });
+
+    expect(html).toContain('lang="fa-AF" dir="rtl"');
+    expect(html).toContain("خلاصه امروز");
+    expect(html).toContain("پول فعلی صرافی");
+    expect(html).toContain("70250 AFN");
+    expect(html).toContain("unicode-bidi:isolate");
+    expect(html).toContain("صرافی کابل &lt;مرکز&gt;");
+    expect(html).not.toContain("<مرکز>");
+  });
+
+  it("uses local Pashto report language", () => {
+    const html = buildDailyReportHtml({
+      rows: [],
+      businessName: "کابل صرافي",
+      branchName: "اصلي څانګه",
+      reportName: "ورځنی راپور",
+      language: "ps-AF",
+      businessDate: "2026-09-03",
+      snapshot: null,
+    });
+
+    expect(html).toContain("د نن لنډیز");
+    expect(html).toContain("د صرافۍ اوسني پیسې");
+    expect(html).toContain("کومه معامله نه ده ثبت شوې");
+  });
+});
 
 describe("thermal receipt rendering", () => {
   it("keeps Dari money values readable and escapes untrusted content", () => {

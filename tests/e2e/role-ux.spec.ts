@@ -7,14 +7,14 @@ test.describe("role-aware workspace presentation", () => {
     await page.goto("/?role=cashier");
     await expect(page.locator(".sidebar-footer")).toContainText("Cashier");
     for (const action of [
-      "Buy currency",
-      "Sell currency",
-      "Exchange currency",
-      "Receive money",
-      "Pay money",
+      /New transaction/,
+      /Receive money/,
+      /Pay money/,
+      /Transfer cash/,
+      /Expense/,
     ]) {
       await expect(
-        page.getByRole("button", { name: action, exact: true }),
+        page.getByRole("button", { name: action }).first(),
       ).toBeEnabled();
     }
     await page
@@ -22,7 +22,7 @@ test.describe("role-aware workspace presentation", () => {
       .getByRole("button", { name: /More/ })
       .click();
     await expect(
-      page.getByRole("button", { name: /^Check cashbox/ }),
+      page.locator(".navigation-menu").getByRole("button", { name: /^Check cashbox/ }),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: /^Settings/ })).toBeVisible();
     await expect(
@@ -34,7 +34,7 @@ test.describe("role-aware workspace presentation", () => {
     await expect(
       page.getByRole("button", { name: /Import data/ }),
     ).not.toBeVisible();
-    await page.getByRole("button", { name: /My money/ }).click();
+    await page.locator(".sidebar nav").getByRole("button", { name: /My money/ }).click();
     await page.locator(".money-place-manager > summary").click();
     await expect(
       page.getByRole("button", { name: "Add money account" }),
@@ -54,14 +54,11 @@ test.describe("role-aware workspace presentation", () => {
     await page.goto("/?role=viewer");
     await expect(page.locator(".sidebar-footer")).toContainText("Viewer");
     for (const action of [
-      "Buy currency",
-      "Sell currency",
-      "Exchange currency",
-      "Receive money",
-      "Pay money",
-      "More actions",
+      /New transaction .*Buy currency/,
+      /Receive money/,
+      /Pay money/,
     ]) {
-      await expect(page.getByRole("button", { name: action })).toBeDisabled();
+      await expect(page.getByRole("button", { name: action }).first()).toBeDisabled();
     }
     await expect(
       page.locator(".sidebar nav").getByRole("button", {
@@ -94,9 +91,9 @@ test.describe("role-aware workspace presentation", () => {
 
   test("accountant can review reports but cannot post transactions", async ({ page }) => {
     await page.goto("/?role=accountant");
-    await expect(page.getByRole("button", { name: "Buy currency", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /New transaction .*Buy currency/ })).toBeDisabled();
     await page.locator(".sidebar nav").getByRole("button", { name: /More/ }).click();
-    await expect(page.getByRole("button", { name: "Reports", exact: true })).toBeVisible();
+    await expect(page.locator(".navigation-menu").getByRole("button", { name: /^Reports/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Team & Devices/ })).toHaveCount(0);
   });
 });

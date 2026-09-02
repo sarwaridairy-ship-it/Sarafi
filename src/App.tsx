@@ -272,6 +272,39 @@ function inspectionMoneyAccounts(language: Language): MoneyAccountRecord[] {
   ];
 }
 
+function inspectionDashboard(language: Language): DashboardSnapshot {
+  return {
+    transaction_count: 7,
+    buy_count: 3,
+    sell_count: 3,
+    exchange_count: 1,
+    volume_base: "1255000",
+    realized_profit: "18450",
+    commission_income: "2500",
+    expenses: "4200",
+    net_result: "16750",
+    net_position_base: "3265250",
+    reconciliation_differences: "0",
+    pending_approvals: 1,
+    fresh_at: new Date().toISOString(),
+    positions: [
+      { currency: "AFN", quantity: "2000000", carrying_base_value: "2000000" },
+      { currency: "USD", quantity: "18000", carrying_base_value: "1264500" },
+      { currency: "EUR", quantity: "750", carrying_base_value: "52500" },
+    ],
+    locations: [
+      { location_id: "inspection-cashbox-id", location_type: "cashbox", location_name: ux(language, "previewCashboxName"), currency: "AFN", quantity: "1250000" },
+      { location_id: "inspection-cashbox-id", location_type: "cashbox", location_name: ux(language, "previewCashboxName"), currency: "USD", quantity: "18000" },
+      { location_id: "inspection-safe", location_type: "account", location_name: ux(language, "previewSafeName"), currency: "AFN", quantity: "450000" },
+      { location_id: "inspection-bank", location_type: "bank", location_name: ux(language, "previewBankName"), currency: "AFN", quantity: "300000" },
+      { location_id: "inspection-bank", location_type: "bank", location_name: ux(language, "previewBankName"), currency: "EUR", quantity: "750" },
+    ],
+    receivables: [{ currency: "AFN", amount: "18000" }],
+    payables: [{ currency: "USD", amount: "250" }],
+    activity: [],
+  };
+}
+
 function App() {
   validateClientEnvironment();
   const platformAdminRoute = window.location.pathname === "/platform-admin";
@@ -310,7 +343,6 @@ function App() {
   }, []);
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [showTrade, setShowTrade] = useState(false);
-  const [showActions, setShowActions] = useState(false);
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showOpeningBalance, setShowOpeningBalance] = useState(false);
@@ -344,7 +376,7 @@ function App() {
   const [amount, setAmount] = useState("");
   const [tradeSide, setTradeSide] = useState<
     "BUY_FX" | "SELL_FX" | "EXCHANGE_FX"
-  >("SELL_FX");
+  >("BUY_FX");
   const [tradeCurrency, setTradeCurrency] = useState("USD");
   const [tradeReceiveCurrency, setTradeReceiveCurrency] = useState("EUR");
   const [tradeFee, setTradeFee] = useState("");
@@ -393,6 +425,9 @@ function App() {
     CurrencyCatalogRecord[]
   >([]);
   const [loadedMoneyAccounts, setMoneyAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [enabledFeatureCodes, setEnabledFeatureCodes] = useState<string[]>(
+    inspectionMode ? ["hawala"] : [],
+  );
   const currencyCatalog = inspectionMode
     ? inspectionCurrencies
     : loadedCurrencyCatalog;
@@ -621,13 +656,18 @@ function App() {
     if (inspectionMode) {
       // oxlint-disable-next-line react/set-state-in-effect -- Inspection mode mirrors Kabul's configured business date.
       setDashboardDate(businessDateInTimeZone(new Date(), "Asia/Kabul"));
+      setDashboard(inspectionDashboard(language));
       return;
     }
     void getWorkspaceSettings(organizationId).then((result) => {
-      if (!result.data?.timezone) return;
-      setDashboardDate(businessDateInTimeZone(new Date(), result.data.timezone));
+      if (!result.data) return;
+      setEnabledFeatureCodes(
+        result.data.features.filter((feature) => feature.enabled).map((feature) => feature.feature_code),
+      );
+      if (result.data.timezone)
+        setDashboardDate(businessDateInTimeZone(new Date(), result.data.timezone));
     });
-  }, [inspectionMode, organizationId]);
+  }, [inspectionMode, language, organizationId]);
 
   useEffect(() => {
     if (inspectionMode) return;
@@ -1019,7 +1059,6 @@ function App() {
       setOperationSourceAccount(activeAccount?.id ?? "");
       setOperationDestinationAccount("");
     }
-    setShowActions(false);
   };
 
   const openTrade = (
@@ -1097,7 +1136,6 @@ function App() {
 
   const openSection = (section: string) => {
     setActiveNav(section);
-    setShowActions(false);
     setShowMoreNavigation(false);
     setShowBranchMenu(false);
   };
@@ -1171,6 +1209,7 @@ function App() {
   const teamNavigation =
     workspaceRole === "owner" || workspaceRole === "manager";
   const cashierNavigation = workspaceRole === "cashier";
+  const hawalaEnabled = enabledFeatureCodes.includes("hawala");
   const canPostFinancial =
     workspaceRole === "owner" ||
     workspaceRole === "manager" ||
@@ -1521,10 +1560,10 @@ function App() {
                         {u("importData")}
                         <span>→</span>
                       </button>
-                      <button onClick={() => openSection("Hawala")}>
+                      {hawalaEnabled && <button onClick={() => openSection("Hawala")}>
                         {t("hawala")}
                         <span>→</span>
-                      </button>
+                      </button>}
                     </>
                   )}
                   <button onClick={() => openSection("Compliance")}>
@@ -1644,9 +1683,9 @@ function App() {
                   <button onClick={() => openSection("Import")}>
                     {u("importData")}
                   </button>
-                  <button onClick={() => openSection("Hawala")}>
+                  {hawalaEnabled && <button onClick={() => openSection("Hawala")}>
                     {t("hawala")}
-                  </button>
+                  </button>}
                 </>
               )}
               <button onClick={() => openSection("Compliance")}>
@@ -1696,6 +1735,8 @@ function App() {
               language={language}
               section={activeNav}
               trades={trades}
+              dashboard={dashboard}
+              businessDate={dashboardDate}
               organizationId={organizationId}
               organizationName={organizationName || u("yourBusiness")}
               branchName={
@@ -1742,122 +1783,81 @@ function App() {
                     </p>
                   )}
                 </div>
-                <div className="action-wrap">
+                <div className="action-wrap daily-command-center">
                   <div className="dashboard-action-heading">
                     <b>{u("startTransaction")}</b>
                     <small>{u("chooseDailyAction")}</small>
                   </div>
                   <div
-                    className="primary-actions"
+                    className="daily-primary-actions"
                     aria-label={u("coreCashierActions")}
                   >
                     <button
                       disabled={!online || !canPostFinancial}
-                      className="primary-action"
+                      className="trade-launch"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
                       title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={(event) => {
-                        openTrade("BUY_FX", event.currentTarget);
+                        openTrade(undefined, event.currentTarget);
                       }}
                     >
-                      {t("buy")}
+                      <span className="daily-action-icon"><AppIcon name="trade" size={24} /></span>
+                      <span><b>{t("newTransaction")}</b><small>{t("buy")} · {t("sell")} · {t("exchange")}</small></span>
                     </button>
                     <button
                       disabled={!online || !canPostFinancial}
-                      className="primary-action"
-                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? postingAccessNotice : undefined}
-                      onClick={(event) => {
-                        openTrade("SELL_FX", event.currentTarget);
-                      }}
-                    >
-                      {t("sell")}
-                    </button>
-                    <button
-                      disabled={!online || !canPostFinancial}
-                      className="primary-action"
-                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? postingAccessNotice : undefined}
-                      onClick={(event) => {
-                        openTrade("EXCHANGE_FX", event.currentTarget);
-                      }}
-                    >
-                      {t("exchange")}
-                    </button>
-                    <button
-                      disabled={!online || !canPostFinancial}
-                      className="primary-action daily-secondary"
+                      className="daily-money-action"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
                       title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={() => openOperation("RECEIVE_MONEY")}
                     >
-                      {t("receive")}
+                      <AppIcon name="receive" size={21} />
+                      <span>{t("receive")}</span>
                     </button>
                     <button
                       disabled={!online || !canPostFinancial}
-                      className="primary-action daily-secondary"
+                      className="daily-money-action"
                       aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
                       title={!canPostFinancial ? postingAccessNotice : undefined}
                       onClick={() => openOperation("PAY_MONEY")}
                     >
-                      {t("pay")}
+                      <AppIcon name="pay" size={21} />
+                      <span>{t("pay")}</span>
                     </button>
                   </div>
-                  <button
-                    className="secondary-action"
-                    disabled={!canPostFinancial}
-                    aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                    title={!canPostFinancial ? postingAccessNotice : undefined}
-                    onClick={() => setShowActions(!showActions)}
-                    aria-expanded={showActions}
-                  >
-                    {t("moreActions")} <span>⌄</span>
-                  </button>
-                  {showActions && (
-                    <div className="action-menu">
-                      {([
-                        ["TRANSFER_CASH", t("transfer")],
-                        ["RECORD_EXPENSE", t("expense")],
-                        ["RECORD_INCOME", u("income")],
-                        ["OWNER_INVESTMENT", t("ownerCapital")],
-                        ["OWNER_WITHDRAWAL", u("ownerWithdrawal")],
-                        ["BANK_DEPOSIT", u("bankDeposit")],
-                        ["BANK_WITHDRAWAL", u("bankWithdrawal")],
-                      ] as Array<[OperationKind, string]>)
-                        .filter(
-                          ([kind]) =>
-                            workspaceRole !== "cashier" ||
-                            ![
-                              "RECORD_INCOME",
-                              "OWNER_INVESTMENT",
-                              "OWNER_WITHDRAWAL",
-                            ].includes(kind),
-                        )
-                        .map(([kind, label]) => {
-                        return (
-                          <button
-                            disabled={!online || !canPostFinancial}
-                            key={kind}
-                            onClick={() => openOperation(kind)}
-                          >
-                            {label}
-                            <span>→</span>
-                          </button>
-                        );
-                        })}
-                      {(workspaceRole === "owner" || workspaceRole === "manager") && (
-                        <button
-                          disabled={!online || !canPostFinancial}
-                          onClick={() => {
-                            setShowActions(false);
-                            setShowOpeningBalance(true);
-                          }}
-                        >
-                          {u("openingBalance")} <span>→</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  <div className="daily-action-grid">
+                    <button className="daily-action-tile" onClick={() => openSection("Debts")}>
+                      <AppIcon name="debt" /><span>{t("debts")}</span>
+                    </button>
+                    {canPostFinancial && <button className="daily-action-tile" disabled={!online} onClick={() => openOperation("TRANSFER_CASH")}>
+                      <AppIcon name="transfer" /><span>{t("transfer")}</span>
+                    </button>}
+                    {canPostFinancial && <button className="daily-action-tile" disabled={!online} onClick={() => openOperation("RECORD_EXPENSE")}>
+                      <AppIcon name="expense" /><span>{t("expense")}</span>
+                    </button>}
+                    {workspaceRole === "owner" && <button className="daily-action-tile" disabled={!online} onClick={() => openOperation("RECORD_INCOME")}>
+                      <AppIcon name="receive" /><span>{u("income")}</span>
+                    </button>}
+                    {workspaceRole === "owner" && <div className="daily-action-tile daily-split-action">
+                      <AppIcon name="capital" /><span>{t("ownerCapital")}</span>
+                      <div><button disabled={!online} onClick={() => openOperation("OWNER_INVESTMENT")} aria-label={t("ownerCapital")}>+</button><button disabled={!online} onClick={() => openOperation("OWNER_WITHDRAWAL")} aria-label={u("ownerWithdrawal")}>−</button></div>
+                    </div>}
+                    {workspaceRole === "owner" && <div className="daily-action-tile daily-split-action">
+                      <AppIcon name="bank" /><span>{u("bankDeposit")}</span>
+                      <div><button disabled={!online} onClick={() => openOperation("BANK_DEPOSIT")} aria-label={u("bankDeposit")}>+</button><button disabled={!online} onClick={() => openOperation("BANK_WITHDRAWAL")} aria-label={u("bankWithdrawal")}>−</button></div>
+                    </div>}
+                    {workspaceRole === "owner" && hawalaEnabled && <button className="daily-action-tile" onClick={() => openSection("Hawala")}>
+                      <AppIcon name="hawala" /><span>{t("hawala")}</span>
+                    </button>}
+                    {workspaceRole === "owner" && <button className="daily-action-tile" disabled={!online} onClick={() => setShowOpeningBalance(true)}>
+                      <AppIcon name="cashbox" /><span>{u("openingBalance")}</span>
+                    </button>}
+                    {workspaceRole === "manager" && <><button className="daily-action-tile" onClick={() => openSection("Reconciliation")}><AppIcon name="cashbox" /><span>{t("reconciliation")}</span></button><button className="daily-action-tile" onClick={() => openSection("Team & Devices")}><AppIcon name="people" /><span>{t("teamDevices")}</span></button><button className="daily-action-tile" onClick={() => openSection("Reports")}><AppIcon name="report" /><span>{t("reports")}</span></button><button className="daily-action-tile" onClick={() => openSection("Rates")}><AppIcon name="rates" /><span>{t("rates")}</span></button></>}
+                    {workspaceRole === "cashier" && <><button className="daily-action-tile" onClick={() => openSection("Reconciliation")}><AppIcon name="cashbox" /><span>{t("reconciliation")}</span></button><button className="daily-action-tile" onClick={() => openSection("People")}><AppIcon name="people" /><span>{t("debts")}</span></button><button className="daily-action-tile" onClick={() => openSection("Cash & Accounts")}><AppIcon name="wallet" /><span>{t("myMoney")}</span></button><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{t("transactions")}</span></button><button className="daily-action-tile" onClick={() => openSection("Rates")}><AppIcon name="rates" /><span>{t("rates")}</span></button></>}
+                    {workspaceRole === "accountant" && <><button className="daily-action-tile" onClick={() => openSection("Reports")}><AppIcon name="report" /><span>{t("reports")}</span></button><button className="daily-action-tile" onClick={() => openSection("Reconciliation")}><AppIcon name="cashbox" /><span>{t("reconciliation")}</span></button><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{t("transactions")}</span></button><button className="daily-action-tile" onClick={() => openSection("Cash & Accounts")}><AppIcon name="wallet" /><span>{t("myMoney")}</span></button><button className="daily-action-tile" onClick={() => openSection("Rates")}><AppIcon name="rates" /><span>{t("rates")}</span></button></>}
+                    {workspaceRole === "compliance_officer" && <><button className="daily-action-tile" onClick={() => openSection("Compliance")}><AppIcon name="shield" /><span>{u("compliance")}</span></button><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{t("transactions")}</span></button></>}
+                    {workspaceRole === "viewer" && <><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{t("transactions")}</span></button><button className="daily-action-tile" onClick={() => openSection("Cash & Accounts")}><AppIcon name="wallet" /><span>{t("myMoney")}</span></button></>}
+                  </div>
                 </div>
               </section>
               <section className={`role-home-card role-${workspaceRole}`}>
@@ -2192,24 +2192,32 @@ function App() {
                 ×
               </button>
             </div>
+            <div className="trade-mode-switch" role="tablist" aria-label={t("newTransaction")}>
+              {([
+                ["BUY_FX", t("buy")],
+                ["SELL_FX", t("sell")],
+                ["EXCHANGE_FX", t("exchange")],
+              ] as const).map(([side, label]) => (
+                <button
+                  key={side}
+                  type="button"
+                  role="tab"
+                  aria-selected={tradeSide === side}
+                  className={tradeSide === side ? "active" : ""}
+                  disabled={tradeBusy}
+                  onClick={() => {
+                    setTradeSide(side);
+                    setTradeReviewing(false);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <fieldset
               className="trade-fields"
               disabled={tradeReviewing || tradeBusy}
             >
-              <label>
-                {t("customer")}
-                <select
-                  value={tradeCounterparty}
-                  onChange={(event) => setTradeCounterparty(event.target.value)}
-                >
-                  <option value="">{t("walkInCustomer")}</option>
-                  {tradeCounterparties.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.display_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <div className="form-grid">
                 <label>
                   {tradeSide === "BUY_FX" ? t("buyAmount") : t("sellAmount")}
@@ -2271,26 +2279,43 @@ function App() {
                   )}
                 </label>
               </div>
-              <div className="form-grid">
+              <details className="trade-optional-fields">
+                <summary>{t("customer")} · {t("fee")} · {t("note")}</summary>
                 <label>
-                  {t("fee")}
-                  <input
-                    min="0"
-                    step="0.01"
-                    value={tradeFee}
-                    onChange={(event) => setTradeFee(event.target.value)}
-                    placeholder="0.00"
-                  />
+                  {t("customer")}
+                  <select
+                    value={tradeCounterparty}
+                    onChange={(event) => setTradeCounterparty(event.target.value)}
+                  >
+                    <option value="">{t("walkInCustomer")}</option>
+                    {tradeCounterparties.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.display_name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-                <label>
-                  {t("note")}
-                  <input
-                    value={tradeNote}
-                    onChange={(event) => setTradeNote(event.target.value)}
-                    placeholder={t("optionalNote")}
-                  />
-                </label>
-              </div>
+                <div className="form-grid">
+                  <label>
+                    {t("fee")}
+                    <input
+                      min="0"
+                      step="0.01"
+                      value={tradeFee}
+                      onChange={(event) => setTradeFee(event.target.value)}
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label>
+                    {t("note")}
+                    <input
+                      value={tradeNote}
+                      onChange={(event) => setTradeNote(event.target.value)}
+                      placeholder={t("optionalNote")}
+                    />
+                  </label>
+                </div>
+              </details>
             </fieldset>
             <div className="rate-box">
               <span>{t("exchangeRate")}</span>
@@ -2692,6 +2717,8 @@ function WorkspaceView({
   language,
   section,
   trades,
+  dashboard,
+  businessDate,
   organizationId,
   organizationName,
   branchName,
@@ -2711,6 +2738,8 @@ function WorkspaceView({
   language: Language;
   section: string;
   trades: Trade[];
+  dashboard: DashboardSnapshot | null;
+  businessDate: string;
   organizationId: string | null;
   organizationName: string;
   branchName: string;
@@ -2803,6 +2832,8 @@ function WorkspaceView({
       <ReportsView
         language={language}
         trades={trades}
+        dashboard={dashboard}
+        businessDate={businessDate}
         organizationId={organizationId}
         organizationName={organizationName}
         branchName={branchName}
@@ -5229,6 +5260,8 @@ function RatesView({
 function ReportsView({
   language,
   trades,
+  dashboard,
+  businessDate,
   organizationId,
   organizationName,
   branchName,
@@ -5237,6 +5270,8 @@ function ReportsView({
 }: {
   language: Language;
   trades: Trade[];
+  dashboard: DashboardSnapshot | null;
+  businessDate: string;
   organizationId: string | null;
   organizationName: string;
   branchName: string;
@@ -5279,6 +5314,7 @@ function ReportsView({
       onToast(u("exportUnavailable"));
       return false;
     }
+    if (organizationId === "inspection") return true;
     const result = await recordReportExport({
       organization_id: organizationId,
       report_name: u("recentActivity"),
@@ -5303,16 +5339,24 @@ function ReportsView({
       onToast(u("shareOpened"));
     }
   };
-  const downloadPdf = (
-    rows: typeof filteredRows,
-    businessName: string,
-    reportName: string,
-  ) => {
+  const downloadPdf = (rows: typeof filteredRows) => {
     void authorizeExport("pdf").then(async (allowed) => {
       if (allowed) {
-        const { downloadPdf: createPdf } = await loadExports();
-        createPdf(rows, businessName, reportName);
-        onToast(u("exportReady"));
+        try {
+          const { downloadPdf: createPdf } = await loadExports();
+          await createPdf({
+            rows,
+            businessName: organizationName,
+            branchName,
+            reportName: language === "fa-AF" ? "گزارش روزانه" : language === "ps-AF" ? "ورځنی راپور" : "Daily report",
+            language,
+            businessDate: to || from || businessDate,
+            snapshot: dashboard,
+          });
+          onToast(u("exportReady"));
+        } catch {
+          onToast(u("exportUnavailable"));
+        }
       }
     });
   };
@@ -5404,13 +5448,7 @@ function ReportsView({
       <div className="activity-actions">
         <button
           className="export-button"
-          onClick={() =>
-            downloadPdf(
-              filteredRows,
-              organizationName,
-              u("recentActivity"),
-            )
-          }
+          onClick={() => downloadPdf(filteredRows)}
         >
           {t("exportPdf")}
         </button>
@@ -6368,6 +6406,28 @@ function AuthScreen({
               ))}
             </div>
           </fieldset>
+          {!adminPortal && !reset && (
+            <div className="auth-mode-tabs" role="tablist" aria-label={u("everyoneSignsInHere")}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "signIn"}
+                className={mode === "signIn" ? "active" : ""}
+                onClick={() => onModeChange("signIn")}
+              >
+                {t("signIn")}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "signUp"}
+                className={mode === "signUp" ? "active" : ""}
+                onClick={() => onModeChange("signUp")}
+              >
+                {t("createAnAccount")}
+              </button>
+            </div>
+          )}
           <p className="kicker">{t("secureAccess")}</p>
           <h1>
             {adminPortal
@@ -6462,16 +6522,6 @@ function AuthScreen({
             </p>
           )}
           <div className="auth-links">
-            {!reset && !adminPortal && (
-              <button
-                type="button"
-                onClick={() =>
-                  onModeChange(mode === "signIn" ? "signUp" : "signIn")
-                }
-              >
-                {mode === "signIn" ? t("createAnAccount") : t("backToSignIn")}
-              </button>
-            )}
             {mode === "signIn" && !adminPortal && (
               <button type="button" onClick={() => onModeChange("reset")}>
                 {t("forgotPassword")}

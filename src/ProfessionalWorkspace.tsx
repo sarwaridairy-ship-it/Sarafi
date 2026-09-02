@@ -20,7 +20,18 @@ export type AppIconName =
   | "settings"
   | "check"
   | "print"
-  | "close";
+  | "close"
+  | "receive"
+  | "pay"
+  | "debt"
+  | "transfer"
+  | "expense"
+  | "capital"
+  | "bank"
+  | "hawala"
+  | "report"
+  | "rates"
+  | "cashbox";
 
 const iconPaths: Record<AppIconName, ReactNode> = {
   home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></>,
@@ -36,6 +47,17 @@ const iconPaths: Record<AppIconName, ReactNode> = {
   check: <path d="m5 12 4 4L19 6"/>,
   print: <><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></>,
   close: <><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>,
+  receive: <><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></>,
+  pay: <><path d="M12 21V8"/><path d="m7 13 5-5 5 5"/><path d="M5 3h14"/></>,
+  debt: <><circle cx="8" cy="8" r="3"/><path d="M2.5 20a5.5 5.5 0 0 1 11 0"/><path d="M15 8h7"/><path d="M18.5 4.5v7"/></>,
+  transfer: <><path d="M4 7h15"/><path d="m15 3 4 4-4 4"/><path d="M20 17H5"/><path d="m9 13-4 4 4 4"/></>,
+  expense: <><path d="M4 7h16v12H4z"/><path d="M4 11h16"/><path d="M8 15h3"/><path d="m15 5 2-2 2 2"/></>,
+  capital: <><path d="M4 20h16"/><path d="M6 17V9"/><path d="M10 17V5"/><path d="M14 17v-7"/><path d="M18 17V3"/></>,
+  bank: <><path d="m3 9 9-6 9 6"/><path d="M5 10h14"/><path d="M6 10v8"/><path d="M10 10v8"/><path d="M14 10v8"/><path d="M18 10v8"/><path d="M3 21h18"/></>,
+  hawala: <><circle cx="8" cy="12" r="5"/><circle cx="16" cy="12" r="5"/><path d="M8 9h8"/><path d="M8 15h8"/></>,
+  report: <><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5"/><path d="M9 12h6"/><path d="M9 16h6"/></>,
+  rates: <><path d="M4 18 9 13l3 3 8-9"/><path d="M15 7h5v5"/></>,
+  cashbox: <><path d="M3 7h18v13H3z"/><path d="M3 11h18"/><circle cx="12" cy="15.5" r="2"/><path d="M7 4h10v3"/></>,
 };
 
 export function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {

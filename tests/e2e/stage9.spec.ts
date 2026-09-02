@@ -20,7 +20,7 @@ test.describe("Stage 9 browser matrix", () => {
       page.getByRole("heading", { name: "Good morning." }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Buy currency", exact: true }),
+      page.locator(".trade-launch"),
     ).toBeVisible();
     await expect(
       page.getByRole("navigation", { name: "Workspace" }),

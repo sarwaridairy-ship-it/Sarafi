@@ -22,13 +22,13 @@ test.describe("accessibility acceptance", () => {
   }) => {
     await page.goto("/");
     for (const action of [
-      "Buy currency",
-      "Sell currency",
-      "Exchange currency",
-      "Receive money",
-      "Pay money",
+      /New transaction/,
+      /Receive money/,
+      /Pay money/,
+      /^Debts$/,
+      /Transfer cash/,
     ]) {
-      const control = page.getByRole("button", { name: action, exact: true });
+      const control = page.getByRole("button", { name: action }).first();
       await expect(control).toBeVisible();
       await control.focus();
       await expect(control).toBeFocused();
@@ -39,8 +39,8 @@ test.describe("accessibility acceptance", () => {
     page,
   }) => {
     await page.goto("/");
-    const buy = page.getByRole("button", { name: "Buy currency", exact: true });
-    await buy.click();
+    const launch = page.locator(".trade-launch");
+    await launch.click();
     const dialog = page.getByRole("dialog", { name: /Buy currency/ });
     await expect(dialog).toBeVisible();
     await dialog.getByRole("textbox", { name: /We receive/ }).fill("1000");
@@ -52,16 +52,14 @@ test.describe("accessibility acceptance", () => {
     await expect(close).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
-    await expect(buy).toBeFocused();
+    await expect(launch).toBeFocused();
   });
 
   test("trade dialog has no critical or serious automated violations", async ({
     page,
   }) => {
     await page.goto("/");
-    await page
-      .getByRole("button", { name: "Buy currency", exact: true })
-      .click();
+    await page.locator(".trade-launch").click();
     const results = await new AxeBuilder({ page })
       .include(".trade-modal")
       .setLegacyMode(true)

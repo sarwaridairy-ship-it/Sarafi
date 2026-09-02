@@ -263,10 +263,11 @@
     };
     const designDuration=18000,paperSpeed=.90,paperStartTime=designDuration*.37,paperEndTime=designDuration*.735,paperRealEnd=paperStartTime+(paperEndTime-paperStartTime)/paperSpeed,fullDuration=designDuration+(paperRealEnd-paperEndTime);
     const fastPlayback=params.get('speed')==='fast';
-    const duration=fastPlayback?950:fullDuration;
-    const finalHold=fastPlayback?100:1300;
+    const duration=fastPlayback?760:9800;
+    const finalHold=fastPlayback?80:260;
+    const handoffProgress=.885;
     const timeline=progress=>{const elapsed=clamp(progress)*fullDuration;if(elapsed<=paperStartTime)return elapsed/designDuration;if(elapsed<=paperRealEnd)return(paperStartTime+(elapsed-paperStartTime)*paperSpeed)/designDuration;return(paperEndTime+(elapsed-paperRealEnd))/designDuration};
-    document.documentElement.style.setProperty('--opening-duration',`${(duration+finalHold)/1000}s`);
+    document.documentElement.style.setProperty('--opening-duration',`${(duration*handoffProgress+finalHold)/1000}s`);
     const frameParam=params.get('frame'),frameNumber=frameParam===null?null:Number(frameParam),fixed=frameNumber!==null&&Number.isFinite(frameNumber)?clamp(frameNumber):null;
     const pathLength=path.getTotalLength();path.style.strokeDasharray=String(pathLength);glowPath.style.strokeDasharray=String(pathLength);
 
@@ -321,17 +322,17 @@
       authCard.setAttribute('transform',`translate(0 ${mix(88,0,authU).toFixed(1)}) translate(540 960) scale(${mix(.95,1,authU).toFixed(3)}) translate(-540 -960)`);
     }
     function startPlayback(){
-      if(fixed!==null){render(fixed);svg.dataset.animationState='fixed';svg.dataset.animationProgress=String(fixed);return}
+      if(fixed!==null){const previewFrame=Math.min(fixed,handoffProgress);render(previewFrame);svg.dataset.animationState='fixed';svg.dataset.animationProgress=String(previewFrame);return}
       let startedAt=null,completed=false;
       render(0);svg.dataset.animationState='playing';svg.dataset.animationProgress='0';
-      const finish=()=>{if(completed)return;completed=true;render(1);svg.dataset.animationProgress='1.0000';svg.dataset.animationState='complete';window.setTimeout(()=>completeOpening(true),finalHold)};
-      window.setTimeout(finish,duration+200);
+      const finish=()=>{if(completed)return;completed=true;render(handoffProgress);svg.dataset.animationProgress=handoffProgress.toFixed(4);svg.dataset.animationState='complete';window.setTimeout(()=>completeOpening(true),finalHold)};
+      window.setTimeout(finish,duration*handoffProgress+200);
       const tick=now=>{
         if(completed)return;
         if(startedAt===null)startedAt=now;
         const t=clamp((now-startedAt)/duration);
         render(t);svg.dataset.animationProgress=t.toFixed(4);
-        if(t<1)requestAnimationFrame(tick);else finish();
+        if(t<handoffProgress)requestAnimationFrame(tick);else finish();
       };
       requestAnimationFrame(tick);
     }

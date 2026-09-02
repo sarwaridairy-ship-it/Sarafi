@@ -1,15 +1,15 @@
 :root {
-  --ink: #1f2d2a;
-  --muted: #788681;
-  --line: #e5eae5;
+  --ink: #13262f;
+  --muted: #64747a;
+  --line: #dbe2de;
   --surface: #fff;
-  --wash: #f7f8f5;
-  --teal: #157d73;
-  --amber: #efa94e;
+  --wash: #f4f1ea;
+  --teal: #0d756c;
+  --amber: #c89a48;
   --red: #e2675e;
   --blue: #5f8edb;
-  --font-sans: "Segoe UI", Tahoma, Arial, sans-serif;
-  --font-display: "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-sans: Tahoma, "Noto Naskh Arabic", "Segoe UI", Arial, sans-serif;
+  --font-display: Tahoma, "Noto Naskh Arabic", "Segoe UI", Arial, sans-serif;
 }
 .app-shell {
   display: flex;
