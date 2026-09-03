@@ -39,6 +39,8 @@ const copy: Record<Language, Copy> = {
     choosePlan: 'Choose a plan', perMonth: 'per month', employees: 'employees', branches: 'branches', choosePayment: 'Payment method',
     referenceHelp: 'Enter the receipt or transfer reference', optionalNote: 'Optional note', requestActivation: 'Send for activation', requestSent: 'Payment was sent for administrator review.',
     paymentHistory: 'Payment requests', noRequests: 'No payment request yet.', onlyOwner: 'Only the business owner can manage plans and payments.', backHome: 'Back to Home',
+    planCatalog: 'Plan catalog', published: 'Available', draft: 'Draft', retired: 'Retired', includedServices: 'Included controls',
+    audit: 'Security history', auditTrail: 'Administrator security history', noAudit: 'No administrator action has been recorded yet.',
   },
   'fa-AF': {
     admin: 'مدیریت عمومی صرافی', adminIntro: 'صرافی‌ها، دسترسی کاربران، بسته‌ها و فعال‌سازی پرداخت را مدیریت کنید. پول و معاملات صرافی‌ها در این صفحه دیده نمی‌شود.',
@@ -58,6 +60,8 @@ const copy: Record<Language, Copy> = {
     choosePlan: 'انتخاب بسته', perMonth: 'در ماه', employees: 'کارمند', branches: 'شعبه', choosePayment: 'روش پرداخت',
     referenceHelp: 'شماره رسید یا انتقال را بنویسید', optionalNote: 'یادداشت اختیاری', requestActivation: 'فرستادن برای فعال‌سازی', requestSent: 'پرداخت برای بررسی مدیر فرستاده شد.',
     paymentHistory: 'درخواست‌های پرداخت', noRequests: 'هنوز درخواست پرداختی نیست.', onlyOwner: 'تنها مالک صرافی بسته و پرداخت را مدیریت می‌کند.', backHome: 'بازگشت به خانه',
+    planCatalog: 'فهرست بسته‌ها', published: 'قابل استفاده', draft: 'پیش‌نویس', retired: 'بازنشسته', includedServices: 'خدمات شامل',
+    audit: 'تاریخچه امنیت', auditTrail: 'تاریخچه امنیت مدیران', noAudit: 'هنوز عملیات مدیری ثبت نشده است.',
   },
   'ps-AF': {
     admin: 'د صرافۍ عمومي اداره', adminIntro: 'صرافۍ، د کاروونکو لاسرسی، بستې او د تادیې فعالول اداره کړئ. د صرافیو پیسې او معاملې دلته نه لیدل کېږي.',
@@ -77,6 +81,8 @@ const copy: Record<Language, Copy> = {
     choosePlan: 'بسته وټاکئ', perMonth: 'په میاشت', employees: 'کارکوونکي', branches: 'څانګې', choosePayment: 'د تادیې لاره',
     referenceHelp: 'د رسید یا لېږد شمېره ولیکئ', optionalNote: 'اختیاري یادښت', requestActivation: 'د فعالولو لپاره لېږل', requestSent: 'تادیه د مدیر کتنې ته ولېږل شوه.',
     paymentHistory: 'د تادیې غوښتنې', noRequests: 'تر اوسه د تادیې غوښتنه نشته.', onlyOwner: 'یوازې د صرافۍ مالک بسته او تادیه اداره کوي.', backHome: 'کور ته ستنېدل',
+    planCatalog: 'د بستو لېست', published: 'د کار وړ', draft: 'مسوده', retired: 'تړل شوې', includedServices: 'شامل خدمتونه',
+    audit: 'امنیتي تاریخ', auditTrail: 'د مدیرانو امنیتي تاریخ', noAudit: 'تر اوسه د مدیر کوم کار نه دی ثبت شوی.',
   },
 }
 
@@ -86,6 +92,21 @@ const localized = (language: Language, row: SubscriptionPlan | PaymentProvider, 
 }
 
 const statusText = (language: Language, value: string) => copy[language][value] ?? value.replaceAll('_', ' ')
+const auditText = (language: Language, value: string) => ({
+  en: { subscription_payment_approved: 'Payment approved', subscription_payment_rejected: 'Payment rejected', platform_user_active: 'User restored', platform_user_suspended: 'User suspended', subscription_status_changed: 'Plan status changed', payment_provider_state_changed: 'Payment method changed' },
+  'fa-AF': { subscription_payment_approved: 'پرداخت تأیید شد', subscription_payment_rejected: 'پرداخت رد شد', platform_user_active: 'کاربر فعال شد', platform_user_suspended: 'کاربر متوقف شد', subscription_status_changed: 'حالت بسته تغییر کرد', payment_provider_state_changed: 'روش پرداخت تغییر کرد' },
+  'ps-AF': { subscription_payment_approved: 'تادیه تایید شوه', subscription_payment_rejected: 'تادیه رد شوه', platform_user_active: 'کاروونکی فعال شو', platform_user_suspended: 'کاروونکی ودرول شو', subscription_status_changed: 'د بستې حالت بدل شو', payment_provider_state_changed: 'د تادیې لاره بدله شوه' },
+}[language] as Record<string, string>)[value] ?? value.replaceAll('_', ' ')
+const planFeatureText = (language: Language, value: string) => ({
+  en: { reports: 'Reports', team: 'Team controls', compliance: 'Compliance', hawala: 'Hawala' },
+  'fa-AF': { reports: 'گزارش‌ها', team: 'کنترول کارمندان', compliance: 'رعایت اصول', hawala: 'حواله' },
+  'ps-AF': { reports: 'راپورونه', team: 'د کارکوونکو کنټرول', compliance: 'د اصولو څارنه', hawala: 'حواله' },
+}[language] as Record<string, string>)[value] ?? (language === 'en' ? 'Other control' : language === 'fa-AF' ? 'کنترول دیگر' : 'بل کنټرول')
+const roleText = (language: Language, value: string) => ({
+  en: { owner: 'Owner', manager: 'Manager', accountant: 'Accountant', cashier: 'Cashier', compliance_officer: 'Compliance officer', viewer: 'Viewer' },
+  'fa-AF': { owner: 'مالک', manager: 'مدیر', accountant: 'حسابدار', cashier: 'صندوق‌دار', compliance_officer: 'مسئول رعایت اصول', viewer: 'بیننده' },
+  'ps-AF': { owner: 'مالک', manager: 'مدیر', accountant: 'حسابدار', cashier: 'صندوق‌دار', compliance_officer: 'د اصولو مسئول', viewer: 'لیدونکی' },
+}[language] as Record<string, string>)[value] ?? value
 
 export function BillingView({
   language,
@@ -197,7 +218,7 @@ export function PlatformAdminConsole({
   const [data, setData] = useState<PlatformConsole | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'businesses' | 'payments' | 'providers'>('businesses')
+  const [tab, setTab] = useState<'businesses' | 'payments' | 'providers' | 'plans' | 'audit'>('businesses')
   const [query, setQuery] = useState('')
   const [selectedOrganization, setSelectedOrganization] = useState<string | null>(null)
   const [users, setUsers] = useState<PlatformOrganizationUser[]>([])
@@ -207,11 +228,21 @@ export function PlatformAdminConsole({
 
   const load = useCallback(async () => {
     setLoading(true)
+    if (inspection) {
+      const previewPlans: SubscriptionPlan[] = [
+        { id: 'starter', code: 'starter', name_en: 'Small shop', name_dari: 'صرافی کوچک', name_pashto: 'کوچنۍ صرافي', description_en: 'One branch with essential daily tools.', description_dari: 'یک شعبه با ابزارهای ضروری روزانه.', description_pashto: 'یوه څانګه او د ورځني کار اړین وسایل.', price_afn: '1000', billing_interval: 'monthly', employee_limit: 5, branch_limit: 1, features: { reports: true, team: true }, status: 'published', sort_order: 10 },
+        { id: 'business', code: 'business', name_en: 'Growing business', name_dari: 'صرافی در حال رشد', name_pashto: 'پراخېدونکې صرافي', description_en: 'More employees, branches, reports, and compliance controls.', description_dari: 'کارمندان، شعبه‌ها، گزارش‌ها و کنترول بیشتر.', description_pashto: 'ډېر کارکوونکي، څانګې، راپورونه او کنترول.', price_afn: '2500', billing_interval: 'monthly', employee_limit: 25, branch_limit: 5, features: { reports: true, team: true, compliance: true }, status: 'published', sort_order: 20 },
+      ]
+      setData({ organizations: [{ id: 'preview-org', display_name: 'Kabul Central Exchange', created_at: new Date().toISOString(), member_count: 6, plan_code: 'business', subscription_status: 'active', period_end: new Date(Date.now() + 86400000 * 30).toISOString() }], plans: previewPlans, providers: [{ code: 'manual_review', name_en: 'Bank or office payment', name_dari: 'پرداخت بانکی یا در دفتر', name_pashto: 'بانکي یا د دفتر تادیه', instructions_en: 'Review the receipt reference before activation.', instructions_dari: 'پیش از فعال‌سازی شماره رسید را بررسی کنید.', instructions_pashto: 'له فعالولو مخکې د رسید شمېره وګورئ.', provider_mode: 'manual_review', state: 'live', public_checkout_url: null }], payment_requests: [], audit_events: [{ id: 'preview-audit', event_type: 'subscription_payment_approved', target_organization_id: 'preview-org', organization_name: 'Kabul Central Exchange', target_user_id: null, created_at: new Date().toISOString() }], counts: { organizations: 1, active_subscriptions: 1, pending_payments: 0, suspended_users: 0 } })
+      setError('')
+      setLoading(false)
+      return
+    }
     const result = await getPlatformAdminConsole()
     setData(result.data)
     setError(result.error ?? '')
     setLoading(false)
-  }, [])
+  }, [inspection])
   // oxlint-disable-next-line react/set-state-in-effect -- Fetching the external administrator record is the purpose of this effect.
   useEffect(() => { void load() }, [load])
   // oxlint-disable-next-line react/set-state-in-effect -- User rows are external data keyed by the selected organization.
@@ -237,12 +268,14 @@ export function PlatformAdminConsole({
   return <main className="platform-shell">
     <header className="platform-header"><div><span className="brand-mark">S</span><span><b>{c.admin}</b><small>{c.adminIntro}</small></span></div><div><select value={language} aria-label={c.language} onChange={(event) => onLanguageChange(event.target.value as Language)}><option value="fa-AF">دری</option><option value="ps-AF">پښتو</option><option value="en">English</option></select><button className="text-button" onClick={onSignOut}>{c.signOut}</button></div></header>
     <section className="platform-metrics"><article><span>{c.organizations}</span><b>{data.counts.organizations}</b></article><article><span>{c.activePlans}</span><b>{data.counts.active_subscriptions}</b></article><article><span>{c.pendingPayments}</span><b>{data.counts.pending_payments}</b></article><article><span>{c.suspendedUsers}</span><b>{data.counts.suspended_users}</b></article></section>
-    <nav className="platform-tabs"><button className={tab === 'businesses' ? 'active' : ''} onClick={() => setTab('businesses')}>{c.businesses}</button><button className={tab === 'payments' ? 'active' : ''} onClick={() => setTab('payments')}>{c.payments}</button><button className={tab === 'providers' ? 'active' : ''} onClick={() => setTab('providers')}>{c.providers}</button></nav>
+    <nav className="platform-tabs"><button className={tab === 'businesses' ? 'active' : ''} onClick={() => setTab('businesses')}>{c.businesses}</button><button className={tab === 'payments' ? 'active' : ''} onClick={() => setTab('payments')}>{c.payments}</button><button className={tab === 'providers' ? 'active' : ''} onClick={() => setTab('providers')}>{c.providers}</button><button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}>{c.plans}</button><button className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}>{c.audit}</button></nav>
     {toast && <div className="notice" role="status">{toast}<button onClick={() => setToast('')}>×</button></div>}
     <p className="platform-security-note">{c.mfaNote}</p>
-    {tab === 'businesses' && <section className="platform-grid"><div className="platform-list"><label>{c.findBusiness}<input value={query} onChange={(event) => setQuery(event.target.value)} /></label>{organizations.map((organization) => <button className={selectedOrganization === organization.id ? 'platform-business active' : 'platform-business'} key={organization.id} onClick={() => setSelectedOrganization(organization.id)}><span><b>{organization.display_name}</b><small>{organization.member_count} {c.members} · {organization.plan_code ?? '—'}</small></span><strong>{statusText(language, organization.subscription_status ?? 'trial')}</strong></button>)}</div><div className="platform-detail">{selectedOrganization ? <><h2>{c.subscriptionControl}</h2><label>{c.reason}<input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={c.reasonPlaceholder} /></label><div className="inline-actions"><button onClick={() => void act(setSubscriptionStatus({ organizationId: selectedOrganization, status: 'active', reason: reason || c.restore }))}>{c.restore}</button><button className="danger" onClick={() => void act(setSubscriptionStatus({ organizationId: selectedOrganization, status: 'suspended', reason }))}>{c.suspend}</button></div><h2>{c.userAccess}</h2>{users.map((user) => <div className="platform-user" key={user.user_id}><span><b>{user.display_name}</b><small>{user.email} · {user.role_code}</small></span><strong>{statusText(language, user.platform_status)}</strong><button onClick={() => void act(setPlatformUserAccess({ userId: user.user_id, status: user.platform_status === 'active' ? 'suspended' : 'active', reason }))}>{user.platform_status === 'active' ? c.suspend : c.restore}</button></div>)}</> : <div className="empty-live">{c.open}</div>}</div></section>}
+    {tab === 'businesses' && <section className="platform-grid"><div className="platform-list"><label>{c.findBusiness}<input value={query} onChange={(event) => setQuery(event.target.value)} /></label>{organizations.map((organization) => <button className={selectedOrganization === organization.id ? 'platform-business active' : 'platform-business'} key={organization.id} onClick={() => setSelectedOrganization(organization.id)}><span><b>{organization.display_name}</b><small>{organization.member_count} {c.members} · {data.plans.find((plan) => plan.code === organization.plan_code) ? localized(language, data.plans.find((plan) => plan.code === organization.plan_code)!, 'name') : '—'}</small></span><strong>{statusText(language, organization.subscription_status ?? 'trial')}</strong></button>)}</div><div className="platform-detail">{selectedOrganization ? <><h2>{c.subscriptionControl}</h2><label>{c.reason}<input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={c.reasonPlaceholder} /></label><div className="inline-actions"><button onClick={() => void act(setSubscriptionStatus({ organizationId: selectedOrganization, status: 'active', reason: reason || c.restore }))}>{c.restore}</button><button className="danger" onClick={() => void act(setSubscriptionStatus({ organizationId: selectedOrganization, status: 'suspended', reason }))}>{c.suspend}</button></div><h2>{c.userAccess}</h2>{users.map((user) => <div className="platform-user" key={user.user_id}><span><b>{user.display_name}</b><small>{user.email} · {roleText(language, user.role_code)}</small></span><strong>{statusText(language, user.platform_status)}</strong><button onClick={() => void act(setPlatformUserAccess({ userId: user.user_id, status: user.platform_status === 'active' ? 'suspended' : 'active', reason }))}>{user.platform_status === 'active' ? c.suspend : c.restore}</button></div>)}</> : <div className="empty-live">{c.open}</div>}</div></section>}
     {tab === 'payments' && <section className="platform-panel"><h1>{c.paymentQueue}</h1><label>{c.adminNote}<input value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder={c.reasonPlaceholder} /></label>{data.payment_requests.length ? data.payment_requests.map((request) => <article className="payment-review-card" key={request.id}><div><h2>{request.organization_name}</h2><p>{request.plan_name} · {request.amount_afn} AFN</p><small>{c.receipt}: {request.payer_reference || '—'} · {new Date(request.requested_at).toLocaleString(language)}</small></div><div><button className="primary-action" onClick={() => void act(decideSubscriptionPayment({ requestId: request.id, decision: 'approved', note: adminNote }))}>{c.approve}</button><button className="danger" onClick={() => void act(decideSubscriptionPayment({ requestId: request.id, decision: 'rejected', note: adminNote }))}>{c.reject}</button></div></article>) : <div className="empty-live">{c.noPayments}</div>}</section>}
     {tab === 'providers' && <section className="platform-panel"><h1>{c.providerControl}</h1><p>{c.manualSafe}</p>{data.providers.map((provider) => <article className="provider-card" key={provider.code}><div><h2>{localized(language, provider, 'name')}</h2><p>{localized(language, provider, 'instructions')}</p></div><select value={provider.state} disabled={provider.provider_mode === 'hosted_gateway' && !provider.public_checkout_url} onChange={(event) => void act(setPaymentProviderState({ providerCode: provider.code, state: event.target.value as PaymentProvider['state'] }))}><option value="live">{c.live}</option><option value="disabled">{c.disabled}</option><option value="configuration_required">{c.configuration_required}</option></select></article>)}</section>}
+    {tab === 'plans' && <section className="platform-panel"><h1>{c.planCatalog}</h1><div className="platform-plan-grid">{data.plans.map((plan) => <article className="plan-choice selected" key={plan.id}><span className={`subscription-state ${plan.status}`}>{statusText(language, plan.status)}</span><h2>{localized(language, plan, 'name')}</h2><p>{localized(language, plan, 'description')}</p><b dir="ltr">{plan.price_afn} AFN · {c.perMonth}</b><small>{plan.employee_limit} {c.employees} · {plan.branch_limit} {c.branches}</small><em>{c.includedServices}: {Object.entries(plan.features).filter(([, enabled]) => enabled).map(([name]) => planFeatureText(language, name)).join(' · ') || '—'}</em></article>)}</div></section>}
+    {tab === 'audit' && <section className="platform-panel"><h1>{c.auditTrail}</h1><div className="platform-audit-list">{data.audit_events?.length ? data.audit_events.map((event) => <article key={event.id}><span><b>{auditText(language, event.event_type)}</b><small>{event.organization_name || event.target_user_id || 'SARAFI'}</small></span><time>{new Date(event.created_at).toLocaleString(language)}</time></article>) : <div className="empty-live">{c.noAudit}</div>}</div></section>}
     {inspection && <small>preview</small>}
   </main>
 }

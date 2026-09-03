@@ -172,7 +172,7 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByRole("heading", { name: "Shop settings", exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".settings-card")).toHaveCount(3);
+    await expect(page.locator(".settings-card")).toHaveCount(4);
     await page.getByRole("button", { name: /Back to Home/ }).click();
     await page
       .locator(".sidebar nav")
@@ -194,6 +194,7 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByRole("heading", { name: "Help & support" }),
     ).toBeVisible();
+    await expect(page.locator(".help-guide-list details")).toHaveCount(10);
     await page.getByRole("button", { name: "Close help" }).first().click();
     await page
       .locator("header")
@@ -223,6 +224,38 @@ test.describe("workspace controls", () => {
     await expect(
       page.getByRole("heading", { name: /Sell currency/ }),
     ).not.toBeVisible();
+  });
+
+  test("global search and notifications lead to the matching workspace", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Search the whole shop" }).click();
+    await page.getByPlaceholder("Find a person, account, or transaction").fill("Main Counter");
+    await page.locator(".global-search-results button").first().click();
+    await expect(page.getByRole("heading", { name: "Where is my money?" })).toBeVisible();
+    await page.getByRole("button", { name: /Back to Home/ }).click();
+    await page.getByRole("button", { name: "Open notifications" }).click();
+    await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
+    await page.locator(".notification-open").first().click();
+    await expect(page.getByRole("heading", { name: "Team & Devices", exact: true })).toBeVisible();
+  });
+
+  test("owner settings and complete-ledger report exports are usable", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".sidebar nav").first().getByRole("button", { name: /More/ }).click();
+    await page.getByRole("button", { name: /Settings/ }).click();
+    await expect(page.getByRole("heading", { name: "Owner controls" })).toBeVisible();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("Settings saved and added to the security history.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your notifications" })).toBeVisible();
+    await page.getByLabel("Actions waiting for approval").uncheck();
+    await expect(page.getByText("Notification choice saved.")).toBeVisible();
+    await page.getByRole("button", { name: /Back to Home/ }).click();
+    await page.locator(".sidebar nav").first().getByRole("button", { name: /More/ }).click();
+    await page.getByRole("button", { name: /^Reports/ }).click();
+    await page.getByLabel("Report type").selectOption("fx");
+    await expect(page.getByRole("button", { name: "Export CSV" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Recent exports" })).toBeVisible();
+    await expect(page.locator(".report-export-list")).toContainText("PDF");
   });
 
   test("the visible daily grid opens a validated operation form", async ({ page }) => {
@@ -747,6 +780,16 @@ test.describe("workspace controls", () => {
     await expect(page.getByRole("heading", { name: "Platform administrator" })).toBeVisible();
     await expect(page.getByText(/Business owners and employees sign in on the main page/)).toBeVisible();
     await expect(page.getByRole("tab", { name: "Create an account" })).toHaveCount(0);
+  });
+
+  test("platform administrator preview exposes plans and security history", async ({ page }) => {
+    await page.goto("/platform-admin?preview=1");
+    await expect(page.getByText("SARAFI administrator", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Plans", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Plan catalog" })).toBeVisible();
+    await page.getByRole("button", { name: "Security history", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Administrator security history" })).toBeVisible();
+    await expect(page.getByText("Payment approved")).toBeVisible();
   });
 
   test("Buy, Sell, and Exchange open distinct FX forms", async ({ page }) => {

@@ -81,6 +81,7 @@ export type PlatformConsole = {
   plans: SubscriptionPlan[]
   providers: PaymentProvider[]
   payment_requests: PaymentRequest[]
+  audit_events: Array<{ id: string; event_type: string; target_organization_id: string | null; organization_name: string | null; target_user_id: string | null; created_at: string }>
   counts: {
     organizations: number
     active_subscriptions: number

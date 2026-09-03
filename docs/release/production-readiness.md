@@ -9,9 +9,9 @@
 - [x] Secret-safe environment template
 - [x] Initial architecture and threat notes
 
-## Current production environment — 2026-08-29
+## Current production environment — 2026-09-03
 
-The repository is linked to GitHub, the production Vercel project, and Supabase project `vbvwuqzqtcorassvotke`. Local and remote migration history match through `20260829063603`; linked schema lint passes with no errors. The public web application is live at `https://sarafi-swart.vercel.app/`. Remaining release gates are authenticated human UAT, qualified Dari/Pashto review, Afghan legal/compliance sign-off, and provider backup/restore evidence—not repository linking or migration reconciliation.
+The repository is linked to GitHub, the production Vercel project, and Supabase project `vbvwuqzqtcorassvotke`. Local and remote migration history match through `20260903004944`; linked schema lint passes with no errors. The public web application is live at `https://sarafi-swart.vercel.app/`. Remaining release gates are authenticated human UAT, qualified Dari/Pashto review, Afghan legal/compliance sign-off, hosted-provider configuration, and provider backup/restore evidence—not repository linking or migration reconciliation.
 
 ## Stage 2 status
 
@@ -93,7 +93,8 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [x] Live Business owner control strip
 - [x] Reconciliation, export, notification, and report tests
 - [x] Apply migration and verify report views against live ledger data
-- [ ] Connect Realtime events, push delivery, and reconnect/refetch behavior
+- [x] Connect Realtime events and reconnect/refetch behavior
+- [ ] Configure optional external push delivery after the provider and device policy are approved
 - [x] Add PDF and thermal receipt generation with export authorization checks
 - [x] Add report filters and counterparty running statements to live screens
 
@@ -129,7 +130,7 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [ ] Live authenticated RLS matrix with multiple test users; fresh MFA and approval sub-gates pass, full manifest consolidation remains
 - [x] Live concurrency/TOCTOU and RPC replay tests against two same-tenant cashiers; 7/7 checks passed and report retained in [step-16-live-report-20260828.json](../audits/step-16-live-report-20260828.json) ([procedure](../audits/step-16-concurrency.md))
 - [ ] Backup restore drill and migration rollback/forward test; use the executable [Step 17 recovery procedure](../audits/step-17-recovery-drill.md)
-- [x] Reconcile local and remote migration history; all versions match through `20260829063603`
+- [x] Reconcile local and remote migration history; all versions match through `20260903004944`
 - [ ] Human Afghan Dari/Pashto terminology and device UAT sign-off
 - [ ] Android/iOS device matrix and realistic network performance evidence
 
@@ -190,5 +191,8 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [x] Immediate post-trade success receipt with stable materialized receipt lookup and 58/80 mm printing
 - [x] Controlled English, Dari, and Pashto desktop/mobile screenshot matrix includes Settings and Compliance
 - [x] 360px, 390px, 430px, 768px, 1366px, and 1440px no-overflow checks
+- [x] Global search, actionable notifications, per-user notification choices, owner settings, and complete permission-aware report paging
+- [x] Report export history and separate platform plans/security-history administration views
+- [x] Final browser matrix: 198 passed, 18 intentional environment/scope skips, and zero failures across Chromium, Firefox, and WebKit
 - [ ] Qualified native-speaker Dari/Pashto sign-off
 - [ ] Authenticated human UAT and Afghan legal/compliance sign-off

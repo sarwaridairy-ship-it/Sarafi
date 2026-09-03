@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Language } from "./lib/i18n";
 import {
   getComplianceWorkspace,
+  listNotificationPreferences,
   getWorkspaceSettings,
+  setNotificationPreference,
+  updateWorkspaceSettings,
   type ComplianceWorkspaceRecord,
+  type NotificationPreferenceRecord,
   type WorkspaceSettingsRecord,
 } from "./lib/financialApi";
 
@@ -31,7 +35,8 @@ export type AppIconName =
   | "hawala"
   | "report"
   | "rates"
-  | "cashbox";
+  | "cashbox"
+  | "search";
 
 const iconPaths: Record<AppIconName, ReactNode> = {
   home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></>,
@@ -58,6 +63,7 @@ const iconPaths: Record<AppIconName, ReactNode> = {
   report: <><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5"/><path d="M9 12h6"/><path d="M9 16h6"/></>,
   rates: <><path d="M4 18 9 13l3 3 8-9"/><path d="M15 7h5v5"/></>,
   cashbox: <><path d="M3 7h18v13H3z"/><path d="M3 11h18"/><circle cx="12" cy="15.5" r="2"/><path d="M7 4h10v3"/></>,
+  search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
 };
 
 export function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
@@ -79,12 +85,33 @@ const professionalCopy = {
     timezone: "Business timezone",
     language: "Display language",
     receiptPrefix: "Receipt prefix",
+    editSettings: "Owner controls",
+    saveSettings: "Save settings",
+    savingSettings: "Saving…",
+    settingsSaved: "Settings saved and added to the security history.",
+    settingsFailed: "Settings were not saved. If you changed the cash rule, confirm two-step security first.",
+    ownerSettingsOnly: "Only the owner can change these controls.",
+    allowNegativeCash: "Allow a cashbox to go below zero",
+    mfaSettingsNote: "Changing the negative-cash rule requires two-step security.",
     cashRule: "Cash control",
     noNegativeCash: "Negative cash is blocked",
     negativeCashAllowed: "Negative cash is allowed",
     enabledServices: "Enabled services",
     noExtraServices: "No optional services are enabled.",
     enabled: "Enabled",
+    extraService: "Additional service",
+    hawalaService: "Hawala transfers",
+    complianceService: "Compliance controls",
+    paymentService: "Online payments",
+    importService: "Data import",
+    screeningService: "Name screening",
+    notificationChoices: "Your notifications",
+    notificationIntro: "Choose which important work alerts appear inside SARAFI for your account.",
+    approvalNotification: "Actions waiting for approval",
+    complianceNotification: "Compliance alerts",
+    cashboxNotification: "Cashbox count differences",
+    notificationSaved: "Notification choice saved.",
+    notificationFailed: "The notification choice was not saved. Please try again.",
     accessSecurity: "Access & security",
     currentRole: "Your current role",
     signedInPosting: "Financial posting requires a signed-in, authorized team member.",
@@ -115,6 +142,9 @@ const professionalCopy = {
     draft: "Draft",
     ready: "Ready",
     submitted: "Submitted",
+    recentAlerts: "Recent alerts",
+    recentCases: "Recent cases",
+    noQueueItems: "No items in this queue.",
     complianceUnavailable: "Compliance data is unavailable for this role. Nothing is shown as approved without evidence.",
     compliancePreview: "Sign in with an owner or compliance role to view the live control plane.",
     externalDecision: "Legal thresholds and reporting rules are versioned records—not hard-coded claims.",
@@ -141,12 +171,33 @@ const professionalCopy = {
     timezone: "زمان رسمی کار",
     language: "زبان نمایش",
     receiptPrefix: "پیشوند رسید",
+    editSettings: "کنترول‌های مالک",
+    saveSettings: "ذخیره تنظیمات",
+    savingSettings: "در حال ذخیره…",
+    settingsSaved: "تنظیمات ذخیره و در تاریخچه امنیت ثبت شد.",
+    settingsFailed: "تنظیمات ذخیره نشد. اگر اصل صندوق را تغییر دادید، نخست امنیت دومرحله‌ای را تأیید کنید.",
+    ownerSettingsOnly: "تنها مالک می‌تواند این کنترول‌ها را تغییر دهد.",
+    allowNegativeCash: "اجازه‌دادن صندوق منفی",
+    mfaSettingsNote: "تغییر اصل صندوق منفی به امنیت دومرحله‌ای نیاز دارد.",
     cashRule: "کنترول صندوق",
     noNegativeCash: "ثبت صندوق منفی بسته است",
     negativeCashAllowed: "ثبت صندوق منفی اجازه دارد",
     enabledServices: "خدمات فعال",
     noExtraServices: "خدمت اختیاری فعال نشده است.",
     enabled: "فعال",
+    extraService: "خدمت اضافی",
+    hawalaService: "حواله‌ها",
+    complianceService: "کنترول رعایت اصول",
+    paymentService: "پرداخت آنلاین",
+    importService: "آوردن معلومات",
+    screeningService: "بررسی نام",
+    notificationChoices: "خبرهای شما",
+    notificationIntro: "انتخاب کنید کدام کارهای مهم در داخل صرافی برای شما خبر داده شود.",
+    approvalNotification: "کارهای منتظر تأیید",
+    complianceNotification: "هشدارهای رعایت اصول",
+    cashboxNotification: "تفاوت شمارش صندوق",
+    notificationSaved: "انتخاب خبر ذخیره شد.",
+    notificationFailed: "انتخاب خبر ذخیره نشد. دوباره کوشش کنید.",
     accessSecurity: "دسترسی و امنیت",
     currentRole: "صلاحیت فعلی شما",
     signedInPosting: "ثبت مالی تنها برای کارمند واردشده و باصلاحیت ممکن است.",
@@ -177,6 +228,9 @@ const professionalCopy = {
     draft: "پیش‌نویس",
     ready: "آماده",
     submitted: "فرستاده‌شده",
+    recentAlerts: "هشدارهای اخیر",
+    recentCases: "دوسیه‌های اخیر",
+    noQueueItems: "در این صف موردی نیست.",
     complianceUnavailable: "معلومات رعایت اصول برای این صلاحیت در دسترس نیست. بدون سند چیزی تأییدشده نشان داده نمی‌شود.",
     compliancePreview: "با صلاحیت مالک یا مسئول رعایت اصول وارد شوید تا معلومات زنده را ببینید.",
     externalDecision: "حدود حقوقی و اصول گزارش‌دهی نسخه‌بندی می‌شوند و ادعای ثابت برنامه نیستند.",
@@ -203,12 +257,33 @@ const professionalCopy = {
     timezone: "د کار وخت",
     language: "د ښودلو ژبه",
     receiptPrefix: "د رسید سرلیک",
+    editSettings: "د مالک کنټرولونه",
+    saveSettings: "امستنې ساتل",
+    savingSettings: "ساتل کېږي…",
+    settingsSaved: "امستنې وساتل شوې او په امنیتي تاریخ کې ثبت شوې.",
+    settingsFailed: "امستنې ونه ساتل شوې. که د صندوق اصل مو بدل کړی وي، لومړی دوه پړاوه امنیت تایید کړئ.",
+    ownerSettingsOnly: "یوازې مالک دا کنټرولونه بدلولی شي.",
+    allowNegativeCash: "منفي صندوق ته اجازه ورکول",
+    mfaSettingsNote: "د منفي صندوق د اصل بدلون دوه پړاوه امنیت غواړي.",
     cashRule: "د صندوق کنټرول",
     noNegativeCash: "منفي صندوق بند دی",
     negativeCashAllowed: "منفي صندوق اجازه لري",
     enabledServices: "فعال خدمتونه",
     noExtraServices: "کوم اختیاري خدمت فعال نه دی.",
     enabled: "فعال",
+    extraService: "اضافي خدمت",
+    hawalaService: "حوالې",
+    complianceService: "د اصولو څارنه",
+    paymentService: "انلاین تادیات",
+    importService: "د معلوماتو راوړل",
+    screeningService: "د نوم کتنه",
+    notificationChoices: "ستاسو خبرتیاوې",
+    notificationIntro: "وټاکئ چې د صرافۍ کوم مهم کارونه دلته درته خبر شي.",
+    approvalNotification: "تأیید ته منتظر کارونه",
+    complianceNotification: "د اصولو خبرتیاوې",
+    cashboxNotification: "د صندوق د شمېر توپیر",
+    notificationSaved: "د خبرتیا انتخاب وساتل شو.",
+    notificationFailed: "د خبرتیا انتخاب ونه ساتل شو. بیا هڅه وکړئ.",
     accessSecurity: "لاسرسی او امنیت",
     currentRole: "ستاسو اوسنۍ دنده",
     signedInPosting: "مالي ثبت یوازې واک لرونکی او ننوتلی کارکوونکی کولای شي.",
@@ -239,6 +314,9 @@ const professionalCopy = {
     draft: "مسوده",
     ready: "چمتو",
     submitted: "سپارل شوی",
+    recentAlerts: "وروستۍ خبرتیاوې",
+    recentCases: "وروستۍ دوسیې",
+    noQueueItems: "په دې کتار کې څه نشته.",
     complianceUnavailable: "د دې واک لپاره اصولي معلومات نشته. بې له سنده هېڅ شی تأیید شوی نه ښودل کېږي.",
     compliancePreview: "د ژوندۍ څارنې لپاره د مالک یا اصولي مسئول په واک ننوځئ.",
     externalDecision: "حقوقي حدونه او د راپور اصول نسخه‌لرونکي ریکارډونه دي؛ د پروګرام ثابتې ادعاوې نه دي.",
@@ -259,6 +337,28 @@ const professionalCopy = {
 
 type ProfessionalCopyKey = keyof typeof professionalCopy.en;
 const p = (language: Language, key: ProfessionalCopyKey) => professionalCopy[language][key];
+const preferenceTypes = ["approval_required", "compliance_alert", "cashbox_variance"] as const;
+const preferenceLabel = (language: Language, type: typeof preferenceTypes[number]) => p(language, ({
+  approval_required: "approvalNotification",
+  compliance_alert: "complianceNotification",
+  cashbox_variance: "cashboxNotification",
+})[type] as ProfessionalCopyKey);
+const serviceLabel = (language: Language, code: string) => {
+  if (code.startsWith("sanctions_provider:")) return p(language, "screeningService");
+  const labels: Record<string, ProfessionalCopyKey> = {
+    hawala: "hawalaService",
+    compliance: "complianceService",
+    online_payments: "paymentService",
+    payments: "paymentService",
+    imports: "importService",
+  };
+  return p(language, labels[code] ?? "extraService");
+};
+const complianceTypeCopy: Record<Language, Record<string, string>> = {
+  en: { large_transaction: "Large transaction", kyc_required: "Customer identity required", edd_required: "Extra customer review", screening_required: "Name screening required", document_missing: "Document missing", suspicious_pattern: "Unusual activity", risk_geography: "Location risk" },
+  "fa-AF": { large_transaction: "معامله بزرگ", kyc_required: "هویت مشتری لازم است", edd_required: "بررسی بیشتر مشتری", screening_required: "بررسی نام لازم است", document_missing: "سند کم است", suspicious_pattern: "فعالیت غیرعادی", risk_geography: "خطر مربوط به محل" },
+  "ps-AF": { large_transaction: "لویه معامله", kyc_required: "د پېرودونکي هویت اړین دی", edd_required: "د پېرودونکي زیاته کتنه", screening_required: "د نوم کتنه اړینه ده", document_missing: "سند نشته", suspicious_pattern: "نااشنا فعالیت", risk_geography: "د ځای خطر" },
+};
 
 function WorkspaceHeader({ icon, kicker, title, intro, backLabel, onBack }: { icon: AppIconName; kicker: string; title: string; intro: string; backLabel: string; onBack: () => void }) {
   return (
@@ -276,20 +376,81 @@ function DetailRow({ label, value, status }: { label: string; value: ReactNode; 
   return <div className="detail-row"><span>{label}</span><strong className={status ? `detail-status ${status}` : undefined}>{value}</strong></div>;
 }
 
-export function SettingsView({ language, organizationId, organizationName, branchName, roleLabel, onDashboard }: { language: Language; organizationId: string | null; organizationName: string; branchName: string; roleLabel: string; onDashboard: () => void }) {
+export function SettingsView({ language, organizationId, organizationName, branchName, roleLabel, canManage, onDashboard }: { language: Language; organizationId: string | null; organizationName: string; branchName: string; roleLabel: string; canManage: boolean; onDashboard: () => void }) {
   const [settings, setSettings] = useState<WorkspaceSettingsRecord | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error" | "preview">(organizationId === "inspection" ? "preview" : "loading");
+  const [draftLanguage, setDraftLanguage] = useState(language);
+  const [timezone, setTimezone] = useState("Asia/Kabul");
+  const [receiptPrefix, setReceiptPrefix] = useState("SAR");
+  const [negativeCashAllowed, setNegativeCashAllowed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<"saved" | "failed" | null>(null);
+  const [preferences, setPreferences] = useState<NotificationPreferenceRecord[]>([]);
+  const [preferenceBusy, setPreferenceBusy] = useState<string | null>(null);
+  const [preferenceMessage, setPreferenceMessage] = useState<"saved" | "failed" | null>(null);
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
     let active = true;
-    void getWorkspaceSettings(organizationId).then((result) => {
+    void Promise.all([getWorkspaceSettings(organizationId), listNotificationPreferences(organizationId)]).then(([result, preferenceResult]) => {
       if (!active) return;
       setSettings(result.data);
+      setPreferences(preferenceResult.data ?? []);
+      if (result.data) {
+        setDraftLanguage(result.data.default_language as Language);
+        setTimezone(result.data.timezone);
+        setReceiptPrefix(result.data.receipt_prefix);
+        setNegativeCashAllowed(result.data.negative_cash_allowed);
+      }
       setState(result.error || !result.data ? "error" : "ready");
     });
     return () => { active = false; };
   }, [organizationId]);
+  const changePreference = async (notificationType: typeof preferenceTypes[number], inApp: boolean) => {
+    if (!organizationId) return;
+    if (organizationId === "inspection") {
+      setPreferences((current) => [...current.filter((item) => item.notification_type !== notificationType), { id: notificationType, notification_type: notificationType, in_app: inApp, push: false, threshold_base: null }]);
+      setPreferenceMessage("saved");
+      return;
+    }
+    setPreferenceBusy(notificationType);
+    setPreferenceMessage(null);
+    const result = await setNotificationPreference({ organizationId, notificationType, inApp });
+    setPreferenceBusy(null);
+    if (!result.data || result.error) {
+      setPreferenceMessage("failed");
+      return;
+    }
+    setPreferences((current) => [...current.filter((item) => item.notification_type !== notificationType), result.data!]);
+    setPreferenceMessage("saved");
+  };
+  const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId || !canManage) return;
+    if (organizationId === "inspection") {
+      setSettings({ default_language: draftLanguage, base_currency_code: "AFN", timezone, receipt_prefix: receiptPrefix.toUpperCase(), negative_cash_allowed: negativeCashAllowed, features: [] });
+      setSaveMessage("saved");
+      return;
+    }
+    setSaving(true);
+    setSaveMessage(null);
+    const result = await updateWorkspaceSettings({ organizationId, language: draftLanguage, timezone, receiptPrefix, negativeCashAllowed });
+    setSaving(false);
+    if (result.error || !result.data) {
+      setSaveMessage("failed");
+      return;
+    }
+    setSettings({ ...result.data, features: settings?.features ?? [] });
+    setSaveMessage("saved");
+  };
   const languageLabel = language === "en" ? "English" : language === "fa-AF" ? "دری" : "پښتو";
+  const timezoneOptions = [
+    { value: "Asia/Kabul", label: language === "en" ? "Kabul" : "کابل" },
+    { value: "Asia/Tehran", label: language === "en" ? "Tehran" : language === "fa-AF" ? "تهران" : "تهران" },
+    { value: "Asia/Dubai", label: language === "en" ? "Dubai" : language === "fa-AF" ? "دبی" : "دوبۍ" },
+    { value: "Asia/Karachi", label: language === "en" ? "Karachi" : language === "fa-AF" ? "کراچی" : "کراچۍ" },
+    { value: "Europe/Istanbul", label: language === "en" ? "Istanbul" : language === "fa-AF" ? "استانبول" : "استانبول" },
+    { value: "UTC", label: language === "en" ? "Universal time" : language === "fa-AF" ? "زمان جهانی" : "نړیوال وخت" },
+  ];
   const cashRule = settings ? (settings.negative_cash_allowed ? p(language, "negativeCashAllowed") : p(language, "noNegativeCash")) : "—";
   return (
     <section className="professional-workspace">
@@ -304,18 +465,38 @@ export function SettingsView({ language, organizationId, organizationName, branc
             <DetailRow label={p(language, "organization")} value={organizationName || "—"} />
             <DetailRow label={p(language, "branch")} value={branchName || "—"} />
             <DetailRow label={p(language, "baseCurrency")} value={settings?.base_currency_code ?? "—"} />
-            <DetailRow label={p(language, "timezone")} value={settings?.timezone ?? "—"} />
+            <DetailRow label={p(language, "timezone")} value={settings ? (timezoneOptions.find((option) => option.value === settings.timezone)?.label ?? settings.timezone) : "—"} />
             <DetailRow label={p(language, "language")} value={languageLabel} />
             <DetailRow label={p(language, "receiptPrefix")} value={settings?.receipt_prefix ?? "—"} />
           </div>
+          {canManage ? <form className="settings-editor" onSubmit={saveSettings}>
+            <h3>{p(language, "editSettings")}</h3>
+            <label>{p(language, "language")}<select value={draftLanguage} onChange={(event) => setDraftLanguage(event.target.value as Language)}><option value="fa-AF">دری</option><option value="ps-AF">پښتو</option><option value="en">English</option></select></label>
+            <label>{p(language, "timezone")}<select value={timezone} onChange={(event) => setTimezone(event.target.value)}>{timezoneOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+            <label>{p(language, "receiptPrefix")}<input required minLength={2} maxLength={10} pattern="[A-Za-z0-9-]{2,10}" dir="ltr" value={receiptPrefix} onChange={(event) => setReceiptPrefix(event.target.value)} /></label>
+            <label className="settings-checkbox"><input type="checkbox" checked={negativeCashAllowed} onChange={(event) => setNegativeCashAllowed(event.target.checked)} />{p(language, "allowNegativeCash")}</label>
+            <small>{p(language, "mfaSettingsNote")}</small>
+            {saveMessage && <div className={`settings-save-message ${saveMessage}`} role="status">{p(language, saveMessage === "saved" ? "settingsSaved" : "settingsFailed")}</div>}
+            <button className="primary-action" disabled={saving}>{saving ? p(language, "savingSettings") : p(language, "saveSettings")}</button>
+          </form> : <p className="muted-copy">{p(language, "ownerSettingsOnly")}</p>}
         </article>
         <article className="settings-card">
           <div className="settings-card-title"><AppIcon name="wallet" /><div><h2>{p(language, "cashRule")}</h2><p>{cashRule}</p></div></div>
           <div className={`security-callout ${settings ? "good" : ""}`}><AppIcon name="shield" /><span>{cashRule}</span></div>
           <h3>{p(language, "enabledServices")}</h3>
           <div className="feature-list">
-            {settings?.features.filter((feature) => feature.enabled).length ? settings.features.filter((feature) => feature.enabled).map((feature) => <span className="feature-chip" key={feature.feature_code}><AppIcon name="check" size={15} />{feature.feature_code.replaceAll("_", " ")} · {p(language, "enabled")}</span>) : <p className="muted-copy">{settings ? p(language, "noExtraServices") : "—"}</p>}
+            {settings?.features.filter((feature) => feature.enabled).length ? settings.features.filter((feature) => feature.enabled).map((feature) => <span className="feature-chip" key={feature.feature_code}><AppIcon name="check" size={15} />{serviceLabel(language, feature.feature_code)} · {p(language, "enabled")}</span>) : <p className="muted-copy">{settings ? p(language, "noExtraServices") : "—"}</p>}
           </div>
+        </article>
+        <article className="settings-card settings-card-wide">
+          <div className="settings-card-title"><AppIcon name="check" /><div><h2>{p(language, "notificationChoices")}</h2><p>{p(language, "notificationIntro")}</p></div></div>
+          <div className="notification-preferences">
+            {preferenceTypes.map((type) => {
+              const saved = preferences.find((item) => item.notification_type === type);
+              return <label key={type}><span>{preferenceLabel(language, type)}</span><input type="checkbox" checked={saved?.in_app ?? true} disabled={preferenceBusy === type} onChange={(event) => void changePreference(type, event.target.checked)} /></label>;
+            })}
+          </div>
+          {preferenceMessage && <div className={`settings-save-message ${preferenceMessage}`} role="status">{p(language, preferenceMessage === "saved" ? "notificationSaved" : "notificationFailed")}</div>}
         </article>
         <article className="settings-card settings-card-wide">
           <div className="settings-card-title"><AppIcon name="shield" /><div><h2>{p(language, "accessSecurity")}</h2><p>{p(language, "ledgerProtection")}</p></div></div>
@@ -373,6 +554,10 @@ export function ComplianceView({ language, organizationId, onDashboard }: { lang
         <article className="queue-card"><div><p>{p(language, "alertQueue")}</p><strong>{hasVerifiedData ? (data!.alertCounts.open + data!.alertCounts.reviewing) : "—"}</strong></div><dl><div><dt>{p(language, "open")}</dt><dd>{hasVerifiedData ? data!.alertCounts.open : "—"}</dd></div><div><dt>{p(language, "reviewing")}</dt><dd>{hasVerifiedData ? data!.alertCounts.reviewing : "—"}</dd></div><div><dt>{p(language, "closed")}</dt><dd>{hasVerifiedData ? data!.alertCounts.closed : "—"}</dd></div></dl></article>
         <article className="queue-card"><div><p>{p(language, "caseQueue")}</p><strong>{hasVerifiedData ? (data!.caseCounts.draft + data!.caseCounts.ready) : "—"}</strong></div><dl><div><dt>{p(language, "draft")}</dt><dd>{hasVerifiedData ? data!.caseCounts.draft : "—"}</dd></div><div><dt>{p(language, "ready")}</dt><dd>{hasVerifiedData ? data!.caseCounts.ready : "—"}</dd></div><div><dt>{p(language, "submitted")}</dt><dd>{hasVerifiedData ? data!.caseCounts.submitted : "—"}</dd></div></dl></article>
       </div>
+      {hasVerifiedData && <div className="compliance-record-grid">
+        <article className="settings-card"><h2>{p(language, "recentAlerts")}</h2><div className="compliance-record-list">{data!.alerts.length ? data!.alerts.map((alert) => <div key={alert.id}><span><b>{complianceTypeCopy[language][alert.alert_type] ?? alert.alert_type}</b><small>{new Date(alert.created_at).toLocaleString(language)}</small></span><strong>{alert.status === "under_review" ? p(language, "reviewing") : alert.status === "open" ? p(language, "open") : p(language, "closed")}</strong></div>) : <p className="muted-copy">{p(language, "noQueueItems")}</p>}</div></article>
+        <article className="settings-card"><h2>{p(language, "recentCases")}</h2><div className="compliance-record-list">{data!.cases.length ? data!.cases.map((item) => <div key={item.id}><span><b><bdi>{item.submitted_reference ?? item.id.slice(0, 8)}</bdi></b><small>{new Date(item.created_at).toLocaleString(language)}</small></span><strong>{item.report_status === "draft" ? p(language, "draft") : item.report_status === "ready" ? p(language, "ready") : item.report_status === "submitted" ? p(language, "submitted") : p(language, "closed")}</strong></div>) : <p className="muted-copy">{p(language, "noQueueItems")}</p>}</div></article>
+      </div>}
     </section>
   );
 }

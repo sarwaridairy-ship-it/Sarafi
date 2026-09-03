@@ -29,9 +29,11 @@ import {
   listCounterpartyStatement,
   listDebts,
   listHawalaTransfers,
+  listCompleteJournalEntries,
   listJournalEntries,
   listLocationEvidence,
   listRateHistory,
+  listReportExports,
   postFxTrade,
   recordCashboxClose,
   recordDebt,
@@ -67,6 +69,10 @@ import {
   type WorkspaceContextRecord,
   type ApprovalRecord,
   type PrivateDocumentRecord,
+  type NotificationRecord,
+  type ReportExportRecord,
+  listNotifications,
+  markNotificationState,
 } from "./lib/financialApi";
 import { getSupabaseClient } from "./lib/supabase";
 import { businessDateInTimeZone } from "./lib/businessTime";
@@ -78,6 +84,7 @@ import {
   signInWithPassword,
   signOut,
   signUpWithPassword,
+  subscribeToOrganizationActivity,
   verifyTotp,
   type DetailedAuthResult,
   type MfaReadiness,
@@ -104,6 +111,63 @@ import { BillingView, PlatformAdminConsole } from "./PlatformWorkspace";
 const loadExports = () => import("./lib/exports");
 
 const openingSessionKey = "sarafi-opening-seen";
+
+const helpGuides = {
+  en: [
+    ["Start the shop", "The owner creates the shop, names the main branch and cashbox, chooses currencies, then records the money already on hand."],
+    ["Opening money", "Use Opening money once for cash the shop had before SARAFI. Choose its real location and enter its AFN value; it is not income or profit."],
+    ["Buy, sell, or exchange", "Choose what the shop is doing, the two currencies, customer, amount, rate, and cashbox. Review both money directions before saving."],
+    ["Debts and payments", "Create a debt under the correct person and choose who owes whom. Each payment reduces the remaining amount and stays in that person’s statement."],
+    ["Transfers, income, and expenses", "Always choose the real source and destination account. Transfers move money inside the shop; income and expenses explain why money changed."],
+    ["Close a cashbox", "Count each currency, compare it with SARAFI, and explain any difference. A manager or owner reviews differences."],
+    ["Correct a transaction", "Open Transactions, choose the original record, and request a reversal with a clear reason. SARAFI keeps both records for audit."],
+    ["Add an employee", "The owner creates an invitation, chooses the job, branch, and cashbox. The employee opens that link and signs in with their own account."],
+    ["Revoke a device", "Open Team & Devices, select the device, enter a reason, and confirm two-step security. Revoked devices cannot post money."],
+    ["Reports and payments", "Choose the report and filters, then export PDF or CSV. Only the owner can manage the SARAFI plan and submit a payment reference."],
+  ],
+  "fa-AF": [
+    ["آغاز کار صرافی", "مالک صرافی را می‌سازد، نام شعبه و صندوق اصلی را می‌نویسد، اسعار را انتخاب و سپس پول موجود آغاز کار را ثبت می‌کند."],
+    ["پول آغاز کار", "این بخش را تنها برای پولی استفاده کنید که پیش از سرافی در صرافی موجود بود. جای واقعی پول و ارزش افغانی آن را بنویسید؛ این پول عاید یا مفاد نیست."],
+    ["خرید، فروش یا تبادله", "نوع معامله، دو اسعار، مشتری، مبلغ، نرخ و صندوق را انتخاب کنید. پیش از ثبت، پول ورودی و خروجی را یک‌بار بررسی کنید."],
+    ["طلب، بدهی و پرداخت", "قرض را زیر نام شخص درست ثبت و مشخص کنید چه کسی بدهکار است. هر پرداخت مبلغ باقی‌مانده را کم می‌کند و در صورت‌حساب شخص می‌ماند."],
+    ["انتقال، عاید و مصرف", "همیشه حساب واقعی مبدأ و مقصد را انتخاب کنید. انتقال پول را داخل صرافی جابه‌جا می‌کند؛ عاید و مصرف دلیل تغییر پول را ثبت می‌کند."],
+    ["بستن صندوق", "هر اسعار را بشمارید، با مبلغ سرافی مقایسه و دلیل هر تفاوت را بنویسید. مدیر یا مالک تفاوت را بررسی می‌کند."],
+    ["اصلاح معامله", "در معاملات، ثبت اصلی را باز و با دلیل روشن درخواست برگشت بدهید. سرافی هر دو ثبت را برای بررسی نگه می‌دارد."],
+    ["افزودن کارمند", "مالک دعوت‌نامه می‌سازد و وظیفه، شعبه و صندوق را تعیین می‌کند. کارمند لینک را باز و با حساب خودش وارد می‌شود."],
+    ["لغو دستگاه", "در کارمندان و دستگاه‌ها، دستگاه را انتخاب، دلیل را نوشته و امنیت دومرحله‌ای را تأیید کنید. دستگاه لغوشده عملیات پولی ثبت نمی‌کند."],
+    ["گزارش و پرداخت", "نوع گزارش و فلترها را انتخاب و PDF یا CSV بگیرید. تنها مالک بسته سرافی را اداره و شماره پرداخت را می‌فرستد."],
+  ],
+  "ps-AF": [
+    ["د صرافۍ کار پیلول", "مالک صرافي جوړوي، د اصلي څانګې او صندوق نوم لیکي، اسعار ټاکي او بیا له پخوا موجودې پیسې ثبتوي."],
+    ["پیل پیسې", "دا برخه یوازې د هغو پیسو لپاره وکاروئ چې تر سرافي مخکې موجودې وې. اصلي ځای او افغاني ارزښت یې ولیکئ؛ دا عاید یا ګټه نه ده."],
+    ["پېرود، پلور یا تبادله", "د معاملې ډول، دواړه اسعار، پېرودونکی، مبلغ، نرخ او صندوق وټاکئ. تر ثبت مخکې د پیسو دواړه لوري وګورئ."],
+    ["پورونه او ورکړې", "پور د سم کس په نوم ثبت او روښانه کړئ چې څوک پوروړی دی. هره ورکړه پاتې مبلغ کموي او د کس په حساب کې پاتې کېږي."],
+    ["لېږد، عاید او لګښت", "تل د پیسو رښتینې سرچینه او منزل وټاکئ. لېږد پیسې د صرافۍ دننه خوځوي؛ عاید او لګښت د بدلون دلیل ثبتوي."],
+    ["صندوق تړل", "هر اسعار وشمېرئ، د سرافي له مبلغ سره یې پرتله او د هر توپیر دلیل ولیکئ. مدیر یا مالک توپیر ګوري."],
+    ["معامله سمول", "معاملو ته لاړ شئ، اصلي ثبت پرانیزئ او په روښانه دلیل د بېرته راګرځولو غوښتنه وکړئ. سرافي دواړه ثبتونه ساتي."],
+    ["کارکوونکی زیاتول", "مالک بلنه جوړوي او دنده، څانګه او صندوق ټاکي. کارکوونکی لینک پرانیزي او په خپل حساب ننوځي."],
+    ["وسیله لغوه کول", "په کارکوونکو او وسایلو کې وسیله وټاکئ، دلیل ولیکئ او دوه پړاوه امنیت تایید کړئ. لغوه وسیله مالي ثبت نشي کولای."],
+    ["راپور او تادیه", "راپور او فلټرونه وټاکئ، بیا PDF یا CSV واخلئ. یوازې مالک د سرافي بسته اداره کوي او د تادیې شمېره لېږي."],
+  ],
+} satisfies Record<Language, Array<[string, string]>>;
+
+const notificationUi = {
+  en: { title: "Notifications", empty: "You are up to date.", open: "Open notifications", dismiss: "Dismiss", approval_required: "A team action is waiting for your review.", compliance_alert: "A compliance alert needs review.", cashbox_variance: "A cashbox count has a difference." },
+  "fa-AF": { title: "خبرها", empty: "خبر تازه‌ای ندارید.", open: "بازکردن خبرها", dismiss: "پاک‌کردن", approval_required: "یک عملیات کارمند منتظر بررسی شما است.", compliance_alert: "یک هشدار رعایت اصول باید بررسی شود.", cashbox_variance: "در شمارش صندوق تفاوت پیدا شده است." },
+  "ps-AF": { title: "خبرتیاوې", empty: "نوې خبرتیا نشته.", open: "خبرتیاوې پرانیستل", dismiss: "لرې کول", approval_required: "د کارکوونکي یو کار ستاسو کتنې ته منتظر دی.", compliance_alert: "یوه اصولي خبرتیا کتنې ته اړتیا لري.", cashbox_variance: "د صندوق په شمېرنه کې توپیر شته." },
+} satisfies Record<Language, Record<string, string>>;
+
+const searchUi = {
+  en: { open: "Search the whole shop", placeholder: "Find a person, account, or transaction", empty: "No matching record was found.", people: "Person", account: "Money account", transaction: "Transaction" },
+  "fa-AF": { open: "جستجو در تمام صرافی", placeholder: "پیداکردن شخص، حساب یا معامله", empty: "ثبت مطابق پیدا نشد.", people: "شخص", account: "حساب پول", transaction: "معامله" },
+  "ps-AF": { open: "په ټوله صرافۍ کې لټون", placeholder: "کس، حساب یا معامله پیدا کړئ", empty: "برابر ثبت ونه موندل شو.", people: "کس", account: "د پیسو حساب", transaction: "معامله" },
+} satisfies Record<Language, Record<string, string>>;
+
+const reportHistoryUi = {
+  en: { title: "Recent exports", empty: "No report has been exported yet.", created: "Created" },
+  "fa-AF": { title: "گزارش‌های صادرشده اخیر", empty: "هنوز گزارشی صادر نشده است.", created: "ساخته‌شده" },
+  "ps-AF": { title: "وروستي صادر شوي راپورونه", empty: "تر اوسه کوم راپور نه دی صادر شوی.", created: "جوړ شوی" },
+} satisfies Record<Language, Record<string, string>>;
 
 function formatFinancialAmount(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
@@ -313,6 +377,7 @@ function App() {
     (import.meta.env.MODE === "e2e" ||
       (import.meta.env.DEV &&
         import.meta.env.VITE_AUTH_GATE_DISABLED === "true"));
+  const platformInspectionPreview = platformAdminRoute && inspectionMode && new URLSearchParams(window.location.search).get("preview") === "1";
   const supabaseConfigured = Boolean(readPublicSupabaseConfig());
   const [showOpening, setShowOpening] = useState(() =>
     shouldShowOpening(inspectionMode),
@@ -345,6 +410,14 @@ function App() {
   const [showTrade, setShowTrade] = useState(false);
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>(() =>
+    inspectionMode
+      ? [{ id: "inspection-notice", notification_type: "approval_required", subject_id: "preview", message: "", status: "unread", created_at: new Date().toISOString() }]
+      : [],
+  );
   const [showOpeningBalance, setShowOpeningBalance] = useState(false);
   const [openingAmount, setOpeningAmount] = useState("");
   const [openingBaseValue, setOpeningBaseValue] = useState("");
@@ -446,6 +519,9 @@ function App() {
   ]);
   const [onboardingCashboxName, setOnboardingCashboxName] =
     useState(() => ux(language, "previewCashboxName"));
+  const [onboardingBranchName, setOnboardingBranchName] = useState(() =>
+    ux(language, "mainBranchPlaceholder"),
+  );
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null,
   );
@@ -512,6 +588,11 @@ function App() {
       Compliance: u("compliance"),
       Billing: u("planPayment"),
     })[section] ?? section;
+  const refreshNotifications = useCallback(async () => {
+    if (!organizationId || organizationId === "inspection") return;
+    const result = await listNotifications(organizationId);
+    if (result.data) setNotifications(result.data);
+  }, [organizationId]);
 
   useEffect(() => {
     document.documentElement.dir = isRtl(language) ? "rtl" : "ltr";
@@ -533,6 +614,23 @@ function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [activeNav]);
+
+  useEffect(() => {
+    if (!organizationId || organizationId === "inspection") return;
+    // oxlint-disable-next-line react/set-state-in-effect -- Notifications are external organization records loaded for this workspace.
+    void refreshNotifications();
+    const interval = window.setInterval(() => void refreshNotifications(), 60_000);
+    return () => window.clearInterval(interval);
+  }, [organizationId, refreshNotifications]);
+
+  useEffect(() => {
+    if (!organizationId || organizationId === "inspection") return;
+    return subscribeToOrganizationActivity(organizationId, () => {
+      setDashboardRefresh((value) => value + 1);
+      setMoneyContextRefresh((value) => value + 1);
+      void refreshNotifications();
+    }) ?? undefined;
+  }, [organizationId, refreshNotifications]);
 
   useEffect(() => {
     const modal = document.querySelector<HTMLElement>(
@@ -750,6 +848,11 @@ function App() {
   const branchMoneyAccounts = moneyAccounts.filter(
     (account) => !account.branch_id || !branchId || account.branch_id === branchId,
   );
+  const hasRecordedMoney = moneyAccounts.some((account) =>
+    account.balances.some((balance) => {
+      try { return !new Decimal(balance.amount).isZero(); } catch { return false; }
+    }),
+  );
 
   useEffect(() => {
     if (inspectionMode) return;
@@ -845,7 +948,7 @@ function App() {
       language,
       base_currency_code: "AFN",
       currencies: onboardingCurrencies,
-      branch_name: t("mainBranch"),
+      branch_name: onboardingBranchName,
       cashbox_name: onboardingCashboxName,
     });
     setOrganizationLoading(false);
@@ -1139,6 +1242,15 @@ function App() {
     setShowMoreNavigation(false);
     setShowBranchMenu(false);
   };
+  const actOnNotification = async (notice: NotificationRecord, dismiss = false) => {
+    if (organizationId !== "inspection") await markNotificationState(notice.id, dismiss ? "dismissed" : "read");
+    setNotifications((current) => dismiss ? current.filter((item) => item.id !== notice.id) : current.map((item) => item.id === notice.id ? { ...item, status: "read" } : item));
+    if (!dismiss) {
+      const destination = notice.notification_type === "compliance_alert" ? "Compliance" : notice.notification_type === "cashbox_variance" ? "Reconciliation" : "Team & Devices";
+      openSection(destination);
+      setShowNotifications(false);
+    }
+  };
 
   const chooseWorkspace = (context: WorkspaceContextRecord, nextBranchId?: string) => {
     const nextBranch = context.branches.find((item) => item.id === nextBranchId) ?? context.branches[0] ?? null;
@@ -1198,6 +1310,7 @@ function App() {
     setOpeningAmount("");
     setOpeningBaseValue("");
     setDashboardRefresh((value) => value + 1);
+    setMoneyContextRefresh((value) => value + 1);
     setToast(u("savedSuccessfully"));
   };
 
@@ -1229,6 +1342,14 @@ function App() {
       viewer: u("viewer"),
     } satisfies Record<WorkspaceRole, string>)[role as WorkspaceRole] ?? role;
   const roleLabel = roleName(workspaceRole);
+  const normalizedSearch = globalSearch.trim().toLocaleLowerCase(language);
+  const globalSearchResults = normalizedSearch
+    ? [
+        ...tradeCounterparties.map((person) => ({ id: `person-${person.id}`, section: "People", kind: searchUi[language].people, label: person.display_name, detail: person.phone ?? "" })),
+        ...moneyAccounts.map((account) => ({ id: `account-${account.id}`, section: "Cash & Accounts", kind: searchUi[language].account, label: account.name, detail: account.reference_label ?? account.account_type.replaceAll("_", " ") })),
+        ...trades.map((trade) => ({ id: `transaction-${trade.id}`, section: "Transactions", kind: searchUi[language].transaction, label: trade.customer, detail: `${trade.direction} · ${trade.status}` })),
+      ].filter((item) => `${item.label} ${item.detail} ${item.kind}`.toLocaleLowerCase(language).includes(normalizedSearch)).slice(0, 10)
+    : [];
   const operationLabel = (kind: OperationKind) =>
     ({
       RECEIVE_MONEY: t("receive"),
@@ -1279,7 +1400,7 @@ function App() {
     u("activeCashboxAccount");
 
   if (platformAdminRoute) {
-    if (!user)
+    if (!user && !platformInspectionPreview)
       return (
         <AuthScreen
           language={language}
@@ -1392,11 +1513,13 @@ function App() {
         currencies={onboardingCurrencies}
         catalog={currencyCatalog}
         cashboxName={onboardingCashboxName}
+        branchName={onboardingBranchName}
         busy={organizationLoading}
         onLanguageChange={setLanguage}
         onBusinessNameChange={setBusinessName}
         onCurrenciesChange={setOnboardingCurrencies}
         onCashboxNameChange={setOnboardingCashboxName}
+        onBranchNameChange={setOnboardingBranchName}
         onSubmit={submitOnboarding}
       />
     );
@@ -1703,6 +1826,34 @@ function App() {
             <strong>{sectionLabel(activeNav)}</strong>
           </div>
           <div className="top-actions">
+            <div className="global-search-control">
+              <button className="icon-button" onClick={() => { setShowSearch((value) => !value); setShowNotifications(false); }} aria-label={searchUi[language].open} aria-expanded={showSearch}><AppIcon name="search" /></button>
+              {showSearch && <section className="global-search-popover" aria-label={searchUi[language].open}>
+                <label><AppIcon name="search" size={18} /><input autoFocus value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} placeholder={searchUi[language].placeholder} /></label>
+                {normalizedSearch ? <div className="global-search-results">{globalSearchResults.length ? globalSearchResults.map((result) => <button key={result.id} onClick={() => { openSection(result.section); setShowSearch(false); setGlobalSearch(""); }}><span><b>{result.label}</b><small>{result.detail}</small></span><em>{result.kind}</em></button>) : <p>{searchUi[language].empty}</p>}</div> : null}
+              </section>}
+            </div>
+            <div className="notification-control">
+              <button
+                className="icon-button notification-button"
+                onClick={() => { setShowNotifications((value) => !value); setShowSearch(false); }}
+                aria-label={notificationUi[language].open}
+                aria-expanded={showNotifications}
+              >
+                <AppIcon name="transactions" />
+                {notifications.some((item) => item.status === "unread") && <span>{notifications.filter((item) => item.status === "unread").length}</span>}
+              </button>
+              {showNotifications && <section className="notification-popover" aria-label={notificationUi[language].title}>
+                <h2>{notificationUi[language].title}</h2>
+                {notifications.length ? notifications.map((notice) => <article className={notice.status === "unread" ? "unread" : ""} key={notice.id}>
+                  <button className="notification-open" onClick={() => void actOnNotification(notice)}>
+                    <b>{(notificationUi[language] as Record<string, string>)[notice.notification_type] ?? notice.message}</b>
+                    <time>{new Date(notice.created_at).toLocaleString(language, { dateStyle: "medium", timeStyle: "short" })}</time>
+                  </button>
+                  <button className="notification-dismiss" onClick={() => void actOnNotification(notice, true)} aria-label={notificationUi[language].dismiss}>×</button>
+                </article>) : <p>{notificationUi[language].empty}</p>}
+              </section>}
+            </div>
             <button
               className="icon-button"
               onClick={() => setPrivacy(!privacy)}
@@ -1734,7 +1885,6 @@ function App() {
             <WorkspaceView
               language={language}
               section={activeNav}
-              trades={trades}
               dashboard={dashboard}
               businessDate={dashboardDate}
               organizationId={organizationId}
@@ -1860,6 +2010,17 @@ function App() {
                   </div>
                 </div>
               </section>
+              {workspaceRole === "owner" && !hasRecordedMoney && (
+                <section className="first-day-setup" aria-labelledby="first-day-title">
+                  <div><p className="kicker">1 · 2 · 3 · 4</p><h2 id="first-day-title">{u("firstDayTitle")}</h2><p>{u("firstDayIntro")}</p></div>
+                  <div className="first-day-steps">
+                    <button onClick={() => setShowOpeningBalance(true)}><span>1</span><AppIcon name="cashbox" />{u("openingBalance")}</button>
+                    <button onClick={() => openSection("Cash & Accounts")}><span>2</span><AppIcon name="wallet" />{t("myMoney")}</button>
+                    <button onClick={() => openSection("Rates")}><span>3</span><AppIcon name="rates" />{t("rates")}</button>
+                    <button onClick={() => openSection("Team & Devices")}><span>4</span><AppIcon name="people" />{t("teamDevices")}</button>
+                  </div>
+                </section>
+              )}
               <section className={`role-home-card role-${workspaceRole}`}>
                 <div>
                   <span>{roleLabel}</span>
@@ -2619,6 +2780,14 @@ function App() {
               </button>
             </div>
             <p className="modal-note">{u("helpIntro")}</p>
+            <div className="help-guide-list">
+              {helpGuides[language].map(([title, explanation], index) => (
+                <details key={title} open={index === 0}>
+                  <summary><span>{index + 1}</span>{title}</summary>
+                  <p>{explanation}</p>
+                </details>
+              ))}
+            </div>
             <button
               className="primary-action full"
               onClick={() => setShowHelp(false)}
@@ -2716,7 +2885,6 @@ function App() {
 function WorkspaceView({
   language,
   section,
-  trades,
   dashboard,
   businessDate,
   organizationId,
@@ -2737,7 +2905,6 @@ function WorkspaceView({
 }: {
   language: Language;
   section: string;
-  trades: Trade[];
   dashboard: DashboardSnapshot | null;
   businessDate: string;
   organizationId: string | null;
@@ -2773,6 +2940,7 @@ function WorkspaceView({
         organizationName={organizationName}
         branchName={branchName}
         roleLabel={roleLabel}
+        canManage={canManageMoney}
         onDashboard={onDashboard}
       />
     );
@@ -2831,7 +2999,6 @@ function WorkspaceView({
     return (
       <ReportsView
         language={language}
-        trades={trades}
         dashboard={dashboard}
         businessDate={businessDate}
         organizationId={organizationId}
@@ -5259,7 +5426,6 @@ function RatesView({
 
 function ReportsView({
   language,
-  trades,
   dashboard,
   businessDate,
   organizationId,
@@ -5269,7 +5435,6 @@ function ReportsView({
   onToast,
 }: {
   language: Language;
-  trades: Trade[];
   dashboard: DashboardSnapshot | null;
   businessDate: string;
   organizationId: string | null;
@@ -5284,32 +5449,48 @@ function ReportsView({
   const [status, setStatus] = useState("All");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [reportType, setReportType] = useState<"all" | "fx" | "cash" | "debt">("all");
+  const [entries, setEntries] = useState<JournalRecord[]>([]);
+  const [exportHistory, setExportHistory] = useState<ReportExportRecord[]>(() => organizationId === "inspection" ? [{ id: "inspection-export", report_name: reportHistoryUi[language].title, format: "pdf", filters: {}, generated_at: new Date().toISOString(), expires_at: null }] : []);
+  const [loadingEntries, setLoadingEntries] = useState(organizationId !== "inspection");
   const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const catalog = organizationId === "inspection"
     ? inspectionCurrencies
     : loadedCatalog;
   useEffect(() => {
-    if (organizationId === "inspection") return;
-    void listCurrencyCatalog(organizationId).then((result) => {
-      if (result.data) setCatalog(result.data);
+    if (!organizationId || organizationId === "inspection") return;
+    // oxlint-disable-next-line react/set-state-in-effect -- The loading flag tracks an external ledger request for the selected organization.
+    setLoadingEntries(true);
+    void Promise.all([listCompleteJournalEntries(organizationId), listCurrencyCatalog(organizationId), listReportExports(organizationId)]).then(([result, currencyResult, exportResult]) => {
+      if (result.data) setEntries(result.data);
+      if (currencyResult.data) setCatalog(currencyResult.data);
+      if (exportResult.data) setExportHistory(exportResult.data);
+      setLoadingEntries(false);
     });
   }, [organizationId]);
-  const rows = trades.map((trade) => ({
-    entryId: `trade_${trade.id}`,
-    occurredAt: trade.time,
-    type: trade.direction,
-    branchId: branchName,
-    status: trade.status.toLowerCase(),
+  const visibleEntries: JournalRecord[] = organizationId === "inspection" ? [
+    { id: "inspection-buy", status: "posted", memo: null, occurred_at: new Date().toISOString(), branch_id: "inspection-branch", event_type: "buy_fx", immutable_reference: "000002", currency_code: "USD", amount: "1000", given_currency: "AFN", received_currency: "USD" },
+    { id: "inspection-expense", status: "posted", memo: null, occurred_at: new Date().toISOString(), branch_id: "inspection-branch", event_type: "record_expense", immutable_reference: "000001", currency_code: "AFN", amount: "2500" },
+  ] : entries;
+  const fxTypes = new Set(["buy_fx", "sell_fx", "exchange_fx"]);
+  const debtTypes = new Set(["debt_created", "settlement", "receive_money", "pay_money"]);
+  const cashTypes = new Set(["transfer_cash", "record_expense", "record_income", "owner_investment", "owner_withdrawal", "bank_deposit", "bank_withdrawal", "opening_balance", "receive_money", "pay_money"]);
+  const filteredEntries = visibleEntries.filter((entry) => {
+    const type = entry.event_type ?? "";
+    const matchesType = reportType === "all" || (reportType === "fx" && fxTypes.has(type)) || (reportType === "cash" && cashTypes.has(type)) || (reportType === "debt" && debtTypes.has(type));
+    const matchesCurrency = currency === "All" || [entry.currency_code, entry.given_currency, entry.received_currency].includes(currency);
+    return matchesType && matchesCurrency && (status === "All" || entry.status === status.toLowerCase()) && (!from || entry.occurred_at >= from) && (!to || entry.occurred_at <= `${to}T23:59:59.999Z`);
+  });
+  const filteredRows = filteredEntries.map((entry) => ({
+    entryId: entry.immutable_reference ?? entry.id,
+    occurredAt: entry.occurred_at,
+    type: entry.event_type ?? "recorded_transaction",
+    branchId: entry.branch_id ?? branchName,
+    status: entry.status,
     realizedProfit: "0",
   }));
-  const filteredRows = rows.filter(
-    (row) =>
-      (status === "All" || row.status === status.toLowerCase()) &&
-      (!from || row.occurredAt >= from) &&
-      (!to || row.occurredAt <= `${to}T23:59:59`) &&
-      (currency === "All" || row.type.includes(currency)),
-  );
-  const authorizeExport = async (format: "pdf" | "print") => {
+  const reportName = ({ all: u("reportDaily"), fx: u("reportFx"), cash: u("reportCash"), debt: u("reportDebt") })[reportType];
+  const authorizeExport = async (format: "csv" | "pdf" | "print") => {
     if (!organizationId) {
       onToast(u("exportUnavailable"));
       return false;
@@ -5317,14 +5498,15 @@ function ReportsView({
     if (organizationId === "inspection") return true;
     const result = await recordReportExport({
       organization_id: organizationId,
-      report_name: u("recentActivity"),
+      report_name: reportName,
       format,
-      filters: { scope: "loaded_activity" },
+      filters: { report_type: reportType, from, to, currency, status },
     });
     if (result.error) {
       onToast(u("exportUnavailable"));
       return false;
     }
+    if (result.data) setExportHistory((current) => [result.data!, ...current.filter((item) => item.id !== result.data!.id)].slice(0, 20));
     return true;
   };
   const share = async () => {
@@ -5332,7 +5514,7 @@ function ReportsView({
     if (allowed) {
       const { shareReportViaWhatsApp } = await loadExports();
       shareReportViaWhatsApp({
-        reportName: u("recentActivity"),
+        reportName,
         reference: filteredRows[0]?.entryId ?? "snapshot",
         businessName: organizationName,
       });
@@ -5348,7 +5530,7 @@ function ReportsView({
             rows,
             businessName: organizationName,
             branchName,
-            reportName: language === "fa-AF" ? "گزارش روزانه" : language === "ps-AF" ? "ورځنی راپور" : "Daily report",
+            reportName,
             language,
             businessDate: to || from || businessDate,
             snapshot: dashboard,
@@ -5358,6 +5540,15 @@ function ReportsView({
           onToast(u("exportUnavailable"));
         }
       }
+    });
+  };
+  const downloadCsv = () => {
+    void authorizeExport("csv").then(async (allowed) => {
+      if (!allowed) return;
+      const { downloadCsv: saveCsv } = await loadExports();
+      const csv = buildCsvReport(filteredRows, organizationName, reportName, new Date().toISOString());
+      saveCsv(csv, `sarafi-${reportType}-${to || from || businessDate}.csv`);
+      onToast(u("exportReady"));
     });
   };
   const printReport = () => {
@@ -5401,7 +5592,19 @@ function ReportsView({
           {u("backHome")} →
         </button>
       </div>
+      <div className="report-snapshot">
+        <article><span>{t("transactions")}</span><b>{dashboard?.transaction_count ?? filteredRows.length}</b></article>
+        <article><span>{t("todayVolume")}</span><b><bdi>{formatFinancialAmount(dashboard?.volume_base ?? "0")} AFN</bdi></b></article>
+        <article><span>{t("realizedProfit")}</span><b><bdi>{formatFinancialAmount(dashboard?.realized_profit ?? "0")} AFN</bdi></b></article>
+        <article><span>{t("operatingExpenses")}</span><b><bdi>{formatFinancialAmount(dashboard?.expenses ?? "0")} AFN</bdi></b></article>
+      </div>
       <div className="rate-strip">
+        <label>
+          {u("reportType")}
+          <select value={reportType} onChange={(event) => setReportType(event.target.value as typeof reportType)}>
+            <option value="all">{u("reportDaily")}</option><option value="fx">{u("reportFx")}</option><option value="cash">{u("reportCash")}</option><option value="debt">{u("reportDebt")}</option>
+          </select>
+        </label>
         <label>
           {u("from")}
           <input
@@ -5446,6 +5649,7 @@ function ReportsView({
         </label>
       </div>
       <div className="activity-actions">
+        <button className="export-button" onClick={downloadCsv}>{t("exportCsv")}</button>
         <button
           className="export-button"
           onClick={() => downloadPdf(filteredRows)}
@@ -5508,10 +5712,14 @@ function ReportsView({
         </button>
       </div>
       <div className="empty-live">
-        {filteredRows.length
+        {loadingEntries ? u("reportLoading") : filteredRows.length
           ? `${filteredRows.length} ${u("reportsReady")}`
           : u("noReportRows")}
       </div>
+      <section className="report-export-history" aria-label={reportHistoryUi[language].title}>
+        <h2>{reportHistoryUi[language].title}</h2>
+        {exportHistory.length ? <div className="report-export-list">{exportHistory.map((item) => <article key={item.id}><span><b>{item.report_name}</b><small>{reportHistoryUi[language].created}: {new Date(item.generated_at).toLocaleString(language)}</small></span><strong>{item.format.toUpperCase()}</strong></article>)}</div> : <p>{reportHistoryUi[language].empty}</p>}
+      </section>
     </section>
   );
 }
@@ -6179,11 +6387,13 @@ function OnboardingScreen({
   currencies,
   catalog,
   cashboxName,
+  branchName,
   busy,
   onLanguageChange,
   onBusinessNameChange,
   onCurrenciesChange,
   onCashboxNameChange,
+  onBranchNameChange,
   onSubmit,
 }: {
   language: Language;
@@ -6191,11 +6401,13 @@ function OnboardingScreen({
   currencies: string[];
   catalog: CurrencyCatalogRecord[];
   cashboxName: string;
+  branchName: string;
   busy: boolean;
   onLanguageChange: (language: Language) => void;
   onBusinessNameChange: (value: string) => void;
   onCurrenciesChange: (currencies: string[]) => void;
   onCashboxNameChange: (value: string) => void;
+  onBranchNameChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
@@ -6260,6 +6472,16 @@ function OnboardingScreen({
               value={businessName}
               onChange={(event) => onBusinessNameChange(event.target.value)}
               placeholder={u("businessNamePlaceholder")}
+            />
+          </label>
+          <label>
+            {u("mainBranchName")}
+            <input
+              required
+              minLength={2}
+              value={branchName}
+              onChange={(event) => onBranchNameChange(event.target.value)}
+              placeholder={u("mainBranchPlaceholder")}
             />
           </label>
           <fieldset className="currency-choices">
