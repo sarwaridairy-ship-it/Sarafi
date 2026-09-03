@@ -6,5 +6,7 @@ tests
 test-results
 tmp
 coverage
+output
+reports
 *.md
 *.pdf
