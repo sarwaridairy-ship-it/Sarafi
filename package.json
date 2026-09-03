@@ -22,12 +22,14 @@
     "security:money-accounts": "node scripts/security/run-money-accounts-acceptance.mjs",
     "security:team": "node scripts/security/run-team-invitation-acceptance.mjs",
     "security:premium-web": "node scripts/security/run-premium-web-acceptance.mjs",
+    "security:master-web": "node scripts/security/run-master-web-completion.mjs",
     "performance:step18": "npm run build && node scripts/performance/check-step18.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "decimal.js": "^10.6.0",
+    "fflate": "0.8.3",
     "jspdf": "^4.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

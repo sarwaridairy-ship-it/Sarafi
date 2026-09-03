@@ -2396,10 +2396,68 @@ td {
 .auth-audience-note { display:grid; gap:4px; margin:12px 0 16px; padding:12px 14px; border-radius:11px; background:#f0f7f4; }
 .auth-audience-note span { color:#5c6d66; font-size:.86rem; line-height:1.55; }
 
+/* Complete control surfaces stay readable instead of becoming long raw lists. */
+.control-lists { display:grid; gap:16px; }
+.control-lists .balance-list { max-height:340px; overflow:auto; }
+.control-lists .balance-row { grid-template-columns:auto minmax(0,1fr) auto auto; }
+.compliance-select-row { display:flex; width:100%; align-items:center; justify-content:space-between; gap:14px; padding:12px; border:0; border-bottom:1px solid #e3e9e6; color:inherit; background:transparent; text-align:start; cursor:pointer; }
+.compliance-select-row:hover,.compliance-select-row:focus-visible { background:#f2f8f5; }
+.compliance-select-row span { display:grid; gap:4px; }
+.compliance-select-row small { color:#687770; }
+.compliance-actions-grid { align-items:start; }
+.rate-admin-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-block:18px; }
+.rate-admin-grid > * { min-width:0; margin:0; }
+.valuation-form { grid-column:1/-1; }
+.valuation-history { margin-top:20px; }
+.valuation-history .balance-row strong { max-width:55%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cross-rate-input { padding:10px 12px; border:1px solid #d7e0dc; border-radius:10px; background:#f8faf8; }
+.reconciliation-history { margin-top:22px; padding-top:18px; border-top:1px solid #dfe6e2; }
+.reconciliation-history > .panel-header { align-items:end; }
+.reconciliation-history > .panel-header label { width:min(360px,100%); }
+.reconciliation-record { padding:4px 0 12px; border-bottom:1px solid #e2e8e5; }
+.reconciliation-record .balance-row { grid-template-columns:auto minmax(0,1fr) auto auto; }
+.reconciliation-lines { display:flex; flex-wrap:wrap; gap:7px; padding:0 10px; }
+.reconciliation-lines span { padding:6px 9px; border-radius:8px; color:#526660; background:#f2f6f4; font-size:.78rem; }
+.named-report-results { margin-top:18px; padding:18px; border:1px solid #dbe4e0; border-radius:15px; background:#fff; }
+.named-report-results .panel-header { align-items:center; margin-bottom:8px; }
+.named-report-results h2 { margin:0; }
+.report-pagination { display:flex; align-items:center; gap:8px; }
+.report-pagination button { min-height:36px; border:1px solid #cfdad5; border-radius:8px; background:#fff; padding:7px 11px; font:inherit; font-weight:700; cursor:pointer; }
+.report-pagination button:disabled { opacity:.45; cursor:not-allowed; }
+.named-report-table { display:grid; }
+.named-report-table article { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(80px,.25fr); align-items:center; gap:14px; padding:12px 4px; border-bottom:1px solid #e4eae7; }
+.named-report-table article > span,.named-report-table article > strong { display:grid; gap:3px; }
+.named-report-table small { color:#687770; font-weight:500; }
+.named-report-table em { color:#526660; font-style:normal; text-align:end; }
+.platform-health-grid,.diagnostic-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:16px 0 22px; }
+.platform-health-grid article,.diagnostic-grid article { display:grid; gap:7px; min-width:0; padding:15px; border:1px solid #dce5e1; border-radius:12px; background:#f8faf9; }
+.platform-health-grid span,.diagnostic-grid span { color:#65756f; font-size:.82rem; }
+.diagnostic-grid b { overflow-wrap:anywhere; }
+.platform-control-form { display:grid; gap:13px; max-width:820px; margin:18px 0; padding:18px; border:1px solid #dce5e1; border-radius:14px; background:#f8faf9; }
+.platform-control-form > h2 { margin:0; }
+.platform-control-form label { display:grid; gap:6px; font-weight:700; }
+.platform-control-form input,.platform-control-form select,.platform-control-form textarea,.platform-panel select,.platform-panel textarea { width:100%; min-height:44px; border:1px solid #ccd8d3; border-radius:9px; background:#fff; padding:9px 11px; font:inherit; }
+.platform-control-form textarea { min-height:78px; resize:vertical; }
+.platform-control-form fieldset { margin:0; border:1px solid #d5dfdb; border-radius:10px; padding:12px; }
+.platform-control-form legend { padding-inline:5px; font-weight:800; }
+.platform-control-form .switch-row,.feature-control-grid .switch-row { display:flex; align-items:center; gap:9px; }
+.platform-control-form .switch-row input,.feature-control-grid .switch-row input,.support-scope-grid input { width:18px; min-height:18px; }
+.feature-control-grid,.support-scope-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.feature-control-grid label,.support-scope-grid label { padding:11px; border:1px solid #dce5e1; border-radius:9px; background:#fff; }
+.support-request-list { display:grid; gap:9px; }
+.support-request-list .provider-card div:first-child { display:grid; gap:3px; }
+.support-request-list .provider-card h2,.support-request-list .provider-card p { margin:0; }
+.system-announcement { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:0 0 12px; padding:11px 14px; border:1px solid #d7dfdb; border-inline-start:4px solid #0d756c; border-radius:10px; color:#24434a; background:#f4f8f6; }
+.system-announcement.security { border-inline-start-color:#a96b16; background:#fbf7ed; }
+.system-announcement span { display:grid; gap:3px; }
+.system-announcement small { color:#65736f; }
+.system-announcement button { min-height:36px; flex:0 0 auto; border:1px solid #c9d5d0; border-radius:8px; color:#0b655d; background:#fff; padding:7px 11px; font:inherit; font-weight:800; cursor:pointer; }
+
 @media (max-width:900px) {
   .role-home-card,.platform-header,.provider-card,.payment-review-card { align-items:stretch; flex-direction:column; }
   .platform-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .platform-grid { grid-template-columns:1fr; }
+  .platform-health-grid,.diagnostic-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .platform-header > div:last-child { align-self:stretch; justify-content:space-between; }
 }
 @media (max-width:640px) {
@@ -2420,6 +2478,19 @@ td {
   .platform-tabs button { flex:1 0 auto; }
   .platform-list,.platform-detail,.platform-panel { padding:14px; }
   .platform-user { align-items:stretch; flex-direction:column; }
+  .rate-admin-grid,.platform-health-grid,.diagnostic-grid,.feature-control-grid,.support-scope-grid { grid-template-columns:1fr; }
+  .valuation-form { grid-column:1; }
+  .named-report-results { padding:12px; }
+  .named-report-results .panel-header { align-items:stretch; }
+  .report-pagination { justify-content:space-between; }
+  .named-report-table article { grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+  .named-report-table em { grid-column:1/-1; text-align:start; }
+  .panel > .activity-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+  .panel > .activity-actions .export-button { width:100%; min-width:0; white-space:normal; }
+  .reconciliation-record .balance-row,.control-lists .balance-row { grid-template-columns:auto minmax(0,1fr) auto; }
+  .reconciliation-record .member-actions,.control-lists .text-button { grid-column:2/-1; justify-self:start; }
+  .system-announcement { align-items:stretch; flex-direction:column; }
+  .system-announcement button { align-self:start; }
 }
 
 /* Premium simplicity: one calm daily workspace across owner and staff roles. */
@@ -2471,6 +2542,8 @@ td {
 .metric-grid { gap:10px; margin-bottom:10px; }
 .metric-card { min-height:112px; padding:16px; border-radius:13px; box-shadow:none; }
 .hero-metric { border-color:#143d45; background:#143d45; }
+.hero-metric .sparkline { display:none; }
+.hero-metric .metric-foot { margin-top:auto; }
 .panel { border-color:#dbe2de; border-radius:14px; box-shadow:none; }
 .dashboard-grid { gap:10px; margin-bottom:10px; }
 .dashboard-grid .panel { padding:16px; }

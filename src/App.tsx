@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Decimal from "decimal.js";
 import "./App.css";
 import "./professional.css";
@@ -11,6 +11,9 @@ import { isRtl, translate, type Language } from "./lib/i18n";
 import { ux } from "./lib/uxCopy";
 import {
   getCurrentRates,
+  getOrganizationControlPlane,
+  getNamedFinancialReport,
+  getReconciliationWorkspace,
   listCurrencyCatalog,
   listMoneyAccounts,
   getReceiptForJournalEntry,
@@ -22,6 +25,9 @@ import {
   cancelTeamInvitation,
   createTeamInvitation,
   createCounterparty,
+  createRateGroup,
+  createValuationRateSet,
+  decideApproval,
   getPrivateCounterpartyDocuments,
   getPrivateDocumentUrl,
   listCashboxBalances,
@@ -29,13 +35,14 @@ import {
   listCounterpartyStatement,
   listDebts,
   listHawalaTransfers,
-  listCompleteJournalEntries,
   listJournalEntries,
   listLocationEvidence,
   listRateHistory,
   listReportExports,
   postFxTrade,
   recordCashboxClose,
+  approveCashboxClose,
+  rejectCashboxClose,
   recordDebt,
   recordHawalaSend,
   recordOpeningBalance,
@@ -43,6 +50,7 @@ import {
   createMoneyAccount,
   setOrganizationCurrency,
   setExchangeRate,
+  setRateGroupExchangeRate,
   recordReportExport,
   registerBrowserDevice,
   revokeTeamDevice,
@@ -70,6 +78,9 @@ import {
   type ApprovalRecord,
   type PrivateDocumentRecord,
   type NotificationRecord,
+  type NamedReportRow,
+  type OrganizationControlPlane,
+  type ReconciliationCloseRecord,
   type ReportExportRecord,
   listNotifications,
   markNotificationState,
@@ -107,6 +118,7 @@ import {
   type CompletedTrade,
 } from "./ProfessionalWorkspace";
 import { BillingView, PlatformAdminConsole } from "./PlatformWorkspace";
+import { getPublicPlatformStatus, type PublicPlatformStatus } from "./lib/platformApi";
 
 const loadExports = () => import("./lib/exports");
 
@@ -452,6 +464,7 @@ function App() {
   >("BUY_FX");
   const [tradeCurrency, setTradeCurrency] = useState("USD");
   const [tradeReceiveCurrency, setTradeReceiveCurrency] = useState("EUR");
+  const [tradeExchangeRate, setTradeExchangeRate] = useState("");
   const [tradeFee, setTradeFee] = useState("");
   const [tradeNote, setTradeNote] = useState("");
   const [tradeCounterparty, setTradeCounterparty] = useState("");
@@ -470,6 +483,13 @@ function App() {
     businessDateInTimeZone(new Date(), "Asia/Kabul"),
   );
   const [toast, setToast] = useState("");
+  const [platformStatus, setPlatformStatus] = useState<PublicPlatformStatus | null>(null);
+  useEffect(() => {
+    if (!supabaseConfigured || inspectionMode) return;
+    void getPublicPlatformStatus().then((result) => {
+      if (result.data) setPlatformStatus(result.data);
+    });
+  }, [inspectionMode, supabaseConfigured]);
   const [showMoreNavigation, setShowMoreNavigation] = useState(false);
   const modalReturnFocusRef = useRef<HTMLElement | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(
@@ -966,11 +986,11 @@ function App() {
   const addTrade = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (tradeBusy) return;
-    if (tradeSide === "EXCHANGE_FX") {
+    if (tradeSide === "EXCHANGE_FX" && (!tradeExchangeRate || !new Decimal(tradeExchangeRate).isFinite() || new Decimal(tradeExchangeRate).lte(0) || (!sellRate && !rate))) {
       setToast(u("pairRateUnavailable"));
       return;
     }
-    if (!rate || !sellRate) {
+    if (tradeSide !== "EXCHANGE_FX" && (!rate || !sellRate)) {
       setToast(u("pairRateUnavailable"));
       return;
     }
@@ -998,15 +1018,17 @@ function App() {
     let sessionCheck;
     try {
       const soldCurrency = tradeSide === "BUY_FX" ? "AFN" : tradeCurrency;
-      const boughtCurrency = tradeSide === "BUY_FX" ? tradeCurrency : "AFN";
-      const pricing = deriveTradeAmounts(tradeSide, amount, rate, sellRate);
-      const {
-        rate: effectiveRate,
-        soldAmount,
-        boughtAmount,
-        soldBaseValue,
-        boughtBaseValue,
-      } = pricing;
+      const boughtCurrency = tradeSide === "BUY_FX" ? tradeCurrency : tradeSide === "EXCHANGE_FX" ? tradeReceiveCurrency : "AFN";
+      const pricing = tradeSide === "EXCHANGE_FX"
+        ? {
+            rate: tradeExchangeRate,
+            soldAmount: new Decimal(amount).toFixed(12),
+            boughtAmount: new Decimal(amount).times(tradeExchangeRate).toFixed(12),
+            soldBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
+            boughtBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
+          }
+        : deriveTradeAmounts(tradeSide, amount, rate, sellRate);
+      const { rate: effectiveRate, soldAmount, boughtAmount, soldBaseValue, boughtBaseValue } = pricing;
       sessionCheck = await postFxTrade({
         organization_id: organizationId,
         branch_id: branchId,
@@ -1055,6 +1077,7 @@ function App() {
     setDashboardRefresh((value) => value + 1);
     setAmount("");
     setTradeFee("");
+    setTradeExchangeRate("");
     setTradeNote("");
     setTradeCounterparty("");
     setTradeReviewing(false);
@@ -1377,7 +1400,15 @@ function App() {
     })[value.toLowerCase()] ?? u("review");
   let tradePreview: ReturnType<typeof deriveTradeAmounts> | null = null;
   try {
-    if (amount && tradeSide !== "EXCHANGE_FX")
+    if (amount && tradeSide === "EXCHANGE_FX" && tradeExchangeRate)
+      tradePreview = {
+        rate: tradeExchangeRate,
+        soldAmount: new Decimal(amount).toFixed(12),
+        boughtAmount: new Decimal(amount).times(tradeExchangeRate).toFixed(12),
+        soldBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
+        boughtBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
+      };
+    else if (amount && tradeSide !== "EXCHANGE_FX")
       tradePreview = deriveTradeAmounts(tradeSide, amount, rate, sellRate);
   } catch {
     tradePreview = null;
@@ -1393,7 +1424,7 @@ function App() {
       : tradeSide === "EXCHANGE_FX"
         ? tradeReceiveCurrency
         : "AFN";
-  const effectiveTradeRate = tradeSide === "BUY_FX" ? rate : sellRate;
+  const effectiveTradeRate = tradeSide === "BUY_FX" ? rate : tradeSide === "EXCHANGE_FX" ? tradeExchangeRate : sellRate;
   const activeMoneyAccountName =
     moneyAccounts.find((account) => account.cashbox_id === cashboxId)?.name ??
     moneyAccounts.find((account) => account.account_type === "cashbox")?.name ??
@@ -1881,6 +1912,8 @@ function App() {
           </div>
         </header>
         <div className="content-wrap">
+          {platformStatus?.web_version?.force_update && <div className="system-announcement security" role="alert"><span><b>{language === "en" ? "A new SARAFI web version is ready." : language === "fa-AF" ? "نسخه تازه ویب صرافی آماده است." : "د صرافۍ نوې وېب نسخه چمتو ده."}</b><small>{language === "en" ? platformStatus.web_version.release_notes_en : language === "fa-AF" ? platformStatus.web_version.release_notes_dari : platformStatus.web_version.release_notes_pashto}</small></span><button onClick={() => window.location.reload()}>{language === "en" ? "Refresh now" : language === "fa-AF" ? "تازه کردن" : "اوس تازه کول"}</button></div>}
+          {platformStatus?.announcements.map((notice) => <div className={`system-announcement ${notice.type}`} role="status" key={notice.id}><span>{language === "en" ? notice.message_en : language === "fa-AF" ? notice.message_dari : notice.message_pashto}</span></div>)}
           {!dashboardView && (
             <WorkspaceView
               language={language}
@@ -1894,6 +1927,8 @@ function App() {
               }
               roleLabel={roleLabel}
               canManageTeam={workspaceRole === "owner"}
+              canDecideApprovals={workspaceRole === "owner" || workspaceRole === "manager"}
+              canApproveReconciliation={workspaceRole === "owner" || workspaceRole === "manager"}
               canManageMoney={workspaceRole === "owner"}
               userId={user?.id ?? "inspection-user"}
               deviceId={linkedDevice?.id ?? ""}
@@ -2395,9 +2430,14 @@ function App() {
                   <select
                     value={tradeCurrency}
                     onChange={(event) => {
-                      setTradeCurrency(event.target.value);
+                      const nextCurrency = event.target.value;
+                      setTradeCurrency(nextCurrency);
+                      if (nextCurrency === tradeReceiveCurrency) {
+                        setTradeReceiveCurrency(tradeCurrencies.find((item) => item !== nextCurrency) ?? "");
+                      }
                       setRateState("");
                       setSellRate("");
+                      setTradeExchangeRate("");
                     }}
                   >
                     {tradeCurrencies.map((currency) => (
@@ -2481,7 +2521,11 @@ function App() {
             <div className="rate-box">
               <span>{t("exchangeRate")}</span>
               {tradeSide === "EXCHANGE_FX" ? (
-                <b>{u("pairRateUnavailable")}</b>
+                <label className="cross-rate-input">
+                  <span dir="ltr">1 {tradeCurrency} =</span>
+                  <input required min="0.000001" step="any" inputMode="decimal" value={tradeExchangeRate} onChange={(event) => { setTradeExchangeRate(event.target.value); setTradeReviewing(false); }} placeholder="0.00" aria-label={t("exchangeRate")} />
+                  <b dir="ltr">{tradeReceiveCurrency}</b>
+                </label>
               ) : (
                 <>
                   <b dir="ltr">
@@ -2491,7 +2535,7 @@ function App() {
                 </>
               )}
             </div>
-            {tradeSide !== "EXCHANGE_FX" && (
+            {(
               <section className="trade-account-flow">
                 <h3>{u("tradeMoneyFlow")}</h3>
                 <div className="money-flow-summary">
@@ -2502,7 +2546,7 @@ function App() {
                   <strong aria-hidden="true">→</strong>
                   <span>
                     <small>{u("destinationAccount")}</small>
-                    <b>{tradeSide === "BUY_FX" ? activeMoneyAccountName : u("customerOutside")}</b>
+                    <b>{tradeSide === "BUY_FX" ? activeMoneyAccountName : tradeSide === "EXCHANGE_FX" ? activeMoneyAccountName : u("customerOutside")}</b>
                   </span>
                 </div>
                 <p>{u("tradeHasTwoMoneySides")}</p>
@@ -2543,7 +2587,7 @@ function App() {
             <button
               className="primary-action full"
               type="submit"
-              disabled={tradeBusy || tradeSide === "EXCHANGE_FX"}
+              disabled={tradeBusy}
             >
               {tradeBusy
                 ? t("working")
@@ -2892,6 +2936,8 @@ function WorkspaceView({
   branchName,
   roleLabel,
   canManageTeam,
+  canDecideApprovals,
+  canApproveReconciliation,
   canManageMoney,
   userId,
   deviceId,
@@ -2912,6 +2958,8 @@ function WorkspaceView({
   branchName: string;
   roleLabel: string;
   canManageTeam: boolean;
+  canDecideApprovals: boolean;
+  canApproveReconciliation: boolean;
   canManageMoney: boolean;
   userId: string;
   deviceId: string;
@@ -3014,6 +3062,7 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         canManage={canManageTeam}
+        canDecideApprovals={canDecideApprovals}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3035,6 +3084,7 @@ function WorkspaceView({
         organizationId={organizationId}
         branchId={branchId}
         cashboxId={cashboxId}
+        canApprove={canApproveReconciliation}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3264,12 +3314,14 @@ function TeamDevicesView({
   language,
   organizationId,
   canManage,
+  canDecideApprovals,
   onDashboard,
   onToast,
 }: {
   language: Language;
   organizationId: string | null;
   canManage: boolean;
+  canDecideApprovals: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -3373,6 +3425,8 @@ function TeamDevicesView({
   const [editBusy, setEditBusy] = useState(false);
   const [deviceReason, setDeviceReason] = useState("");
   const [deviceBusy, setDeviceBusy] = useState("");
+  const [approvalReason, setApprovalReason] = useState("");
+  const [approvalBusy, setApprovalBusy] = useState("");
 
   const roleOptions = [
     "manager",
@@ -3672,6 +3726,17 @@ function TeamDevicesView({
     setDeviceReason("");
     setRefresh((value) => value + 1);
     onToast(action === "trust" ? u("deviceApproved") : u("deviceRevoked"));
+  };
+  const decidePendingApproval = async (approval: ApprovalRecord, decision: "approved" | "rejected") => {
+    if (approvalReason.trim().length < 2) { onToast(u("accessChangeReason")); return; }
+    if (decision === "approved" && !mfa.verified) { onToast(u("secureTeamIntro")); return; }
+    setApprovalBusy(approval.id);
+    const result = await decideApproval(approval.id, decision, approvalReason);
+    setApprovalBusy("");
+    if (result.error) { onToast(result.error.includes("AAL2") ? u("secureTeamIntro") : u("teamSaveFailed")); return; }
+    setApprovalReason("");
+    setRefresh((value) => value + 1);
+    onToast(u("savedSuccessfully"));
   };
 
   const scopeSummary = (
@@ -4043,6 +4108,7 @@ function TeamDevicesView({
             <h2>{u("approvalInbox")}</h2>
             <p>{u("selfApprovalRule")}</p>
           </div>
+          {canDecideApprovals && <label>{u("accessChangeReason")}<input value={approvalReason} onChange={(event) => setApprovalReason(event.target.value)} placeholder={u("deviceReasonPlaceholder")} /></label>}
           <strong>
             {approvals.filter((item) => item.status === "pending").length}{" "}
             {t("pending")}
@@ -4064,11 +4130,14 @@ function TeamDevicesView({
                     {new Date(approval.requested_at).toLocaleString(language, { hour12: false })}
                   </small>
                 </span>
-                <strong>
-                  {approval.amount_base
-                    ? `${approval.amount_base} ${approval.currency_code ?? ""}`
-                    : u("review")}
-                </strong>
+                <div className="member-actions">
+                  <strong>
+                    {approval.amount_base
+                      ? `${approval.amount_base} ${approval.currency_code ?? ""}`
+                      : u("review")}
+                  </strong>
+                  {canDecideApprovals && approval.status === "pending" && <><button className="text-button" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "approved")}>{u("approved")}</button><button className="text-button danger" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "rejected")}>{u("rejected")}</button></>}
+                </div>
               </div>
             ))
           ) : (
@@ -5239,7 +5308,13 @@ function RatesView({
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
+  const advanced = ({
+    en: { group: "Customer rate group", tolerance: "Allowed rate difference", newGroup: "Add rate group", groupName: "Group name", groupCode: "Short code", valuation: "Reporting valuation rates", valuationIntro: "Record one AFN value for each enabled currency. This changes reports only; it never changes cash or old trades.", valuationName: "Valuation name", saveValuation: "Save valuation set", latestValuations: "Saved valuation sets" },
+    "fa-AF": { group: "گروه نرخ مشتری", tolerance: "فاصله مجاز نرخ", newGroup: "افزودن گروه نرخ", groupName: "نام گروه", groupCode: "کود کوتاه", valuation: "نرخ‌های ارزش‌گذاری گزارش", valuationIntro: "برای هر ارز فعال یک ارزش افغانی ثبت کنید. این کار فقط گزارش را تغییر می‌دهد و پول یا معاملات گذشته را تغییر نمی‌دهد.", valuationName: "نام ارزش‌گذاری", saveValuation: "ذخیره نرخ‌های ارزش‌گذاری", latestValuations: "ارزش‌گذاری‌های ذخیره‌شده" },
+    "ps-AF": { group: "د پېرودونکي د نرخ ډله", tolerance: "د نرخ اجازه شوې فاصله", newGroup: "د نرخ ډله زیاتول", groupName: "د ډلې نوم", groupCode: "لنډ کوډ", valuation: "د راپور د ارزونې نرخونه", valuationIntro: "د هر فعال اسعار لپاره په افغانۍ ارزښت ولیکئ. دا یوازې راپور بدلوي؛ نغدې او پخوانۍ معاملې نه بدلوي.", valuationName: "د ارزونې نوم", saveValuation: "د ارزونې نرخونه ساتل", latestValuations: "ساتل شوې ارزونې" },
+  } as const)[language];
   const [history, setHistory] = useState<RateHistoryRecord[]>([]);
+  const [controls, setControls] = useState<OrganizationControlPlane | null>(null);
   const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const catalog = organizationId === "inspection"
     ? inspectionCurrencies
@@ -5247,12 +5322,19 @@ function RatesView({
   const [sourceCurrency, setSourceCurrency] = useState("USD");
   const [buyRate, setBuyRate] = useState("");
   const [sellRateValue, setSellRateValue] = useState("");
+  const [rateGroupId, setRateGroupId] = useState("");
+  const [spreadTolerance, setSpreadTolerance] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupCode, setNewGroupCode] = useState("");
+  const [valuationName, setValuationName] = useState("");
+  const [valuationRates, setValuationRates] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const loadRates = useCallback(async () => {
     if (!organizationId || organizationId === "inspection") return;
-    const [historyResult, currencyResult] = await Promise.all([
+    const [historyResult, currencyResult, controlResult] = await Promise.all([
       listRateHistory(organizationId),
       listCurrencyCatalog(organizationId),
+      canManage ? getOrganizationControlPlane(organizationId) : Promise.resolve({ data: null, error: null }),
     ]);
     if (historyResult.data) setHistory(historyResult.data);
     if (currencyResult.data) {
@@ -5269,15 +5351,20 @@ function RatesView({
             : enabled.code,
         );
     }
-    if (historyResult.error || currencyResult.error)
+    if (controlResult.data) {
+      setControls(controlResult.data);
+      setRateGroupId((current) => current || controlResult.data?.rate_groups.find((item) => item.active)?.id || "");
+    }
+    if (historyResult.error || currencyResult.error || controlResult.error)
       onToast(ux(language, "couldNotLoad"));
-  }, [language, onToast, organizationId]);
+  }, [canManage, language, onToast, organizationId]);
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
     void Promise.all([
       listRateHistory(organizationId),
       listCurrencyCatalog(organizationId),
-    ]).then(([historyResult, currencyResult]) => {
+      canManage ? getOrganizationControlPlane(organizationId) : Promise.resolve({ data: null, error: null }),
+    ]).then(([historyResult, currencyResult, controlResult]) => {
       if (historyResult.data) setHistory(historyResult.data);
       if (currencyResult.data) {
         setCatalog(currencyResult.data);
@@ -5293,22 +5380,21 @@ function RatesView({
               : enabled.code,
           );
       }
-      if (historyResult.error || currencyResult.error)
+      if (controlResult.data) {
+        setControls(controlResult.data);
+        setRateGroupId((current) => current || controlResult.data?.rate_groups.find((item) => item.active)?.id || "");
+      }
+      if (historyResult.error || currencyResult.error || controlResult.error)
         onToast(ux(language, "couldNotLoad"));
     });
-  }, [language, onToast, organizationId]);
+  }, [canManage, language, onToast, organizationId]);
   const saveRate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!organizationId) return;
     setBusy(true);
-    const result = await setExchangeRate({
-      organizationId,
-      branchId,
-      sourceCurrency,
-      targetCurrency: "AFN",
-      buyRate,
-      sellRate: sellRateValue,
-    });
+    const result = rateGroupId
+      ? await setRateGroupExchangeRate({ organizationId, groupId: rateGroupId, branchId, sourceCurrency, targetCurrency: "AFN", buyRate, sellRate: sellRateValue, spreadTolerance })
+      : await setExchangeRate({ organizationId, branchId, sourceCurrency, targetCurrency: "AFN", buyRate, sellRate: sellRateValue });
     setBusy(false);
     if (result.error) {
       onToast(u("rateSaveFailed"));
@@ -5316,6 +5402,30 @@ function RatesView({
     }
     setBuyRate("");
     setSellRateValue("");
+    onToast(u("rateSaved"));
+    await loadRates();
+  };
+  const addRateGroup = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId) return;
+    setBusy(true);
+    const result = await createRateGroup({ organizationId, name: newGroupName, code: newGroupCode });
+    setBusy(false);
+    if (result.error) { onToast(u("rateSaveFailed")); return; }
+    setNewGroupName(""); setNewGroupCode("");
+    onToast(u("rateSaved"));
+    await loadRates();
+  };
+  const saveValuation = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId) return;
+    const rates = catalog.filter((item) => item.enabled && item.code !== "AFN" && valuationRates[item.code]).map((item) => ({ currency_code: item.code, rate: valuationRates[item.code] }));
+    if (!rates.length) { onToast(u("rateSaveFailed")); return; }
+    setBusy(true);
+    const result = await createValuationRateSet({ organizationId, name: valuationName || new Date().toISOString().slice(0, 10), effectiveAt: new Date().toISOString(), rates });
+    setBusy(false);
+    if (result.error) { onToast(u("rateSaveFailed")); return; }
+    setValuationName(""); setValuationRates({});
     onToast(u("rateSaved"));
     await loadRates();
   };
@@ -5364,6 +5474,13 @@ function RatesView({
             <p>{u("setShopRateIntro")}</p>
           </div>
           <label>
+            {advanced.group}
+            <select value={rateGroupId} onChange={(event) => setRateGroupId(event.target.value)}>
+              <option value="">—</option>
+              {controls?.rate_groups.filter((group) => group.active).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+            </select>
+          </label>
+          <label>
             {u("foreignCurrency")}
             <select
               value={sourceCurrency}
@@ -5386,6 +5503,7 @@ function RatesView({
             {t("sellRate")}
             <input required min="0.000001" step="any" inputMode="decimal" value={sellRateValue} onChange={(event) => setSellRateValue(event.target.value)} placeholder={u("ratePerUnitPlaceholder")} />
           </label>
+          <label>{advanced.tolerance}<input min="0" step="any" inputMode="decimal" value={spreadTolerance} onChange={(event) => setSpreadTolerance(event.target.value)} placeholder="0" /></label>
           <button className="primary-action" type="submit" disabled={busy}>
             {busy ? u("posting") : u("saveShopRate")}
           </button>
@@ -5393,6 +5511,21 @@ function RatesView({
       ) : (
         <div className="empty-live">{u("ownerOnlyRates")}</div>
       )}
+      {canManage && <div className="rate-admin-grid">
+        <form className="inline-management-form" onSubmit={addRateGroup}>
+          <div><h2>{advanced.newGroup}</h2></div>
+          <label>{advanced.groupName}<input required minLength={2} value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} /></label>
+          <label>{advanced.groupCode}<input required minLength={2} dir="ltr" value={newGroupCode} onChange={(event) => setNewGroupCode(event.target.value)} /></label>
+          <button className="primary-action" disabled={busy}>{advanced.newGroup}</button>
+        </form>
+        <form className="inline-management-form valuation-form" onSubmit={saveValuation}>
+          <div><h2>{advanced.valuation}</h2><p>{advanced.valuationIntro}</p></div>
+          <label>{advanced.valuationName}<input required minLength={2} value={valuationName} onChange={(event) => setValuationName(event.target.value)} /></label>
+          {catalog.filter((item) => item.enabled && item.code !== "AFN").map((item) => <label key={item.code}>{item.code} → AFN<input required min="0.000001" step="any" inputMode="decimal" dir="ltr" value={valuationRates[item.code] ?? ""} onChange={(event) => setValuationRates((current) => ({ ...current, [item.code]: event.target.value }))} /></label>)}
+          <button className="primary-action" disabled={busy}>{advanced.saveValuation}</button>
+        </form>
+      </div>}
+      {controls?.valuation_sets.length ? <section className="valuation-history"><h2>{advanced.latestValuations}</h2><div className="balance-list">{controls.valuation_sets.slice(0, 10).map((set) => <div className="balance-row" key={set.id}><span className="currency-badge usd">V</span><span className="balance-name"><b>{set.name}</b><small>{new Date(set.effective_at).toLocaleString(language)} · {set.source}</small></span><strong>{set.rates.map((rate) => `${rate.currency_code} ${rate.rate}`).join(" · ")}</strong></div>)}</div></section> : null}
       <div className="balance-list">
         {history.length ? (
           history.map((item) => (
@@ -5445,52 +5578,85 @@ function ReportsView({
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
+  const reportCopy = useMemo(() => ({
+    en: {
+      choose: "Choose a full report", rows: "report rows", previous: "Previous", next: "Next", empty: "No records match this report and date range.",
+      reports: [
+        ["daily_transactions", "Daily transactions"], ["transaction_journal", "Transaction journal"], ["cash_movement", "Cash movement"], ["branch_balance", "Branch balances"], ["currency_position", "Currency position"], ["fx_profit", "FX profit"], ["commission", "Commission income"], ["expenses", "Expenses"], ["profit_loss", "Profit and loss"], ["balance_sheet", "Balance sheet"], ["trial_balance", "Trial balance"], ["receivables", "Receivables"], ["payables", "Payables"], ["aging", "Debt aging"], ["counterparty_statement", "Customer statement"], ["owner_capital", "Owner capital"], ["employee_activity", "Employee activity"], ["reversals", "Reversals"], ["reconciliation", "Cashbox reconciliation"], ["rate_history", "Rate history"], ["security_activity", "Security activity"], ["hawala", "Hawala transfers"],
+      ],
+    },
+    "fa-AF": {
+      choose: "یک گزارش کامل را انتخاب کنید", rows: "ردیف گزارش", previous: "قبلی", next: "بعدی", empty: "در این گزارش و تاریخ، معلوماتی پیدا نشد.",
+      reports: [
+        ["daily_transactions", "معاملات روزانه"], ["transaction_journal", "دفتر معاملات"], ["cash_movement", "رفت‌وآمد پول"], ["branch_balance", "موجودی شعبه‌ها"], ["currency_position", "موجودی ارزها"], ["fx_profit", "مفاد خرید و فروش ارز"], ["commission", "عاید کمیشن"], ["expenses", "مصارف"], ["profit_loss", "مفاد و ضرر"], ["balance_sheet", "دارایی و بدهی"], ["trial_balance", "تراز حساب‌ها"], ["receivables", "طلب‌های ما"], ["payables", "قرض‌های ما"], ["aging", "قرض‌های دیرشده"], ["counterparty_statement", "صورت‌حساب شخص"], ["owner_capital", "سرمایه مالک"], ["employee_activity", "کارهای کارمندان"], ["reversals", "معاملات برگشتی"], ["reconciliation", "بستن صندوق"], ["rate_history", "تاریخچه نرخ"], ["security_activity", "تاریخچه امنیت"], ["hawala", "حواله‌ها"],
+      ],
+    },
+    "ps-AF": {
+      choose: "بشپړ راپور وټاکئ", rows: "د راپور کرښې", previous: "مخکینی", next: "بل", empty: "په دې راپور او نېټه کې معلومات ونه موندل شول.",
+      reports: [
+        ["daily_transactions", "ورځنۍ معاملې"], ["transaction_journal", "د معاملو دفتر"], ["cash_movement", "د پیسو تګ راتګ"], ["branch_balance", "د څانګو پیسې"], ["currency_position", "د اسعارو موجودي"], ["fx_profit", "د اسعارو ګټه"], ["commission", "د کمېشن عاید"], ["expenses", "لګښتونه"], ["profit_loss", "ګټه او تاوان"], ["balance_sheet", "شتمني او پورونه"], ["trial_balance", "د حسابونو توازن"], ["receivables", "زموږ طلبونه"], ["payables", "زموږ پورونه"], ["aging", "ځنډېدلي پورونه"], ["counterparty_statement", "د کس حساب"], ["owner_capital", "د مالک پانګه"], ["employee_activity", "د کارکوونکو کارونه"], ["reversals", "بېرته ګرځول شوې معاملې"], ["reconciliation", "د صندوق تړل"], ["rate_history", "د نرخ تاریخ"], ["security_activity", "امنیتي تاریخ"], ["hawala", "حوالې"],
+      ],
+    },
+  }[language] as { choose: string; rows: string; previous: string; next: string; empty: string; reports: Array<[string, string]> }), [language]);
+  const reportStatuses = ({
+    en: { posted: "Posted", pending: "Pending", submitted: "Submitted", approved: "Approved", rejected: "Rejected", reversed: "Reversed", open: "Open", settled: "Settled", active: "Active", historical: "Past rate", recorded: "Recorded" },
+    "fa-AF": { posted: "ثبت‌شده", pending: "منتظر", submitted: "سپرده‌شده", approved: "تأییدشده", rejected: "ردشده", reversed: "برگشت‌شده", open: "باز", settled: "تصفیه‌شده", active: "فعال", historical: "نرخ گذشته", recorded: "ثبت‌شده" },
+    "ps-AF": { posted: "ثبت شوې", pending: "منتظر", submitted: "سپارل شوې", approved: "تایید شوې", rejected: "رد شوې", reversed: "بېرته ګرځول شوې", open: "پرانیستې", settled: "تصفیه شوې", active: "فعاله", historical: "پخوانی نرخ", recorded: "ثبت شوې" },
+  }[language]) as Record<string, string>;
+  const reportTerms = ({
+    en: { buy_fx: "Buy currency", sell_fx: "Sell currency", exchange_fx: "Exchange currencies", opening_balance: "Opening money", record_expense: "Expense", record_income: "Income", owner_investment: "Owner investment", owner_withdrawal: "Owner withdrawal", bank_deposit: "Bank deposit", bank_withdrawal: "Bank withdrawal", transfer_cash: "Transfer money", receive_money: "Receive money", pay_money: "Pay money", reversal: "Reversal", cash_variance_adjustment: "Cash difference adjustment", asset: "Asset", liability: "Liability", equity: "Owner capital", income: "Income", expense: "Expense", branch_balance: "Branch balance", carrying_value: "Carrying value in AFN", financial_actions: "Financial actions", overdue: "Overdue", receivable: "They owe us", payable: "We owe them", no_due_date: "No due date", organization_controls_updated: "Business settings changed", cashbox_close_approved: "Cashbox close approved" },
+    "fa-AF": { buy_fx: "خرید ارز", sell_fx: "فروش ارز", exchange_fx: "تبدیل دو ارز", opening_balance: "پول آغاز کار", record_expense: "مصرف", record_income: "عاید", owner_investment: "افزایش سرمایه مالک", owner_withdrawal: "برداشت مالک", bank_deposit: "واریز به بانک", bank_withdrawal: "برداشت از بانک", transfer_cash: "انتقال پول", receive_money: "دریافت پول", pay_money: "پرداخت پول", reversal: "معامله برگشتی", cash_variance_adjustment: "اصلاح تفاوت صندوق", asset: "دارایی", liability: "بدهی", equity: "سرمایه مالک", income: "عاید", expense: "مصرف", branch_balance: "موجودی شعبه", carrying_value: "ارزش ثبت‌شده به افغانی", financial_actions: "کارهای مالی", overdue: "وقت‌گذشته", receivable: "به ما بدهکار است", payable: "ما بدهکار استیم", no_due_date: "بدون تاریخ پرداخت", organization_controls_updated: "تنظیمات صرافی تغییر کرد", cashbox_close_approved: "بستن صندوق تأیید شد" },
+    "ps-AF": { buy_fx: "د اسعارو پېرل", sell_fx: "د اسعارو پلورل", exchange_fx: "د دوو اسعارو بدلول", opening_balance: "پیل پیسې", record_expense: "لګښت", record_income: "عاید", owner_investment: "د مالک پانګه زیاتول", owner_withdrawal: "د مالک ایستل", bank_deposit: "بانک ته جمع", bank_withdrawal: "له بانک څخه ایستل", transfer_cash: "د پیسو لېږد", receive_money: "پیسې اخیستل", pay_money: "پیسې ورکول", reversal: "بېرته ګرځول شوې معامله", cash_variance_adjustment: "د صندوق د توپیر سمون", asset: "شتمني", liability: "پور", equity: "د مالک پانګه", income: "عاید", expense: "لګښت", branch_balance: "د څانګې پیسې", carrying_value: "په افغانۍ ثبت شوی ارزښت", financial_actions: "مالي کارونه", overdue: "وخت تېر", receivable: "موږ ته پوروړی دی", payable: "موږ پوروړي یو", no_due_date: "د ورکړې نېټه نه لري", organization_controls_updated: "د صرافۍ امستنې بدلې شوې", cashbox_close_approved: "د صندوق تړل تایید شول" },
+  }[language]) as Record<string, string>;
+  const localReportTerm = (value: string) => reportTerms[value] ?? value.replaceAll("_", " ");
   const [currency, setCurrency] = useState("All");
   const [status, setStatus] = useState("All");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [reportType, setReportType] = useState<"all" | "fx" | "cash" | "debt">("all");
-  const [entries, setEntries] = useState<JournalRecord[]>([]);
+  const [namedReportCode, setNamedReportCode] = useState("daily_transactions");
+  const [namedRows, setNamedRows] = useState<NamedReportRow[]>([]);
+  const [namedLoading, setNamedLoading] = useState(organizationId !== "inspection");
+  const [reportPage, setReportPage] = useState(0);
   const [exportHistory, setExportHistory] = useState<ReportExportRecord[]>(() => organizationId === "inspection" ? [{ id: "inspection-export", report_name: reportHistoryUi[language].title, format: "pdf", filters: {}, generated_at: new Date().toISOString(), expires_at: null }] : []);
-  const [loadingEntries, setLoadingEntries] = useState(organizationId !== "inspection");
   const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const catalog = organizationId === "inspection"
     ? inspectionCurrencies
     : loadedCatalog;
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
-    // oxlint-disable-next-line react/set-state-in-effect -- The loading flag tracks an external ledger request for the selected organization.
-    setLoadingEntries(true);
-    void Promise.all([listCompleteJournalEntries(organizationId), listCurrencyCatalog(organizationId), listReportExports(organizationId)]).then(([result, currencyResult, exportResult]) => {
-      if (result.data) setEntries(result.data);
+    void Promise.all([listCurrencyCatalog(organizationId), listReportExports(organizationId)]).then(([currencyResult, exportResult]) => {
       if (currencyResult.data) setCatalog(currencyResult.data);
       if (exportResult.data) setExportHistory(exportResult.data);
-      setLoadingEntries(false);
     });
   }, [organizationId]);
-  const visibleEntries: JournalRecord[] = organizationId === "inspection" ? [
-    { id: "inspection-buy", status: "posted", memo: null, occurred_at: new Date().toISOString(), branch_id: "inspection-branch", event_type: "buy_fx", immutable_reference: "000002", currency_code: "USD", amount: "1000", given_currency: "AFN", received_currency: "USD" },
-    { id: "inspection-expense", status: "posted", memo: null, occurred_at: new Date().toISOString(), branch_id: "inspection-branch", event_type: "record_expense", immutable_reference: "000001", currency_code: "AFN", amount: "2500" },
-  ] : entries;
-  const fxTypes = new Set(["buy_fx", "sell_fx", "exchange_fx"]);
-  const debtTypes = new Set(["debt_created", "settlement", "receive_money", "pay_money"]);
-  const cashTypes = new Set(["transfer_cash", "record_expense", "record_income", "owner_investment", "owner_withdrawal", "bank_deposit", "bank_withdrawal", "opening_balance", "receive_money", "pay_money"]);
-  const filteredEntries = visibleEntries.filter((entry) => {
-    const type = entry.event_type ?? "";
-    const matchesType = reportType === "all" || (reportType === "fx" && fxTypes.has(type)) || (reportType === "cash" && cashTypes.has(type)) || (reportType === "debt" && debtTypes.has(type));
-    const matchesCurrency = currency === "All" || [entry.currency_code, entry.given_currency, entry.received_currency].includes(currency);
-    return matchesType && matchesCurrency && (status === "All" || entry.status === status.toLowerCase()) && (!from || entry.occurred_at >= from) && (!to || entry.occurred_at <= `${to}T23:59:59.999Z`);
-  });
-  const filteredRows = filteredEntries.map((entry) => ({
-    entryId: entry.immutable_reference ?? entry.id,
-    occurredAt: entry.occurred_at,
-    type: entry.event_type ?? "recorded_transaction",
-    branchId: entry.branch_id ?? branchName,
-    status: entry.status,
-    realizedProfit: "0",
+  useEffect(() => {
+    if (!organizationId || organizationId === "inspection") return;
+    // oxlint-disable-next-line react/set-state-in-effect -- This flag tracks the external report request started by this effect.
+    setNamedLoading(true);
+    void getNamedFinancialReport({ organizationId, reportCode: namedReportCode, fromDate: from || undefined, toDate: to || undefined }).then((result) => {
+      setNamedRows(result.data ?? []);
+      if (result.error) onToast(ux(language, "couldNotLoad"));
+      setNamedLoading(false);
+    });
+  }, [from, language, namedReportCode, onToast, organizationId, to]);
+  const reportSourceRows = organizationId === "inspection" ? [
+    { reference: "000002", date: new Date().toISOString(), label: reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode, detail: branchName, amount: "1000", secondary_amount: "0", currency: namedReportCode === "employee_activity" ? "COUNT" : "AFN", status: "posted" },
+    { reference: "000001", date: new Date().toISOString(), label: reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode, detail: branchName, amount: "2500", currency: "AFN", status: "posted" },
+  ] satisfies NamedReportRow[] : namedRows;
+  const namedFilteredRows = reportSourceRows.filter((row) => (currency === "All" || row.currency === currency || row.currency === "MIXED" || row.currency === "COUNT") && (status === "All" || row.status === status));
+  const reportRows = namedFilteredRows.map((row) => ({
+    entryId: row.reference,
+    occurredAt: row.date,
+    type: localReportTerm(row.label) + (row.detail ? ` · ${localReportTerm(row.detail)}` : ""),
+    branchId: branchName,
+    status: row.status,
+    realizedProfit: String(row.amount ?? "0"),
   }));
-  const reportName = ({ all: u("reportDaily"), fx: u("reportFx"), cash: u("reportCash"), debt: u("reportDebt") })[reportType];
-  const authorizeExport = async (format: "csv" | "pdf" | "print") => {
+  const pageSize = 25;
+  const pageRows = namedFilteredRows.slice(reportPage * pageSize, (reportPage + 1) * pageSize);
+  const pageCount = Math.max(1, Math.ceil(namedFilteredRows.length / pageSize));
+  const reportName = reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode;
+  const authorizeExport = async (format: "csv" | "pdf" | "xlsx" | "print") => {
     if (!organizationId) {
       onToast(u("exportUnavailable"));
       return false;
@@ -5500,7 +5666,7 @@ function ReportsView({
       organization_id: organizationId,
       report_name: reportName,
       format,
-      filters: { report_type: reportType, from, to, currency, status },
+      filters: { named_report_code: namedReportCode, from, to, currency, status },
     });
     if (result.error) {
       onToast(u("exportUnavailable"));
@@ -5515,13 +5681,13 @@ function ReportsView({
       const { shareReportViaWhatsApp } = await loadExports();
       shareReportViaWhatsApp({
         reportName,
-        reference: filteredRows[0]?.entryId ?? "snapshot",
+        reference: reportRows[0]?.entryId ?? "snapshot",
         businessName: organizationName,
       });
       onToast(u("shareOpened"));
     }
   };
-  const downloadPdf = (rows: typeof filteredRows) => {
+  const downloadPdf = (rows: typeof reportRows) => {
     void authorizeExport("pdf").then(async (allowed) => {
       if (allowed) {
         try {
@@ -5546,8 +5712,16 @@ function ReportsView({
     void authorizeExport("csv").then(async (allowed) => {
       if (!allowed) return;
       const { downloadCsv: saveCsv } = await loadExports();
-      const csv = buildCsvReport(filteredRows, organizationName, reportName, new Date().toISOString());
-      saveCsv(csv, `sarafi-${reportType}-${to || from || businessDate}.csv`);
+      const csv = buildCsvReport(reportRows, organizationName, reportName, new Date().toISOString());
+      saveCsv(csv, `sarafi-${namedReportCode}-${to || from || businessDate}.csv`);
+      onToast(u("exportReady"));
+    });
+  };
+  const downloadXlsx = () => {
+    void authorizeExport("xlsx").then(async (allowed) => {
+      if (!allowed) return;
+      const { downloadXlsx: saveXlsx } = await loadExports();
+      saveXlsx({ rows: reportRows, businessName: organizationName, reportName, generatedAt: new Date().toISOString(), language }, `sarafi-${namedReportCode}-${to || from || businessDate}.xlsx`);
       onToast(u("exportReady"));
     });
   };
@@ -5593,16 +5767,16 @@ function ReportsView({
         </button>
       </div>
       <div className="report-snapshot">
-        <article><span>{t("transactions")}</span><b>{dashboard?.transaction_count ?? filteredRows.length}</b></article>
+        <article><span>{t("transactions")}</span><b>{dashboard?.transaction_count ?? reportRows.length}</b></article>
         <article><span>{t("todayVolume")}</span><b><bdi>{formatFinancialAmount(dashboard?.volume_base ?? "0")} AFN</bdi></b></article>
         <article><span>{t("realizedProfit")}</span><b><bdi>{formatFinancialAmount(dashboard?.realized_profit ?? "0")} AFN</bdi></b></article>
         <article><span>{t("operatingExpenses")}</span><b><bdi>{formatFinancialAmount(dashboard?.expenses ?? "0")} AFN</bdi></b></article>
       </div>
       <div className="rate-strip">
         <label>
-          {u("reportType")}
-          <select value={reportType} onChange={(event) => setReportType(event.target.value as typeof reportType)}>
-            <option value="all">{u("reportDaily")}</option><option value="fx">{u("reportFx")}</option><option value="cash">{u("reportCash")}</option><option value="debt">{u("reportDebt")}</option>
+          {reportCopy.choose}
+          <select value={namedReportCode} onChange={(event) => { setNamedReportCode(event.target.value); setReportPage(0); }}>
+            {reportCopy.reports.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
           </select>
         </label>
         <label>
@@ -5610,7 +5784,7 @@ function ReportsView({
           <input
             type="date"
             value={from}
-            onChange={(event) => setFrom(event.target.value)}
+            onChange={(event) => { setFrom(event.target.value); setReportPage(0); }}
           />
         </label>
         <label>
@@ -5618,14 +5792,14 @@ function ReportsView({
           <input
             type="date"
             value={to}
-            onChange={(event) => setTo(event.target.value)}
+            onChange={(event) => { setTo(event.target.value); setReportPage(0); }}
           />
         </label>
         <label>
           {t("currency")}
           <select
             value={currency}
-            onChange={(event) => setCurrency(event.target.value)}
+            onChange={(event) => { setCurrency(event.target.value); setReportPage(0); }}
           >
             <option value="All">{u("all")}</option>
             {catalog.filter((item) => item.enabled).map((item) => (
@@ -5639,7 +5813,7 @@ function ReportsView({
           {u("status")}
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => { setStatus(event.target.value); setReportPage(0); }}
           >
             <option value="All">{u("all")}</option>
             <option value="posted">{t("posted")}</option>
@@ -5650,9 +5824,10 @@ function ReportsView({
       </div>
       <div className="activity-actions">
         <button className="export-button" onClick={downloadCsv}>{t("exportCsv")}</button>
+        <button className="export-button" onClick={downloadXlsx}>{language === "en" ? "Export Excel" : language === "fa-AF" ? "گرفتن فایل اکسل" : "د اکسل فایل اخیستل"}</button>
         <button
           className="export-button"
-          onClick={() => downloadPdf(filteredRows)}
+          onClick={() => downloadPdf(reportRows)}
         >
           {t("exportPdf")}
         </button>
@@ -5665,9 +5840,9 @@ function ReportsView({
             printThermalReceipt(
               {
                 businessName: organizationName,
-                reference: filteredRows[0]?.entryId ?? "snapshot",
-                type: filteredRows[0]?.type ?? u("statement"),
-                amount: filteredRows[0]?.realizedProfit ?? "0",
+                reference: reportRows[0]?.entryId ?? "snapshot",
+                type: reportRows[0]?.type ?? u("statement"),
+                amount: reportRows[0]?.realizedProfit ?? "0",
                 currency: "AFN",
                 direction: isRtl(language) ? "rtl" : "ltr",
                 locale: language,
@@ -5689,9 +5864,9 @@ function ReportsView({
             printThermalReceipt(
               {
                 businessName: organizationName,
-                reference: filteredRows[0]?.entryId ?? "snapshot",
-                type: filteredRows[0]?.type ?? u("statement"),
-                amount: filteredRows[0]?.realizedProfit ?? "0",
+                reference: reportRows[0]?.entryId ?? "snapshot",
+                type: reportRows[0]?.type ?? u("statement"),
+                amount: reportRows[0]?.realizedProfit ?? "0",
                 currency: "AFN",
                 direction: isRtl(language) ? "rtl" : "ltr",
                 locale: language,
@@ -5711,9 +5886,13 @@ function ReportsView({
           {u("shareWhatsApp")}
         </button>
       </div>
+      <section className="named-report-results" aria-live="polite">
+        <div className="panel-header"><div><h2>{reportName}</h2><p>{namedFilteredRows.length} {reportCopy.rows}</p></div>{pageCount > 1 && <div className="report-pagination"><button disabled={reportPage === 0} onClick={() => setReportPage((page) => Math.max(0, page - 1))}>{reportCopy.previous}</button><b><bdi>{reportPage + 1} / {pageCount}</bdi></b><button disabled={reportPage + 1 >= pageCount} onClick={() => setReportPage((page) => Math.min(pageCount - 1, page + 1))}>{reportCopy.next}</button></div>}</div>
+        {namedLoading ? <div className="empty-live">{u("reportLoading")}</div> : pageRows.length ? <div className="named-report-table" role="table">{pageRows.map((row, index) => <article role="row" key={`${row.reference}-${index}`}><span><b>{localReportTerm(row.label)}</b><small><bdi>{row.reference}</bdi> · <bdi>{new Date(row.date).toLocaleString(language)}</bdi>{row.detail ? ` · ${localReportTerm(row.detail)}` : ""}</small></span><strong><bdi>{formatFinancialAmount(String(row.amount ?? "0"))} {row.currency}</bdi>{row.secondary_amount !== undefined && <small><bdi>{formatFinancialAmount(String(row.secondary_amount))}</bdi></small>}</strong><em>{reportStatuses[row.status] ?? localReportTerm(row.status)}</em></article>)}</div> : <div className="empty-live">{reportCopy.empty}</div>}
+      </section>
       <div className="empty-live">
-        {loadingEntries ? u("reportLoading") : filteredRows.length
-          ? `${filteredRows.length} ${u("reportsReady")}`
+        {namedLoading ? u("reportLoading") : reportRows.length
+          ? `${reportRows.length} ${u("reportsReady")}`
           : u("noReportRows")}
       </div>
       <section className="report-export-history" aria-label={reportHistoryUi[language].title}>
@@ -6032,6 +6211,7 @@ function ReconciliationView({
   organizationId,
   branchId,
   cashboxId,
+  canApprove,
   onDashboard,
   onToast,
 }: {
@@ -6039,6 +6219,7 @@ function ReconciliationView({
   organizationId: string | null;
   branchId: string | null;
   cashboxId: string | null;
+  canApprove: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -6049,6 +6230,9 @@ function ReconciliationView({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadedExpected, setExpected] = useState<Record<string, string>>({});
+  const [closes, setCloses] = useState<ReconciliationCloseRecord[]>([]);
+  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionBusy, setDecisionBusy] = useState("");
   const catalog = organizationId === "inspection"
     ? inspectionCurrencies
     : loadedCatalog;
@@ -6061,7 +6245,8 @@ function ReconciliationView({
       void Promise.all([
         listCashboxBalances(organizationId, cashboxId),
         listCurrencyCatalog(organizationId),
-      ]).then(([result, currencyResult]) => {
+        getReconciliationWorkspace(organizationId),
+      ]).then(([result, currencyResult, workspaceResult]) => {
         if (result.data) {
           setExpected(
             Object.fromEntries(
@@ -6073,7 +6258,8 @@ function ReconciliationView({
           );
         }
         if (currencyResult.data) setCatalog(currencyResult.data);
-        if (result.error || currencyResult.error) onToast(ux(language, "couldNotLoad"));
+        if (workspaceResult.data) setCloses(workspaceResult.data.closes);
+        if (result.error || currencyResult.error || workspaceResult.error) onToast(ux(language, "couldNotLoad"));
       });
   }, [cashboxId, language, onToast, organizationId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -6094,6 +6280,23 @@ function ReconciliationView({
     });
     setBusy(false);
     onToast(result.error ? u("couldNotSave") : u("savedSuccessfully"));
+    if (!result.error && organizationId) {
+      const workspace = await getReconciliationWorkspace(organizationId);
+      if (workspace.data) setCloses(workspace.data.closes);
+    }
+  };
+  const decideClose = async (close: ReconciliationCloseRecord, decision: "approved" | "rejected") => {
+    if (decisionReason.trim().length < 2) { onToast(u("reasonRequired")); return; }
+    setDecisionBusy(close.id);
+    const result = decision === "approved" ? await approveCashboxClose(close.id) : await rejectCashboxClose(close.id, decisionReason);
+    setDecisionBusy("");
+    if (result.error) { onToast(result.error.includes("AAL2") ? u("secureTeamIntro") : u("couldNotSave")); return; }
+    setDecisionReason("");
+    if (organizationId) {
+      const workspace = await getReconciliationWorkspace(organizationId);
+      if (workspace.data) setCloses(workspace.data.closes);
+    }
+    onToast(u("savedSuccessfully"));
   };
   const variance = (currency: string, counted: string) =>
     new Decimal(counted || "0").minus(expected[currency] ?? "0").toFixed(2);
@@ -6155,6 +6358,10 @@ function ReconciliationView({
         </button>
       </form>
       <div className="empty-live">{u("cashDifferenceNote")}</div>
+      <section className="reconciliation-history">
+        <div className="panel-header"><div><h2>{u("statementHistory")}</h2><p>{u("cashboxIntro")}</p></div>{canApprove && <label>{u("reviewDecisionReason")}<input value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} placeholder={u("reasonRequired")} /></label>}</div>
+        <div className="balance-list">{closes.length ? closes.map((close) => <article className="reconciliation-record" key={close.id}><div className="balance-row"><span className="currency-badge usd">✓</span><span className="balance-name"><b>{close.cashbox_name} · {close.business_date}</b><small>{close.branch_name} · {new Date(close.submitted_at).toLocaleString(language)}</small><small>{close.variance_reason || u("expectedVsCounted")}</small></span><strong>{close.status === "submitted" ? t("pending") : close.status === "approved" ? u("approved") : u("rejected")}</strong>{canApprove && close.status === "submitted" && !close.closed_by_current_user && <div className="member-actions"><button className="text-button" disabled={decisionBusy === close.id} onClick={() => void decideClose(close, "approved")}>{u("approved")}</button><button className="text-button danger" disabled={decisionBusy === close.id} onClick={() => void decideClose(close, "rejected")}>{u("rejected")}</button></div>}</div><div className="reconciliation-lines">{close.lines.map((line) => <span key={line.currency_code}><b>{line.currency_code}</b> {u("expectedAmount")}: {formatFinancialAmount(line.expected_amount)} · {u("countedAmount")}: {formatFinancialAmount(line.counted_amount)} · {u("variance")}: {formatFinancialAmount(line.variance_amount)}</span>)}</div></article>) : <div className="empty-live">{u("noStatementHistory")}</div>}</div>
+      </section>
     </section>
   );
 }

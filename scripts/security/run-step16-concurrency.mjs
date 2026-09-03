@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import Decimal from 'decimal.js'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { signInMfaFixtureAtAal2 } from './mfa-fixture.mjs'
 
 const source = process.env.SARAFI_STEP16_ENV ?? '.env.security.local'
 const fileEnv = readFileSync(source, 'utf8').split(/\r?\n/).filter((line) => line && !line.startsWith('#')).reduce((values, line) => {
@@ -64,6 +65,11 @@ const getSnapshot = async (instance) => {
 const cashierA = await signIn(env.SARAFI_E2E_CASHIER_A_EMAIL, env.SARAFI_E2E_CASHIER_A_PASSWORD)
 const deviceA = await registerDevice(cashierA, 'CASHIER_A')
 const deviceB = await registerDevice(cashierA, 'CASHIER_A_SECOND_DEVICE')
+const ownerA = (await signInMfaFixtureAtAal2(env.BUSINESS_A_ID)).client
+for (const [deviceId, label] of [[deviceA, 'primary'], [deviceB, 'second']]) {
+  const trusted = await ownerA.rpc('trust_device', { target_device: deviceId, reason_input: `Step 16 ${label} device trust` })
+  if (trusted.error) throw new Error(`${label} device trust failed: ${trusted.error.message}`)
+}
 const before = await getSnapshot(cashierA)
 const soldCurrency = env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD'
 const availableBefore = new Decimal(

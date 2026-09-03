@@ -102,6 +102,19 @@ export type PlatformOrganizationUser = {
   joined_at: string
 }
 
+export type PlatformOperations = {
+  health: { database: string; checked_at: string; private_storage: boolean; unbalanced_posted_entries: number; expired_pending_approvals: number; pending_support_requests: number }
+  versions: Array<{ id: string; platform: 'web' | 'android' | 'ios'; minimum_version: string; recommended_version: string; force_update: boolean; release_notes_en: string; release_notes_dari: string; release_notes_pashto: string; active: boolean; updated_at: string }>
+  announcements: Array<{ id: string; announcement_type: string; message_en: string; message_dari: string; message_pashto: string; active: boolean; starts_at: string | null; ends_at: string | null; updated_at: string }>
+  support_requests: Array<{ id: string; organization_id: string; organization_name: string; requested_scope: string[]; reason: string; requested_hours: number; status: string; requested_at: string; decided_at: string | null; grant_id: string | null; expires_at: string | null; revoked_at: string | null }>
+  organization_features: Array<{ organization_id: string; feature_code: string; enabled: boolean; updated_at: string }>
+}
+
+export type PublicPlatformStatus = {
+  web_version: null | { minimum_version: string; recommended_version: string; force_update: boolean; release_notes_en: string; release_notes_dari: string; release_notes_pashto: string; updated_at: string }
+  announcements: Array<{ id: string; type: string; message_en: string; message_dari: string; message_pashto: string }>
+}
+
 export async function getBillingPortal(organizationId: string): Promise<RpcResult<BillingPortal>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
@@ -198,4 +211,76 @@ export async function setPaymentProviderState(input: {
     state_input: input.state,
   })
   return { data: result.data as PaymentProvider | null, error: result.error?.message ?? null }
+}
+
+export async function getPlatformOperations(): Promise<RpcResult<PlatformOperations>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_platform_operations')
+  return { data: result.data as PlatformOperations | null, error: result.error?.message ?? null }
+}
+
+export async function getPublicPlatformStatus(): Promise<RpcResult<PublicPlatformStatus>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_public_platform_status')
+  return { data: result.data as PublicPlatformStatus | null, error: result.error?.message ?? null }
+}
+
+export async function setPlatformAppVersion(input: { platform: 'web' | 'android' | 'ios'; minimumVersion: string; recommendedVersion: string; forceUpdate: boolean; releaseNotesEn: string; releaseNotesDari: string; releaseNotesPashto: string }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_platform_app_version', { command: {
+    platform: input.platform,
+    minimum_version: input.minimumVersion,
+    recommended_version: input.recommendedVersion,
+    force_update: input.forceUpdate,
+    release_notes_en: input.releaseNotesEn,
+    release_notes_dari: input.releaseNotesDari,
+    release_notes_pashto: input.releaseNotesPashto,
+  } })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function setPlatformAnnouncement(input: { type: 'maintenance' | 'security' | 'service'; messageEn: string; messageDari: string; messagePashto: string; active: boolean; startsAt?: string; endsAt?: string }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_platform_announcement', { command: {
+    announcement_type: input.type,
+    message_en: input.messageEn,
+    message_dari: input.messageDari,
+    message_pashto: input.messagePashto,
+    active: input.active,
+    starts_at: input.startsAt || null,
+    ends_at: input.endsAt || null,
+  } })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function setPlatformOrganizationFeature(organizationId: string, feature: string, enabled: boolean): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_organization_feature_state', { target_org: organizationId, feature_input: feature, enabled_input: enabled })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function requestSupportAccess(input: { organizationId: string; scope: string[]; reason: string; hours: number }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('request_support_access', { target_org: input.organizationId, scope_input: input.scope, reason_input: input.reason, hours_input: input.hours })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function revokePlatformSupportAccess(requestId: string, reason: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('revoke_support_access', { target_request: requestId, reason_input: reason })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function getSupportDiagnostics(organizationId: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_support_diagnostics', { target_org: organizationId })
+  return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
 }

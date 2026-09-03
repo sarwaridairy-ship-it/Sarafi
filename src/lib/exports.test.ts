@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { buildDailyReportHtml, buildThermalReceiptHtml } from "./exports";
+import { strFromU8, unzipSync } from "fflate";
+import { buildDailyReportHtml, buildThermalReceiptHtml, buildXlsxReport } from "./exports";
+
+describe("Excel report rendering", () => {
+  it("creates a real Open XML workbook with localized headers and escaped values", () => {
+    const workbook = buildXlsxReport({
+      rows: [{ entryId: "A<&>1", occurredAt: "2026-09-03", type: "خرید ارز", branchId: "شعبه مرکزی", status: "posted", realizedProfit: "250.00" }],
+      businessName: "صرافی کابل",
+      reportName: "گزارش روزانه",
+      generatedAt: "2026-09-03T12:00:00.000Z",
+      language: "fa-AF",
+    });
+    const files = unzipSync(workbook);
+    const sheet = strFromU8(files["xl/worksheets/sheet1.xml"]);
+
+    expect(files["[Content_Types].xml"]).toBeDefined();
+    expect(files["xl/workbook.xml"]).toBeDefined();
+    expect(sheet).toContain('rightToLeft="1"');
+    expect(sheet).toContain("شماره");
+    expect(sheet).toContain("A&lt;&amp;&gt;1");
+    expect(sheet).not.toContain("A<&>1");
+  });
+});
 
 describe("daily report rendering", () => {
   it("renders a simple Dari A4 report with isolated money values", () => {

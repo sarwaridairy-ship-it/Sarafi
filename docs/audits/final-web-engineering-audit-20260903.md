@@ -23,11 +23,11 @@ This is not a substitute for legal certification, provider contracts, a provider
 | Daily work | PASS | Buy, sell, exchange, receive, pay, debts, transfers, expenses, income, owner capital, bank movement, opening money, Hawala, close and reconciliation |
 | Money accounts | PASS | Stable named accounts, visible source/destination, account-to-account transfer, evidence drill-down, safe empty/summary states |
 | Currencies and rates | PASS | Organization currency controls and world-currency catalog; bid/ask rates, calculator, rate history, AFN book-value validation |
-| Transactions and reports | PASS | Human-readable history, correction/reversal request, complete permission-aware ledger paging, date/type/status/currency filters, CSV/PDF/A4/58 mm/80 mm/WhatsApp, visible export history |
+| Transactions and reports | PASS | Human-readable history, correction/reversal request, 22 permission-aware report families, 25-row paging, date/status/currency filters, CSV/XLSX/PDF/A4/58 mm/80 mm/WhatsApp, visible export history |
 | Search and notifications | PASS | Global people/account/transaction search; role-triggered in-app notifications; read/dismiss actions; per-user preferences enforced by the database trigger |
 | Settings | PASS | Owner-editable language, timezone, receipt prefix, and negative-cash rule; non-owner read-only view; sensitive rule change requires AAL2 |
 | Compliance workspace | PASS WITH EXTERNAL CONFIGURATION | Versioned rule/profile status, alerts, cases, provider state, fail-closed screening boundary; no fabricated legal approval |
-| Billing and platform administration | PASS WITH PROVIDER CONFIGURATION | Owner billing portal, plans, manual payment request/history, separate MFA administrator gate, business/user suspension, payment review, provider state, plans, and administrator audit history |
+| Billing and platform administration | PASS WITH PROVIDER CONFIGURATION | Owner billing portal, plans, manual payment request/history, separate MFA administrator gate, business/user suspension, payment review, provider state, versions/notices, feature entitlements, diagnostics, safe support, and administrator audit history |
 | Localization and simplicity | PASS FOR ENGINEERING REVIEW | English, Afghan Dari, and Pashto; RTL; local terms; no internal feature codes in local UI; guided help; clear role and empty/error states |
 | Responsive and accessible UI | PASS | Keyboard/focus checks, no critical/serious automated accessibility findings, and no horizontal overflow at 360, 390, 430, 768, 1366, and 1440 px |
 | Security and tenancy | PASS FOR AUTOMATED ENGINEERING ACCEPTANCE | RLS, restricted RPC grants, cross-tenant denial, role denial, AAL2 gates, device validation, anonymous denial, CSP/security headers, private documents, and fail-closed provider boundaries |
@@ -35,15 +35,18 @@ This is not a substitute for legal certification, provider contracts, a provider
 ## Final verification evidence
 
 - Browser matrix: **198 passed, 18 intentionally skipped, 0 failed** across Chromium, Firefox, and WebKit. The intentional skips are environment/scope-specific; corresponding live role and security APIs were verified separately, while offline remains explicitly deferred.
-- Unit/domain suite: **70 passed, 2 intentionally skipped, 0 failed**.
+- Unit/domain suite: **71 passed, 2 intentionally skipped, 0 failed**.
+- Consolidated live security suite: **74 passed, 0 failed**, including tenant isolation, roles, devices, approvals, MFA, storage, Realtime and fixture restoration.
+- Dedicated MFA certificate: **6 passed, 0 failed**; dedicated approval certificate: **9 passed, 0 failed**.
+- Live concurrency/idempotency acceptance: **7 passed, 0 failed**.
 - Live premium web acceptance: **23 passed, 0 failed**.
 - Live money-account/ledger acceptance: **22 passed, 0 failed**; exact journal audit balanced.
 - Live team and invitation acceptance: **7 passed, 0 failed**, including AAL2 enforcement.
 - TypeScript, lint, production build, and browser visual/error-overlay checks: **PASS**.
 - Dependency audit: **0 known production vulnerabilities**.
-- Linked Supabase migration history: matched through `20260903004944`.
+- Linked Supabase migration history: matched through `20260903120108`.
 - Linked Supabase schema lint: **no schema errors**.
-- Main application JavaScript: approximately **410 KB** before gzip, under the 500 KB shell budget; report/PDF code remains lazy-loaded.
+- Main application JavaScript: **470.5 KB** before gzip, under the 500 KB shell budget; report/PDF/Excel code remains lazy-loaded.
 
 ## External acceptance gates
 

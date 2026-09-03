@@ -252,8 +252,9 @@ test.describe("workspace controls", () => {
     await page.getByRole("button", { name: /Back to Home/ }).click();
     await page.locator(".sidebar nav").first().getByRole("button", { name: /More/ }).click();
     await page.getByRole("button", { name: /^Reports/ }).click();
-    await page.getByLabel("Report type").selectOption("fx");
+    await page.getByLabel("Choose a full report").selectOption("fx_profit");
     await expect(page.getByRole("button", { name: "Export CSV" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export Excel" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Recent exports" })).toBeVisible();
     await expect(page.locator(".report-export-list")).toContainText("PDF");
   });
@@ -906,17 +907,20 @@ test.describe("workspace controls", () => {
     await expect(confirmation).toContainText("70.35 AFN");
   });
 
-  test("Exchange refuses to invent a rate for an unsupported currency pair", async ({
+  test("Exchange accepts an explicit cross-currency rate and shows both money sides", async ({
     page,
   }) => {
     await page.goto("/");
     await page.locator(".trade-launch").click();
     await page.getByRole("tab", { name: "Exchange currency" }).click();
-    await expect(
-      page.getByText(/No approved rate is available for this currency pair/),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Review transaction" }),
-    ).toBeDisabled();
+    const dialog = page.locator(".trade-modal");
+    await dialog.getByRole("textbox", { name: "We give" }).fill("100");
+    await dialog.getByRole("textbox", { name: "Rate" }).fill("0.92");
+    await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("92.00");
+    await dialog.getByRole("button", { name: "Review transaction" }).click();
+    const confirmation = dialog.locator(".trade-confirmation");
+    await expect(confirmation).toContainText("100.00 USD");
+    await expect(confirmation).toContainText("92.00 EUR");
+    await expect(confirmation).toContainText("0.92 EUR");
   });
 });

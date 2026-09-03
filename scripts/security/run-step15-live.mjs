@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { createHmac } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { signInMfaFixtureAtAal2 } from './mfa-fixture.mjs'
 
 const envFile = process.env.SARAFI_STEP15_ENV ?? '.env.security.local'
 const fileEnv = Object.fromEntries(readFileSync(envFile, 'utf8').split(/\r?\n/).filter((line) => line && !line.startsWith('#')).map((line) => { const split = line.indexOf('='); return [line.slice(0, split), line.slice(split + 1)] }))
@@ -16,32 +16,15 @@ const requiredCertifications = ['TENANT_SELECT', 'TENANT_INSERT', 'TENANT_UPDATE
 const signIn = async (email, password) => { const c = client(); const result = await c.auth.signInWithPassword({ email, password }); if (result.error) throw new Error(`sign in failed: ${result.error.message}`); return c }
 const expectDenied = async (test, operation) => { try { const result = await operation(); const denied = Boolean(result.error) || (Array.isArray(result.data) && result.data.length === 0) || result.data === null; record(test, denied ? 'DENIED' : 'ALLOWED', result.error?.message ?? `rows=${result.data?.length ?? 'non-array'}`) } catch (error) { record(test, 'DENIED', error instanceof Error ? error.message : 'request failed') } }
 const expectAllowed = async (test, operation) => { try { const result = await operation(); record(test, result.error ? 'FAILED' : 'ALLOWED', result.error?.message ?? '') } catch (error) { record(test, 'FAILED', error instanceof Error ? error.message : 'request failed') } }
-const decodeBase32 = (value) => { const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; const bits = value.replace(/=+$/, '').toUpperCase().split('').map((character) => alphabet.indexOf(character).toString(2).padStart(5, '0')).join(''); return Buffer.from(Array.from({ length: Math.floor(bits.length / 8) }, (_, index) => parseInt(bits.slice(index * 8, index * 8 + 8), 2))) }
-const totp = (secret, time = Date.now()) => { const counter = Math.floor(time / 1000 / 30); const buffer = Buffer.alloc(8); buffer.writeBigUInt64BE(BigInt(counter)); const digest = createHmac('sha1', decodeBase32(secret)).update(buffer).digest(); const offset = digest[digest.length - 1] & 15; return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000).padStart(6, '0') }
-const enrollOwnerMfa = async (client, label) => {
-  const existing = await client.auth.mfa.listFactors()
-  if (existing.error) throw new Error(`${label} MFA factor lookup failed: ${existing.error.message}`)
-  const enrolled = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SECURITY_TEST_${label}_TOTP_${randomUUID()}` })
-  const factor = enrolled.data
-  if (enrolled.error || !factor?.id || !factor.totp?.secret) throw new Error(`${label} MFA enrollment failed: ${enrolled.error?.message ?? 'no TOTP factor returned'}`)
-  const before = await client.auth.mfa.getAuthenticatorAssuranceLevel()
-  record(`${label} AAL1 before TOTP`, before.data?.currentLevel === 'aal1' ? 'VERIFIED' : 'FAILED', before.data?.currentLevel ?? 'none')
-  const challenge = await client.auth.mfa.challenge({ factorId: factor.id })
-  if (challenge.error) throw new Error(`${label} MFA challenge failed: ${challenge.error.message}`)
-  const verify = await client.auth.mfa.verify({ factorId: factor.id, challengeId: challenge.data.id, code: totp(factor.totp.secret) })
-  if (verify.error) throw new Error(`${label} MFA verification failed: ${verify.error.message}`)
-  const after = await client.auth.mfa.getAuthenticatorAssuranceLevel()
-  record(`${label} AAL2 after TOTP`, after.data?.currentLevel === 'aal2' ? 'VERIFIED' : 'FAILED', after.data?.currentLevel ?? 'none')
-}
 const tables = ['organizations', 'organization_memberships', 'branches', 'cashboxes', 'counterparties', 'financial_events', 'journal_entries', 'journal_lines', 'debts', 'settlements', 'approval_requests', 'devices', 'security_audit_events']
 const fxCommand = (org, branch, cashbox) => ({ organization_id: org, branch_id: branch, cashbox_id: cashbox, side: 'buy_fx', sold_currency: 'AFN', bought_currency: 'USD', sold_amount: '0.01', bought_amount: '0.0001', sold_base_value: '0.01', bought_base_value: '0.01', base_currency: 'AFN', client_command_id: `security-test-${randomUUID()}` })
 
 const ownerAaal1 = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A_PASSWORD)
-const ownerA = await signIn(env.SARAFI_E2E_OWNER_A_EMAIL, env.SARAFI_E2E_OWNER_A_PASSWORD)
+const ownerAMfa = await signInMfaFixtureAtAal2(env.BUSINESS_A_ID)
+const ownerA = ownerAMfa.client
 const ownerB = await signIn(env.SARAFI_E2E_OWNER_B_EMAIL, env.SARAFI_E2E_OWNER_B_PASSWORD)
-try { await enrollOwnerMfa(ownerA, 'Owner A') } catch (error) {
-  record('Owner A AAL1/AAL2 TOTP certification', 'FAILED', error instanceof Error ? error.message : 'MFA enrollment failed')
-}
+record('Owner A AAL1 before TOTP', ownerAMfa.beforeLevel === 'aal1' ? 'VERIFIED' : 'FAILED', ownerAMfa.beforeLevel)
+record('Owner A AAL2 after TOTP', ownerAMfa.afterLevel === 'aal2' ? 'VERIFIED' : 'FAILED', ownerAMfa.afterLevel)
 const fixtureReset = await ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: true, reason_input: 'Security certification fixture reset' })
 record('Offline financial posting disabled', 'VERIFIED', 'No client reconnect submission path and legacy financial sync RPC retired')
 record('Legacy offline command auto-replay denied', 'VERIFIED', 'Legacy encrypted records are review-only and reconnect cannot submit them')
@@ -58,7 +41,8 @@ for (const table of ['branches', 'cashboxes', 'counterparties']) {
     ? { organization_id: env.BUSINESS_B_ID, display_name: 'SECURITY_TEST_ATTACK', counterparty_type: 'other' }
     : { organization_id: env.BUSINESS_B_ID, name: 'SECURITY_TEST_ATTACK', ...(table === 'cashboxes' ? { branch_id: env.BRANCH_B1_ID } : {}) }
   await expectDenied(`Owner A -> B INSERT ${table}`, () => ownerA.from(table).insert(row))
-  await expectDenied(`Owner A -> B UPDATE ${table}`, () => ownerA.from(table).update({ name: 'SECURITY_TEST_ATTACK' }).eq('organization_id', env.BUSINESS_B_ID))
+  const update = table === 'counterparties' ? { display_name: 'SECURITY_TEST_ATTACK' } : { name: 'SECURITY_TEST_ATTACK' }
+  await expectDenied(`Owner A -> B UPDATE ${table}`, () => ownerA.from(table).update(update).eq('organization_id', env.BUSINESS_B_ID))
   await expectDenied(`Owner A -> B DELETE ${table}`, () => ownerA.from(table).delete().eq('organization_id', env.BUSINESS_B_ID))
 }
 await expectDenied('Owner A -> B UPDATE organization', () => ownerA.from('organizations').update({ display_name: 'SECURITY_TEST_ATTACK' }).eq('id', env.BUSINESS_B_ID))
@@ -69,6 +53,7 @@ const device = await cashierA.rpc('register_device', { target_org: env.BUSINESS_
 if (device.error || !device.data) throw new Error(`device registration failed: ${device.error?.message ?? 'no device returned'}`)
 const deviceId = device.data.id
 const deviceFxCommand = (org, branch, cashbox) => ({ ...fxCommand(org, branch, cashbox), device_id: deviceId })
+await expectAllowed('Owner A -> trust newly registered cashier device', () => ownerA.rpc('trust_device', { target_device: deviceId, reason_input: 'Security certification device trust' }))
 await expectAllowed('Cashier A -> assigned A1 financial post', () => cashierA.rpc('record_fx_trade', { command: deviceFxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID) }))
 const approvalCommand = { ...fxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID), device_id: deviceId, approval_reason: 'SECURITY_TEST approval fixture' }
 const approvalRequest = await cashierA.rpc('request_fx_trade_approval', { command: approvalCommand })
@@ -102,11 +87,13 @@ record('Device revocation', 'VERIFIED', 'registered, allowed post, owner revoked
 const membershipDevice = await cashierA.rpc('register_device', { target_org: env.BUSINESS_A_ID, friendly_name_input: 'SECURITY_TEST_DEVICE_MEMBERSHIP_A', fingerprint_hash_input: `security-test-${randomUUID()}`, app_version_input: 'security-test', target_branch: env.BRANCH_A1_ID })
 if (membershipDevice.error || !membershipDevice.data) throw new Error(`membership device registration failed: ${membershipDevice.error?.message ?? 'no device returned'}`)
 const membershipDeviceFxCommand = () => ({ ...fxCommand(env.BUSINESS_A_ID, env.BRANCH_A1_ID, env.CASHBOX_A1_ID), device_id: membershipDevice.data.id })
+await expectAllowed('Owner A -> trust membership-test device', () => ownerA.rpc('trust_device', { target_device: membershipDevice.data.id, reason_input: 'Security certification membership device trust' }))
 await expectAllowed('Cashier A -> valid post before membership revocation', () => cashierA.rpc('record_fx_trade', { command: membershipDeviceFxCommand() }))
 await expectAllowed('Owner A -> revoke cashier membership', () => ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: false, reason_input: 'Security certification suspension' }))
 await expectDenied('Revoked membership -> financial SELECT', () => cashierA.from('branches').select('id').eq('organization_id', env.BUSINESS_A_ID))
 await expectDenied('Revoked membership -> financial RPC', () => cashierA.rpc('record_fx_trade', { command: membershipDeviceFxCommand() }))
 record('Membership revocation', 'VERIFIED', 'valid post, owner suspended membership, SELECT/RPC denied')
+await expectAllowed('Owner A -> restore cashier fixture after revocation test', () => ownerA.rpc('set_membership_active', { target_membership: env.CASHIER_A_MEMBERSHIP_ID, active_input: true, reason_input: 'Security certification fixture restore' }))
 const complianceA = await signIn(env.SARAFI_E2E_COMPLIANCE_A_EMAIL, env.SARAFI_E2E_COMPLIANCE_A_PASSWORD)
 const documentPath = `${env.BUSINESS_A_ID}/security-test-document-${randomUUID()}.txt`
 const document = await complianceA.storage.from('sarafi-private-documents').upload(documentPath.replace('.txt', '.png'), new Blob(['SECURITY_TEST_PRIVATE_DOCUMENT'], { type: 'image/png' }), { contentType: 'image/png', upsert: false })
@@ -163,4 +150,4 @@ const report = { project: new URL(env.SUPABASE_URL).hostname, generated_at: new 
 mkdirSync('test-results/step15', { recursive: true })
 writeFileSync('test-results/step15/security-report.json', `${JSON.stringify(report, null, 2)}\n`)
 console.log(JSON.stringify(report, null, 2))
-if (results.some((r) => r.result === 'FAILED')) process.exitCode = 1
+process.exit(results.some((r) => r.result === 'FAILED') ? 1 : 0)

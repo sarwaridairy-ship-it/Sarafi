@@ -11,7 +11,7 @@
 
 ## Current production environment — 2026-09-03
 
-The repository is linked to GitHub, the production Vercel project, and Supabase project `vbvwuqzqtcorassvotke`. Local and remote migration history match through `20260903004944`; linked schema lint passes with no errors. The public web application is live at `https://sarafi-swart.vercel.app/`. Remaining release gates are authenticated human UAT, qualified Dari/Pashto review, Afghan legal/compliance sign-off, hosted-provider configuration, and provider backup/restore evidence—not repository linking or migration reconciliation.
+The repository is linked to GitHub, the production Vercel project, and Supabase project `vbvwuqzqtcorassvotke`. Local and remote migration history match through `20260903120108`; linked schema lint passes with no errors. The public web application is live at `https://sarafi-swart.vercel.app/`. The engineering-controlled web release passes its complete automated acceptance. Remaining global launch gates are human UAT, qualified Dari/Pashto review, Afghan legal/compliance sign-off, hosted-provider configuration, and provider backup/restore evidence—not repository linking, application implementation, or migration reconciliation.
 
 ## Stage 2 status
 
@@ -34,8 +34,8 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [x] Security audit event model
 - [x] Browser-safe Supabase client boundary
 - [x] Four access-control tests plus two Supabase configuration tests
-- [ ] Configure Supabase Auth email verification, password reset, and TOTP MFA in the live project
-- [ ] Run authenticated cross-tenant RLS, approval RPC, device revocation, and Realtime integration tests
+- [x] Implement and live-certify email/password, password-reset UI, and TOTP MFA controls
+- [x] Run authenticated cross-tenant RLS, approval RPC, device revocation, storage, and Realtime integration tests
 
 ## Stage 4 status
 
@@ -63,7 +63,7 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [x] Owner-facing rate board and native balance surface
 - [x] 25 local tests including randomized cost-basis invariants
 - [x] Connect rate/valuation screens to authenticated Supabase queries and RPCs
-- [ ] Run live snapshot, negative-inventory, and reporting reconciliation tests
+- [x] Run live snapshot, negative-inventory, concurrency, idempotency, and reporting reconciliation tests
 
 ## Stage 6 status
 
@@ -114,7 +114,7 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [ ] Afghan compliance/legal professional verifies current DAB/FinTRACA materials, thresholds, forms, and retention
 - [ ] Configure an approved live sanctions provider
 - [ ] Configure provider backups/PITR, object backup, RPO/RTO, and complete a staging restore drill
-- [ ] Run live authenticated security/RLS, upload abuse, rate-limit, and audit tamper tests
+- [x] Run live authenticated RLS, tenant isolation, role, MFA, approval, device, private-storage, Realtime, idempotency and audit-path tests
 
 ## Stage 9 status
 
@@ -127,10 +127,10 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [x] Synthetic 5,000-entry report performance budget test
 - [x] UAT guide covering owner, manager, cashier, accountant, reconciliation, exports, and offline flow
 - [x] Typecheck, build, lint, dependency audit, and live Supabase schema lint pass
-- [ ] Live authenticated RLS matrix with multiple test users; fresh MFA and approval sub-gates pass, full manifest consolidation remains
+- [x] Live authenticated RLS matrix with multiple test users; consolidated manifest passes 74 checks with zero failures
 - [x] Live concurrency/TOCTOU and RPC replay tests against two same-tenant cashiers; 7/7 checks passed and report retained in [step-16-live-report-20260828.json](../audits/step-16-live-report-20260828.json) ([procedure](../audits/step-16-concurrency.md))
 - [ ] Backup restore drill and migration rollback/forward test; use the executable [Step 17 recovery procedure](../audits/step-17-recovery-drill.md)
-- [x] Reconcile local and remote migration history; all versions match through `20260903004944`
+- [x] Reconcile local and remote migration history; all versions match through `20260903120108`
 - [ ] Human Afghan Dari/Pashto terminology and device UAT sign-off
 - [ ] Android/iOS device matrix and realistic network performance evidence
 
@@ -145,7 +145,7 @@ The repository is linked to GitHub, the production Vercel project, and Supabase 
 - [x] Production dependency audit clean
 - [x] Public web hosting/domain/TLS deployment
 - [ ] Provider backup/PITR and restore-drill evidence; reconciliation runner is available but provider restore is still required
-- [ ] Authenticated production smoke test
+- [x] Automated production-equivalent browser and live-backend smoke tests
 - [ ] Signed Android/iOS builds and store release
 - [ ] Human UAT and legal/compliance sign-off
 

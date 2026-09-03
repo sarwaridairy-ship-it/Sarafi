@@ -370,6 +370,7 @@ const copy = {
     difference: "Difference",
     loading: "Loading…",
     differenceReason: "Reason for the difference",
+    reviewDecisionReason: "Reason for approval or rejection",
     reasonRequired: "Explain any shortage or extra cash",
     submitCashCount: "Send cash count for review",
     cashDifferenceNote:
@@ -861,6 +862,7 @@ const copy = {
     difference: "تفاوت",
     loading: "در حال بارگذاری…",
     differenceReason: "دلیل تفاوت",
+    reviewDecisionReason: "دلیل تأیید یا رد",
     reasonRequired: "دلیل کمبود یا پول اضافی را بنویسید",
     submitCashCount: "فرستادن شمارش صندوق برای بررسی",
     cashDifferenceNote:
@@ -1346,6 +1348,7 @@ const copy = {
     difference: "توپیر",
     loading: "لوډېږي…",
     differenceReason: "د توپیر دلیل",
+    reviewDecisionReason: "د تایید یا رد دلیل",
     reasonRequired: "د کمو یا زیاتو پیسو دلیل ولیکئ",
     submitCashCount: "د صندوق شمېر د کتنې لپاره لېږل",
     cashDifferenceNote:

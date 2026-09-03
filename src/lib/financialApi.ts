@@ -35,7 +35,7 @@ export type TeamControlPlane = { members: TeamMemberRecord[]; invitations: TeamI
 export type CreatedTeamInvitation = { id: string; invite_token: string; email: string; display_name: string; role_code: string; expires_at: string }
 export type PrivateDocumentRecord = { id: string; organization_id: string; entity_id: string; entity_type: string; storage_path: string; content_type: string; size_bytes: number; sha256: string; uploaded_by: string; created_at: string }
 export type ReceiptRecord = { id: string; journal_entry_id: string; receipt_number: string; language_code: string; created_at: string }
-export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; features: Array<{ feature_code: string; enabled: boolean }> }
+export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; date_display?: 'gregorian' | 'solar_hijri' | 'both'; digit_display?: 'western' | 'localized'; default_cost_basis?: 'weighted_average'; approval_threshold_base?: string; offline_limit_base?: string; cashier_profit_hidden?: boolean; receipt_number_pattern?: string; features: Array<{ feature_code: string; enabled: boolean }> }
 export type NotificationRecord = { id: string; notification_type: string; subject_id: string; message: string; status: 'unread' | 'read' | 'dismissed'; created_at: string }
 export type NotificationPreferenceRecord = { id: string; notification_type: string; in_app: boolean; push: boolean; threshold_base: string | null }
 export type ReportExportRecord = { id: string; report_name: string; format: 'csv' | 'pdf' | 'xlsx' | 'print'; filters: Record<string, unknown>; generated_at: string; expires_at: string | null }
@@ -44,10 +44,29 @@ export type ComplianceWorkspaceRecord = {
   ruleSet: { id: string; version: string; source_reference: string | null; status: string; effective_from: string; required_documents: string[]; screening_required: boolean } | null
   alertCounts: { open: number; reviewing: number; closed: number }
   caseCounts: { draft: number; ready: number; submitted: number; closed: number }
-  alerts: Array<{ id: string; alert_type: string; status: string; created_at: string }>
-  cases: Array<{ id: string; alert_id: string; report_status: string; submitted_reference: string | null; created_at: string }>
+  alerts: Array<{ id: string; alert_type: string; status: string; evidence?: Record<string, unknown>; disposition_reason?: string | null; created_at: string }>
+  cases: Array<{ id: string; alert_id: string; report_status: string; notes?: string | null; submitted_reference: string | null; created_at: string }>
+  kycProfiles: KycProfileRecord[]
   screeningProvider: string | null
 }
+
+export type OrganizationControlPlane = {
+  organization: { id: string; display_name: string; legal_name: string; license_number: string | null; license_expires_on: string | null }
+  settings: WorkspaceSettingsRecord
+  branches: Array<{ id: string; name: string; timezone: string; active: boolean }>
+  cashboxes: Array<{ id: string; name: string; branch_id: string; active: boolean }>
+  categories: Array<{ id: string; name: string; active: boolean }>
+  features: Array<{ code: string; enabled: boolean }>
+  rate_groups: Array<{ id: string; name: string; code: string; active: boolean; rates: Array<{ id: string; branch_id: string | null; from_currency: string; to_currency: string; buy_rate: string; sell_rate: string; spread_tolerance: string | null; effective_from: string; active: boolean }> }>
+  valuation_sets: Array<{ id: string; name: string; base_currency: string; effective_at: string; source: string; active: boolean; rates: Array<{ currency_code: string; rate: string }> }>
+  periods: Array<{ id: string; starts_on: string; ends_on: string; status: string }>
+  support_requests: Array<{ id: string; reason: string; requested_scope: string[]; requested_hours: number; status: string; requested_at: string; decided_at: string | null; expires_at: string | null }>
+  security_events: Array<{ id: string; event_type: string; target_user_id: string | null; target_device_id: string | null; metadata: Record<string, unknown>; created_at: string }>
+}
+
+export type ReconciliationCloseRecord = { id: string; branch_id: string; branch_name: string; cashbox_id: string; cashbox_name: string; business_date: string; status: string; submitted_at: string; approved_at: string | null; variance_reason: string | null; closed_by_current_user: boolean; lines: Array<{ currency_code: string; expected_amount: string; counted_amount: string; variance_amount: string }> }
+export type KycProfileRecord = { id: string; organization_id: string; counterparty_id: string; legal_name: string; father_name: string | null; date_of_birth: string | null; nationality: string | null; identity_document_type: string | null; identity_document_expiry: string | null; address: string | null; phone: string | null; occupation_or_business: string | null; purpose_of_funds: string | null; source_of_funds: string | null; risk_level: 'low' | 'medium' | 'high'; review_status: 'pending' | 'approved' | 'review_required'; next_review_at: string | null; updated_at: string }
+export type NamedReportRow = { reference: string; date: string; label: string; detail: string; amount: string | number; secondary_amount?: string | number; currency: string; status: string }
 
 export async function postFxTrade(command: unknown): Promise<RpcResult<Record<string, unknown>>> {
   const parsed: FxTradeCommand = parseFxTradeCommand(command)
@@ -70,7 +89,7 @@ export async function getWorkspaceSettings(organizationId: string): Promise<RpcR
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const [settings, features] = await Promise.all([
-    client.from('organization_settings').select('default_language,base_currency_code,negative_cash_allowed,receipt_prefix,timezone').eq('organization_id', organizationId).maybeSingle(),
+    client.from('organization_settings').select('default_language,base_currency_code,negative_cash_allowed,receipt_prefix,timezone,date_display,digit_display,default_cost_basis,approval_threshold_base,offline_limit_base,cashier_profit_hidden,receipt_number_pattern').eq('organization_id', organizationId).maybeSingle(),
     client.from('organization_features').select('feature_code,enabled').eq('organization_id', organizationId).order('feature_code'),
   ])
   const error = settings.error?.message ?? features.error?.message ?? null
@@ -78,15 +97,22 @@ export async function getWorkspaceSettings(organizationId: string): Promise<RpcR
   return { data: { ...settings.data, features: (features.data ?? []) as Array<{ feature_code: string; enabled: boolean }> } as WorkspaceSettingsRecord, error: null }
 }
 
-export async function updateWorkspaceSettings(input: { organizationId: string; language: string; timezone: string; receiptPrefix: string; negativeCashAllowed: boolean }): Promise<RpcResult<WorkspaceSettingsRecord>> {
+export async function updateWorkspaceSettings(input: { organizationId: string; language: string; timezone: string; receiptPrefix: string; negativeCashAllowed: boolean; dateDisplay?: string; digitDisplay?: string; approvalThresholdBase?: string; offlineLimitBase?: string; cashierProfitHidden?: boolean }): Promise<RpcResult<WorkspaceSettingsRecord>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.rpc('update_organization_settings', {
-    target_org: input.organizationId,
-    language_input: input.language,
-    timezone_input: input.timezone,
-    receipt_prefix_input: input.receiptPrefix,
-    negative_cash_input: input.negativeCashAllowed,
+  const result = await client.rpc('update_organization_control_settings', {
+    command: {
+      organization_id: input.organizationId,
+      default_language: input.language,
+      timezone: input.timezone,
+      receipt_prefix: input.receiptPrefix,
+      negative_cash_allowed: input.negativeCashAllowed,
+      date_display: input.dateDisplay ?? 'both',
+      digit_display: input.digitDisplay ?? 'western',
+      approval_threshold_base: input.approvalThresholdBase ?? '0',
+      offline_limit_base: input.offlineLimitBase ?? '0',
+      cashier_profit_hidden: input.cashierProfitHidden ?? true,
+    },
   })
   return { data: result.data ? { ...result.data, features: [] } as WorkspaceSettingsRecord : null, error: result.error?.message ?? null }
 }
@@ -127,14 +153,15 @@ export async function setNotificationPreference(input: { organizationId: string;
 export async function getComplianceWorkspace(organizationId: string): Promise<RpcResult<ComplianceWorkspaceRecord>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const [profile, ruleSet, alerts, cases, providers] = await Promise.all([
+  const [profile, ruleSet, alerts, cases, kycProfiles, providers] = await Promise.all([
     client.from('compliance_profiles').select('profile_name,legal_signoff_status,reviewed_at,reviewed_by').eq('organization_id', organizationId).maybeSingle(),
     client.from('compliance_rule_sets').select('id,version,source_reference,status,effective_from,required_documents,screening_required').eq('organization_id', organizationId).order('effective_from', { ascending: false }).limit(1).maybeSingle(),
-    client.from('compliance_alerts').select('id,alert_type,status,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(50),
-    client.from('compliance_cases').select('id,alert_id,report_status,submitted_reference,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(50),
+    client.from('compliance_alerts').select('id,alert_type,status,evidence,disposition_reason,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(50),
+    client.from('compliance_cases').select('id,alert_id,report_status,notes,submitted_reference,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(50),
+    client.from('kyc_profiles').select('id,organization_id,counterparty_id,legal_name,father_name,date_of_birth,nationality,identity_document_type,identity_document_expiry,address,phone,occupation_or_business,purpose_of_funds,source_of_funds,risk_level,review_status,next_review_at,updated_at').eq('organization_id', organizationId).order('updated_at', { ascending: false }).limit(100),
     client.from('organization_features').select('feature_code').eq('organization_id', organizationId).eq('enabled', true).like('feature_code', 'sanctions_provider:%').limit(1),
   ])
-  const error = profile.error?.message ?? ruleSet.error?.message ?? alerts.error?.message ?? cases.error?.message ?? providers.error?.message ?? null
+  const error = profile.error?.message ?? ruleSet.error?.message ?? alerts.error?.message ?? cases.error?.message ?? kycProfiles.error?.message ?? providers.error?.message ?? null
   if (error) return { data: null, error }
   const alertCounts = { open: 0, reviewing: 0, closed: 0 }
   for (const row of alerts.data ?? []) {
@@ -156,10 +183,173 @@ export async function getComplianceWorkspace(organizationId: string): Promise<Rp
       caseCounts,
       alerts: (alerts.data ?? []).slice(0, 8),
       cases: (cases.data ?? []).slice(0, 8),
+      kycProfiles: (kycProfiles.data ?? []) as KycProfileRecord[],
       screeningProvider: providerCode?.replace('sanctions_provider:', '') ?? null,
     } as ComplianceWorkspaceRecord,
     error: null,
   }
+}
+
+export async function getOrganizationControlPlane(organizationId: string): Promise<RpcResult<OrganizationControlPlane>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_organization_control_plane', { target_org: organizationId })
+  return { data: result.data as OrganizationControlPlane | null, error: result.error?.message ?? null }
+}
+
+export async function updateOrganizationProfile(input: { organizationId: string; displayName: string; legalName: string; licenseNumber?: string; licenseExpiresOn?: string }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('update_organization_profile', {
+    target_org: input.organizationId,
+    display_name_input: input.displayName,
+    legal_name_input: input.legalName,
+    license_number_input: input.licenseNumber || null,
+    license_expires_input: input.licenseExpiresOn || null,
+  })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function createOrganizationBranch(input: { organizationId: string; name: string; timezone: string }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_organization_branch', { target_org: input.organizationId, name_input: input.name, timezone_input: input.timezone })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function setOrganizationBranchState(branchId: string, active: boolean, reason: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_organization_branch_state', { target_branch: branchId, active_input: active, reason_input: reason })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function createOrganizationCashbox(input: { organizationId: string; branchId: string; name: string }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_organization_cashbox', { target_org: input.organizationId, target_branch: input.branchId, name_input: input.name })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function setOrganizationCashboxState(cashboxId: string, active: boolean, reason: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_organization_cashbox_state', { target_cashbox: cashboxId, active_input: active, reason_input: reason })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function saveExpenseCategory(organizationId: string, name: string, active = true): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('upsert_expense_category', { target_org: organizationId, name_input: name, active_input: active })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function setOrganizationFeatureState(organizationId: string, feature: string, enabled: boolean): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_organization_feature_state', { target_org: organizationId, feature_input: feature, enabled_input: enabled })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function createRateGroup(input: { organizationId: string; name: string; code: string }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_rate_group', { target_org: input.organizationId, name_input: input.name, code_input: input.code })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function setRateGroupExchangeRate(input: { organizationId: string; groupId: string; branchId?: string | null; sourceCurrency: string; targetCurrency: string; buyRate: string; sellRate: string; spreadTolerance?: string }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_rate_group_exchange_rate', {
+    target_org: input.organizationId,
+    target_group: input.groupId,
+    target_branch: input.branchId ?? null,
+    source_currency: input.sourceCurrency,
+    target_currency: input.targetCurrency,
+    buy_rate_input: input.buyRate,
+    sell_rate_input: input.sellRate,
+    spread_tolerance_input: input.spreadTolerance || null,
+  })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function createValuationRateSet(input: { organizationId: string; name: string; effectiveAt: string; rates: Array<{ currency_code: string; rate: string }> }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_valuation_rate_set', { command: { organization_id: input.organizationId, name: input.name, effective_at: input.effectiveAt, rates: input.rates } })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function decideApproval(approvalId: string, decision: 'approved' | 'rejected', reason: string): Promise<RpcResult<ApprovalRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('decide_approval', { target_id: approvalId, decision, decision_reason_input: reason })
+  return { data: result.data as ApprovalRecord | null, error: result.error?.message ?? null }
+}
+
+export async function getReconciliationWorkspace(organizationId: string): Promise<RpcResult<{ closes: ReconciliationCloseRecord[] }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_reconciliation_workspace', { target_org: organizationId })
+  return { data: result.data as { closes: ReconciliationCloseRecord[] } | null, error: result.error?.message ?? null }
+}
+
+export async function rejectCashboxClose(closeId: string, reason: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('reject_cashbox_close', { target_id: closeId, reason_input: reason })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function saveKycProfile(command: Record<string, unknown>): Promise<RpcResult<KycProfileRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('upsert_kyc_profile', { command })
+  return { data: result.data as KycProfileRecord | null, error: result.error?.message ?? null }
+}
+
+export async function decideComplianceAlert(alertId: string, status: 'under_review' | 'cleared' | 'reported', reason: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('decide_compliance_alert', { target_alert: alertId, status_input: status, reason_input: reason })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function saveComplianceCase(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('save_compliance_case', { command })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function getNamedFinancialReport(input: { organizationId: string; reportCode: string; fromDate?: string; toDate?: string }): Promise<RpcResult<NamedReportRow[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_named_financial_report', { target_org: input.organizationId, report_code: input.reportCode, from_date: input.fromDate || null, to_date: input.toDate || null })
+  return { data: result.data as NamedReportRow[] | null, error: result.error?.message ?? null }
+}
+
+export async function getOrganizationDataExport(organizationId: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_organization_data_export', { target_org: organizationId })
+  return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
+}
+
+export async function decideSupportAccess(requestId: string, decision: 'approved' | 'rejected', reason: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('decide_support_access', { target_request: requestId, decision_input: decision, reason_input: reason })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function revokeSupportAccess(requestId: string, reason: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('revoke_support_access', { target_request: requestId, reason_input: reason })
+  return { data: result.data, error: result.error?.message ?? null }
 }
 
 export async function recordOperation(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
