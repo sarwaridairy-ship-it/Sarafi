@@ -14,7 +14,6 @@
     #skipOpening{position:fixed;z-index:3;top:max(18px,env(safe-area-inset-top));inset-inline-end:max(18px,env(safe-area-inset-right));min-width:68px;min-height:42px;padding:8px 16px;border:1px solid rgba(184,211,207,.38);border-radius:999px;color:#d5e8e4;background:rgba(2,9,20,.62);font:700 13px "Segoe UI",Tahoma,Arial,sans-serif;backdrop-filter:blur(10px);cursor:pointer}
     #skipOpening:hover,#skipOpening:focus-visible{border-color:#eac969;color:#fff3c9;outline:2px solid rgba(234,201,105,.3);outline-offset:3px}
     #openingProgress{position:fixed;z-index:3;right:50%;bottom:max(24px,env(safe-area-inset-bottom));width:min(42vw,180px);height:2px;overflow:hidden;transform:translateX(50%);border-radius:999px;background:rgba(185,213,207,.18)}
-    #authPage{display:none!important}
     #openingProgress::after{position:absolute;inset:0;content:"";transform:scaleX(0);transform-origin:left;border-radius:inherit;background:linear-gradient(90deg,#168f86,#f1ce70);animation:progress var(--opening-duration,20.1s) linear forwards}
     [dir="rtl"] #openingProgress::after{transform-origin:right}
     @keyframes progress{to{transform:scaleX(1)}}
@@ -69,45 +68,6 @@
     <path id="pricePath" d="M82 1360 C145 1332 174 1246 238 1274 C305 1304 344 1148 405 1168 C465 1188 492 1010 540 960 C590 908 626 970 686 870 C742 776 780 842 832 742 C884 642 938 686 998 556" fill="none" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/>
     <g fill="#f4d986" stroke="#061725" stroke-width="4">
       <circle cx="82" cy="1360" r="8"/><circle cx="238" cy="1274" r="7"/><circle cx="405" cy="1168" r="7"/><circle cx="540" cy="960" r="10"/><circle cx="686" cy="870" r="7"/><circle cx="832" cy="742" r="7"/><circle cx="998" cy="556" r="8"/>
-    </g>
-  </g>
-
-  <g id="authPage" opacity="0" font-family="DejaVu Sans,Tahoma,Arial,sans-serif" direction="rtl">
-    <rect width="1080" height="1920" fill="#020914" opacity=".66"/>
-    <g id="authCard" filter="url(#shadow)">
-      <rect x="88" y="238" width="904" height="1444" rx="62" fill="#071927" stroke="#2b6274" stroke-width="3"/>
-      <rect x="106" y="256" width="868" height="1408" rx="49" fill="none" stroke="#d5b257" stroke-opacity=".18" stroke-width="2"/>
-      <ellipse cx="540" cy="437" rx="192" ry="158" fill="#0d8d83" opacity=".18" filter="url(#glow)"/>
-      <g id="finalLogo" transform="translate(540 430) scale(.285) translate(-540 -960)"><use href="#assetFinal"/></g>
-      <text id="authWelcome" x="540" y="631" text-anchor="middle" fill="#f7f4eb" font-size="48" font-weight="800">به صرافی خوش آمدید</text>
-      <text id="authSubtitle" x="540" y="687" text-anchor="middle" fill="#8da9b8" font-size="23">مدیریت ساده، دقیق و مصئون معاملات</text>
-
-      <g id="authModeGroup" aria-label="ورود یا ثبت‌نام">
-        <rect x="184" y="747" width="712" height="92" rx="28" fill="#03101b" stroke="#1b4051" stroke-width="2"/>
-        <rect x="540" y="755" width="348" height="76" rx="22" fill="#0b8179"/>
-        <text id="authLoginTab" x="714" y="807" text-anchor="middle" fill="#ffffff" font-size="27" font-weight="800">ورود</text>
-        <text id="authRegisterTab" x="366" y="807" text-anchor="middle" fill="#a8bdc7" font-size="27" font-weight="700">ثبت‌نام</text>
-      </g>
-
-      <g id="authFormGroup" aria-label="فرم ورود">
-        <text id="authIdentityLabel" x="872" y="901" text-anchor="start" fill="#dbe7ea" font-size="23" font-weight="700">شمارهٔ موبایل یا ایمیل</text>
-        <rect x="184" y="925" width="712" height="104" rx="25" fill="#04131f" stroke="#2a5666" stroke-width="2"/>
-        <circle cx="836" cy="977" r="20" fill="none" stroke="#d2b259" stroke-width="3"/>
-        <path d="M823 991q13-18 26 0" fill="none" stroke="#d2b259" stroke-width="3" stroke-linecap="round"/>
-        <text id="authIdentityPlaceholder" x="789" y="987" text-anchor="start" fill="#708d9c" font-size="24">شماره یا ایمیل خود را وارد کنید</text>
-
-        <text id="authPasswordLabel" x="872" y="1100" text-anchor="start" fill="#dbe7ea" font-size="23" font-weight="700">رمز عبور</text>
-        <rect x="184" y="1124" width="712" height="104" rx="25" fill="#04131f" stroke="#2a5666" stroke-width="2"/>
-        <rect x="817" y="1165" width="38" height="30" rx="7" fill="none" stroke="#d2b259" stroke-width="3"/>
-        <path d="M825 1165v-10q0-13 11-13t11 13v10" fill="none" stroke="#d2b259" stroke-width="3"/>
-        <text x="789" y="1188" text-anchor="end" direction="ltr" fill="#708d9c" font-size="31" letter-spacing="8">••••••••</text>
-        <text id="authForgot" x="872" y="1274" text-anchor="start" fill="#d6ba69" font-size="20">رمز عبور را فراموش کرده‌اید؟</text>
-
-        <rect x="184" y="1327" width="712" height="108" rx="29" fill="url(#gold)"/>
-        <text id="authLoginButton" x="540" y="1397" text-anchor="middle" fill="#102536" font-size="30" font-weight="900">ورود به حساب</text>
-        <rect x="184" y="1471" width="712" height="100" rx="28" fill="none" stroke="#2d756f" stroke-width="3"/>
-        <text id="authRegisterButton" x="540" y="1536" text-anchor="middle" fill="#75c7bc" font-size="26" font-weight="800">ایجاد حساب تازه</text>
-      </g>
     </g>
   </g>
 

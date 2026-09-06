@@ -142,27 +142,68 @@ export function buildDailyReportHtml(input: DailyReportInput): string {
 }
 
 export async function downloadPdf(input: DailyReportInput): Promise<void> {
-  const host = document.createElement("div");
-  host.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;height:1123px;overflow:hidden;background:#fff;z-index:-1";
-  host.innerHTML = buildDailyReportHtml(input);
-  document.body.append(host);
+  // Keep the report as PDF text instead of a canvas image: users can search,
+  // select, copy, and print the exported record. The source HTML remains the
+  // print-quality preview used by the report screen.
+  const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
+  const toBase64 = (bytes: Uint8Array) => {
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+    }
+    return btoa(binary);
+  };
+  let reportFont = "helvetica";
   try {
-    await document.fonts.ready;
-    const { default: html2canvas } = await import("html2canvas");
-    const canvas = await html2canvas(host.firstElementChild as HTMLElement, {
-      backgroundColor: "#ffffff",
-      scale: 2,
-      logging: false,
-      width: 794,
-      height: 1123,
-    });
-    const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
-    pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, 595.28, 841.89, undefined, "FAST");
-    const asciiName = input.reportName.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "");
-    pdf.save(`${asciiName || "sarafi-daily-report"}-${input.businessDate}.pdf`);
-  } finally {
-    host.remove();
+    const fontResponse = await fetch("/fonts/NotoSansArabic-Regular.ttf", { cache: "force-cache" });
+    if (!fontResponse.ok) throw new Error("Report font unavailable");
+    pdf.addFileToVFS("NotoSansArabic-Regular.ttf", toBase64(new Uint8Array(await fontResponse.arrayBuffer())));
+    pdf.addFont("NotoSansArabic-Regular.ttf", "NotoSansArabic", "normal");
+    reportFont = "NotoSansArabic";
+  } catch {
+    // English/system fallback keeps exports available when an offline cache
+    // has not yet received the bundled font asset.
   }
+  const labels = dailyReportCopy[input.language];
+  const snapshot = input.snapshot;
+  const lines = [
+    input.businessName,
+    input.reportName || labels.title,
+    `${labels.branch}: ${input.branchName}`,
+    `${labels.date}: ${input.businessDate}`,
+    "",
+    labels.summary,
+    `${labels.count}: ${snapshot?.transaction_count ?? input.rows.length}`,
+    `${labels.volume}: ${snapshot?.volume_base ?? "0"} AFN`,
+    `${labels.profit}: ${snapshot?.realized_profit ?? "0"} AFN`,
+    `${labels.expenses}: ${snapshot?.expenses ?? "0"} AFN`,
+    `${labels.position}: ${snapshot?.net_position_base ?? "0"} AFN`,
+    "",
+    labels.money,
+    ...(snapshot?.locations ?? []).slice(0, 8).map((item) => `${item.location_name}: ${item.quantity} ${item.currency}`),
+    "",
+    labels.debts,
+    `${labels.receivable}: ${(snapshot?.receivables ?? []).map((item) => `${item.amount} ${item.currency}`).join(" · ") || "0"}`,
+    `${labels.payable}: ${(snapshot?.payables ?? []).map((item) => `${item.amount} ${item.currency}`).join(" · ") || "0"}`,
+    `${labels.difference}: ${snapshot?.reconciliation_differences ?? "0"}`,
+    "",
+    labels.activity,
+    ...(input.rows.slice(0, 12).map((row) => `${row.entryId} · ${row.type} · ${row.status} · ${row.occurredAt}`)),
+  ];
+  pdf.setFont(reportFont, "normal");
+  pdf.setFontSize(10);
+  let y = 46;
+  for (const line of lines) {
+    const wrapped = pdf.splitTextToSize(line, 500) as string[];
+    for (const item of wrapped) {
+      if (y > 800) { pdf.addPage(); y = 46; }
+      pdf.text(item, input.language === "en" ? 48 : 547, y, { align: input.language === "en" ? "left" : "right" });
+      y += 15;
+    }
+  }
+  const asciiName = input.reportName.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "");
+  pdf.save(`${asciiName || "sarafi-daily-report"}-${input.businessDate}.pdf`);
 }
 
 export function printReport(): void {

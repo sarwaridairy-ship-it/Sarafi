@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fa-AF" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>گزارش آمادگی نسخه وب صرافی</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #17241f; background: #eef3f1; font-family: Arial, Tahoma, sans-serif; font-size: 12.5px; line-height: 1.75; }
+    .page { position: relative; width: 210mm; min-height: 297mm; padding: 18mm 17mm 15mm; background: #fff; page-break-after: always; overflow: hidden; }
+    .page:last-child { page-break-after: auto; }
+    .topline { height: 4px; margin: -18mm -17mm 14mm; background: linear-gradient(90deg,#d8aa44,#0c725d); }
+    .brand { display: flex; align-items: center; justify-content: space-between; direction: ltr; }
+    .brandmark { display: flex; align-items: center; gap: 10px; color: #0c5648; }
+    .logo { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; color: white; background: #0c725d; font-weight: 800; font-size: 19px; }
+    .brand b { letter-spacing: 2px; font-size: 17px; }
+    .date { color: #60716a; font-size: 11px; }
+    .hero { margin-top: 25mm; padding: 20mm 16mm; border-radius: 22px; color: white; background: linear-gradient(145deg,#0c3d34,#0d725d); box-shadow: 0 12px 34px rgba(12,61,52,.18); }
+    .hero small { color: #c9e4dc; font-weight: 700; }
+    h1 { margin: 8px 0 12px; font-size: 31px; line-height: 1.35; }
+    .hero p { max-width: 135mm; margin: 0; color: #e6f3ef; font-size: 15px; }
+    .status { display: inline-flex; align-items: center; gap: 7px; margin-top: 18px; padding: 7px 12px; border-radius: 999px; color: #123b31; background: #dff5ec; font-weight: 800; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #16a36e; }
+    .summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 18mm; }
+    .summary div { padding: 14px; border: 1px solid #dce7e2; border-radius: 14px; background: #f7faf9; }
+    .summary b { display: block; color: #0c725d; font-size: 22px; direction: ltr; text-align: right; }
+    .summary span { color: #5b6a64; }
+    h2 { margin: 0 0 10px; color: #123f35; font-size: 21px; }
+    h3 { margin: 12px 0 4px; color: #0c725d; font-size: 14px; }
+    p { margin: 4px 0 9px; }
+    .lead { color: #566760; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+    .card { padding: 13px 14px; border: 1px solid #dce6e2; border-radius: 13px; background: #fafcfb; break-inside: avoid; }
+    .card strong { color: #0c5648; font-size: 14px; }
+    .card p { margin-bottom: 0; color: #4e5f58; }
+    .number { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-left: 6px; border-radius: 8px; color: white; background: #0c725d; direction: ltr; font-weight: 800; }
+    .role { display: grid; grid-template-columns: 33mm 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid #e4ebe8; break-inside: avoid; }
+    .role:last-child { border-bottom: 0; }
+    .role b { color: #0c5648; }
+    .note { margin: 12px 0; padding: 11px 13px; border-right: 4px solid #d8aa44; border-radius: 9px; background: #fff8e8; }
+    .good { border-right-color: #0c725d; background: #edf8f4; }
+    table { width: 100%; border-collapse: collapse; margin-top: 9px; font-size: 11.5px; }
+    th, td { padding: 8px; border-bottom: 1px solid #dfe8e4; text-align: right; vertical-align: top; }
+    th { color: #0c5648; background: #f1f7f4; }
+    .checklist { margin: 8px 0 0; padding: 0; list-style: none; }
+    .checklist li { position: relative; padding: 7px 29px 7px 0; border-bottom: 1px solid #e7ecea; }
+    .checklist li::before { content: "✓"; position: absolute; right: 2px; top: 7px; color: #0c725d; font-weight: 900; }
+    .pending li::before { content: "○"; color: #c18a1e; }
+    .footer { position: absolute; right: 17mm; left: 17mm; bottom: 8mm; display: flex; justify-content: space-between; color: #7a8782; font-size: 9.5px; direction: ltr; }
+    .url { direction: ltr; unicode-bidi: isolate; color: #0c725d; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <div class="topline"></div>
+    <div class="brand"><div class="brandmark"><span class="logo">S</span><b>SARAFI</b></div><span class="date">۲ سپتمبر ۲۰۲۶</span></div>
+    <div class="hero">
+      <small>گزارش ساده آمادگی نسخه وب</small>
+      <h1>نسخه وب صرافی آماده استفاده عملی است</h1>
+      <p>بخش‌های روزانه صرافی، کارمندان، محل پول، مشتریان، پرداخت بسته و اداره مرکزی ساده، جدا و مصئون ساخته شده است.</p>
+      <span class="status"><i class="dot"></i> نسخه تولیدی فعال است</span>
+    </div>
+    <div class="summary">
+      <div><b>64 / 64</b><span>آزمایش مرورگر کامیاب</span></div>
+      <div><b>68 / 68</b><span>آزمایش برنامه کامیاب</span></div>
+      <div><b>44 / 44</b><span>آزمایش زنده امنیتی کامیاب</span></div>
+    </div>
+    <div class="note good" style="margin-top:16mm"><b>آدرس زنده:</b> <span class="url">https://sarafi-swart.vercel.app/</span><br>نسخه وب و دیتابیس جدید هردو در محیط اصلی فعال گردیده‌اند.</div>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>1 / 4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"></div>
+    <h2>هر کارمند صفحه و وظیفه جدا دارد</h2>
+    <p class="lead">تعداد کارمندان ثابت نیست. مالک به اندازه ضرورت صرافی کارمند اضافه می‌کند. بسته کوچک تا ۵ کارمند و بسته تجارتی تا ۲۵ کارمند را می‌پذیرد.</p>
+    <div class="role"><b>مالک</b><span>تمام تجارت را می‌بیند؛ کارمند دعوت می‌کند؛ شعبه، صندوق، دستگاه و بسته پرداخت را اداره می‌کند.</span></div>
+    <div class="role"><b>مدیر شعبه</b><span>کار روزانه، گزارش، تطبیق حساب و فیصله‌های لازم را می‌بیند؛ بسته و اداره مرکزی را کنترول نمی‌کند.</span></div>
+    <div class="role"><b>صندوق‌دار</b><span>خرید، فروش، تبدیل، دریافت و پرداخت را فقط در شعبه و صندوق سپرده‌شده ثبت می‌کند؛ مشتری جدید نیز ساخته می‌تواند.</span></div>
+    <div class="role"><b>حسابدار</b><span>گزارش و تطبیق حساب را می‌بیند؛ اجازه ثبت حرکت پول را ندارد.</span></div>
+    <div class="role"><b>مسئول مطابقت</b><span>اسناد مشتری، بررسی خطر و کارهای مطابقت را می‌بیند؛ پول ثبت نمی‌کند.</span></div>
+    <div class="role"><b>بیننده</b><span>فقط معلومات مجاز را می‌بیند؛ چیزی تغییر یا ثبت نمی‌کند.</span></div>
+    <div class="role"><b>مدیر مرکزی سیستم</b><span>در صفحه جدا، کاربران، بسته‌ها، درخواست‌های پرداخت و درگاه‌ها را اداره می‌کند؛ به حساب مالی صرافی دسترسی مستقیم ندارد.</span></div>
+
+    <h2 style="margin-top:18px">کارهای اصلی که اکنون فعال است</h2>
+    <div class="grid">
+      <div class="card"><strong><span class="number">۱</span>معامله اسعار</strong><p>خرید، فروش و تبدیل جدا است. نرخ و ارزش افغانی بررسی می‌شود.</p></div>
+      <div class="card"><strong><span class="number">۲</span>محل پول</strong><p>صندوق، حساب بانکی و حساب دیگر با نام انسانی دیده می‌شود؛ دو حساب به هم انتقال می‌کنند.</p></div>
+      <div class="card"><strong><span class="number">۳</span>مشتری و قرض</strong><p>مشتری ساخته می‌شود، در معامله انتخاب می‌گردد و طلب یا قرض او تعقیب می‌شود.</p></div>
+      <div class="card"><strong><span class="number">۴</span>اسعار جهان</strong><p>مالک می‌تواند اسعار لازم را فعال کند؛ برنامه تنها به سه پول محدود نیست.</p></div>
+      <div class="card"><strong><span class="number">۵</span>تیم و دستگاه</strong><p>دعوت کارمند، تعیین شعبه و صندوق، و تأیید یا لغو مرورگر کارمند فعال است.</p></div>
+      <div class="card"><strong><span class="number">۶</span>تاریخچه واضح</strong><p>نام مشتری، کارمند، حساب مبدأ و حساب مقصد در حرکت پول دیده می‌شود.</p></div>
+    </div>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>2 / 4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"></div>
+    <h2>سادگی، موبایل و زبان محلی</h2>
+    <ul class="checklist">
+      <li>منوی موبایل کوتاه و دسته‌بندی‌شده است؛ صفحه در عرض ۳۶۰، ۳۹۰ و ۴۳۰ پیکسل بیرون نمی‌زند.</li>
+      <li>صفحه «پول من کجاست» خلاصه است؛ فهرست حساب‌ها و اسناد جزئی فقط هنگام ضرورت باز می‌شود.</li>
+      <li>انیمیشن آغاز فرستاده‌شده در موبایل فعال است و پس از آن صفحه ورود واقعی باز می‌شود.</li>
+      <li>دری و پشتو از نگاه متن‌های اصلی بررسی شد؛ متن انگلیسی در بخش‌های کلیدی مخلوط نمی‌شود.</li>
+      <li>مبالغ با دو رقم اعشار و جداکننده هزار نشان داده می‌شود؛ عدد خام یا علمی دیده نمی‌شود.</li>
+      <li>ثبت‌نام مالک، ورود تمام کارمندان و صفحه ورود مدیر مرکزی از هم واضح است.</li>
+    </ul>
+
+    <h2 style="margin-top:20px">بسته و پرداخت</h2>
+    <table>
+      <thead><tr><th>بخش</th><th>حالت فعلی</th><th>معنی ساده</th></tr></thead>
+      <tbody>
+        <tr><td>بسته کوچک</td><td>۱۰۰۰ افغانی در ماه</td><td>۱ شعبه و تا ۵ کارمند</td></tr>
+        <tr><td>بسته تجارتی</td><td>۲۵۰۰ افغانی در ماه</td><td>تا ۵ شعبه و ۲۵ کارمند</td></tr>
+        <tr><td>پرداخت بانکی یا دفتری</td><td>فعال</td><td>مالک شماره رسید را می‌فرستد؛ مدیر مرکزی آن را تأیید یا رد می‌کند.</td></tr>
+        <tr><td>حساب‌پی</td><td>قفل تنظیم</td><td>تا گرفتن حساب تجارتی، کلید مصئون و پیام تأیید فعال نمی‌شود.</td></tr>
+        <tr><td>درگاه APS / بانک</td><td>قفل تنظیم</td><td>تا قرارداد بانکی یا APS فعال نمی‌شود.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><b>صداقت پرداخت:</b> درگاه آنلاین ساختگی نشان داده نشده است. تنها روش واقعی موجود فعال است. مدیر مرکزی بعد از گرفتن قرارداد و معلومات مصئون می‌تواند درگاه دیگر را فعال کند.</div>
+
+    <h2 style="margin-top:16px">امنیت مهم</h2>
+    <div class="grid">
+      <div class="card"><strong>حدود هر نقش</strong><p>سرور اجازه هر کارمند را بررسی می‌کند؛ تنها پنهان‌کردن دکمه نیست.</p></div>
+      <div class="card"><strong>دستگاه مورد اعتماد</strong><p>مرورگر کارمند تا تأیید مالک مورد اعتماد نمی‌شود.</p></div>
+      <div class="card"><strong>جدایی تجارت‌ها</strong><p>کاربر یک صرافی معلومات صرافی دیگر را نمی‌بیند.</p></div>
+      <div class="card"><strong>سوابق مالی</strong><p>اطلاعات مالی پاک نمی‌شود و مسیر هر حرکت قابل بررسی است.</p></div>
+    </div>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>3 / 4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"></div>
+    <h2>نتیجه آزمایش و کارهای باقی‌مانده</h2>
+    <table>
+      <thead><tr><th>آزمایش</th><th>نتیجه</th><th>شامل چه بود</th></tr></thead>
+      <tbody>
+        <tr><td>مرورگر کروم</td><td>۶۴ کامیاب، صفر ناکام</td><td>تمام لینک‌ها، نقش‌ها، معامله، مشتری، پرداخت، زبان، دسترسی و اندازه صفحه</td></tr>
+        <tr><td>آزمایش برنامه</td><td>۶۸ کامیاب، صفر ناکام</td><td>حساب، ارزش‌گذاری، تاریخ کاری، گزارش و قواعد مالی</td></tr>
+        <tr><td>تیم زنده</td><td>۷ کامیاب</td><td>ورود قوی، دعوت صندوق‌دار و لغو دعوت</td></tr>
+        <tr><td>پول زنده</td><td>۲۲ کامیاب</td><td>حساب‌ها، اسعار جهان، انتقال دو حساب، توازن و تاریخچه</td></tr>
+        <tr><td>نسخه ممتاز زنده</td><td>۱۵ کامیاب</td><td>نقش‌ها، بسته، پرداخت، دستگاه و منع مدیر غیرمجاز</td></tr>
+        <tr><td>دیتابیس</td><td>بدون خطا</td><td>بررسی ساختار و تطبیق مهاجرت تولیدی</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note good"><b>آنچه من می‌توانم ادعا کنم:</b> کار تخنیکی نسخه وب که در این مرحله در اختیار من بود، تطبیق، آزمایش و در محیط تولیدی نشر شده است.</div>
+
+    <h2 style="margin-top:18px">کارهایی که به تصمیم یا معلومات مالک نیاز دارد</h2>
+    <ul class="checklist pending">
+      <li>یک حساب واقعی و بررسی‌شده باید به عنوان نخستین مدیر مرکزی سیستم تعیین شود. هیچ مالک به صورت خودکار مدیر مرکزی نشده است.</li>
+      <li>نرخ‌های واقعی خرید و فروش، نام تجارتی، شعبه‌ها، صندوق‌ها و کارمندان واقعی باید توسط مالک وارد شود.</li>
+      <li>برای حساب‌پی یا APS باید قرارداد، حساب تجارتی، کلید مصئون و پیام تأیید فراهم گردد.</li>
+      <li>پیش از استفاده عمومی با پول واقعی، مالک و کارمندان صرافی یک بار آزمایش انسانی نهایی انجام دهند.</li>
+    </ul>
+
+    <h2 style="margin-top:18px">عمداً در این مرحله شامل نیست</h2>
+    <div class="note"><b>اپلیکیشن موبایل بومی، بسته نصب و کار آفلاین</b> مطابق هدایت شما برای پیام بعدی گذاشته شد. نسخه فعلی یک وب‌سایت واکنش‌گرا است و روی موبایل در مرورگر کار می‌کند.</div>
+    <p class="lead">نتیجه نهایی: نسخه وب در حد کاری این مرحله آماده نشر است؛ اما فعال‌سازی درگاه واقعی و تعیین مدیر مرکزی بدون معلومات و قرارداد مالک ممکن نیست.</p>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>4 / 4</span></div>
+  </section>
+</body>
+</html>

@@ -21,6 +21,8 @@ describe("professional transaction receipt", () => {
         businessName="Kabul Central Exchange"
         trade={completedTrade}
         onPrint={() => undefined}
+        onNewSimilar={() => undefined}
+        onViewTransaction={() => undefined}
         onDone={() => undefined}
       />,
     );
@@ -42,6 +44,8 @@ describe("professional transaction receipt", () => {
         businessName="Kabul Central Exchange"
         trade={completedTrade}
         onPrint={() => undefined}
+        onNewSimilar={() => undefined}
+        onViewTransaction={() => undefined}
         onDone={() => undefined}
       />,
     );

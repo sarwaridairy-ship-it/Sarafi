@@ -648,8 +648,7 @@ td {
   box-shadow: 0 2px 8px rgba(16, 57, 47, 0.09);
 }
 
-.action-menu,
-.mobile-more-menu {
+.action-menu {
   overflow: hidden;
   border: 1px solid #d9e2dd;
   border-radius: 11px;
@@ -660,39 +659,6 @@ td {
 .action-menu button {
   min-height: 42px;
   font-size: 12px;
-}
-
-.navigation-menu {
-  width: 226px;
-}
-
-.sidebar .navigation-menu {
-  position: static;
-  width: 100%;
-  max-height: 236px;
-  margin: 6px 0 10px;
-  overflow-y: auto;
-  border-color: rgba(215, 232, 224, 0.13);
-  background: rgba(5, 27, 22, 0.34);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
-}
-
-.sidebar .navigation-menu .menu-group-label {
-  margin: 11px 9px 4px;
-  color: #9fb9ae !important;
-}
-
-.sidebar .navigation-menu button {
-  min-height: 37px;
-  color: #d5e3dc;
-  background: transparent;
-  font-size: 11px;
-  text-align: start;
-}
-
-.sidebar .navigation-menu button:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.075);
 }
 
 .sidebar .branch-menu {
@@ -1510,6 +1476,78 @@ td {
   background: linear-gradient(135deg, #eef9f2, #f8fcf9);
 }
 
+.invite-success-copy {
+  min-width: 0;
+}
+
+.invite-handoff-note {
+  max-width: 720px;
+  color: #536b62;
+  line-height: 1.7;
+}
+
+.invitation-qr {
+  width: 220px;
+  height: 220px;
+  padding: 10px;
+  border: 1px solid #d6e1db;
+  border-radius: 12px;
+  background: #fff;
+  image-rendering: pixelated;
+}
+
+.connection-code-field input {
+  max-width: 260px;
+  font-size: 20px;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+  text-align: center;
+}
+
+.worker-lobby-card {
+  width: min(100%, 620px);
+}
+
+.worker-lobby-card form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.worker-lobby-card form label {
+  display: grid;
+  gap: 8px;
+  color: #4d625a;
+  font-weight: 750;
+}
+
+.worker-lobby-card form input {
+  min-height: 58px;
+  border: 1px solid #b9ccc3;
+  border-radius: 11px;
+  background: #fff;
+  color: #17372f;
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.worker-lobby-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.onboarding-back {
+  margin-bottom: 10px;
+  font-size: 22px;
+}
+
 .invite-success h2,
 .team-editor h2,
 .team-section h2 {
@@ -1766,21 +1804,6 @@ td {
   .mobile-nav button.active {
     color: #154d42;
     background: #eaf4ef;
-  }
-  .mobile-more-menu {
-    right: 10px;
-    bottom: calc(78px + env(safe-area-inset-bottom));
-    left: 10px;
-    z-index: 8;
-    padding: 13px;
-    border-radius: 13px;
-  }
-  .mobile-more-menu button {
-    min-height: 44px;
-    border-radius: 8px;
-    color: #294a41;
-    background: #f7f9f7;
-    font-size: 11px;
   }
   .rate-strip { padding: 14px; }
   .rate-strip label { flex: 1 1 calc(50% - 8px); }
@@ -2557,7 +2580,54 @@ td {
 .activity { padding-top:16px; }
 
 .trade-modal { width:min(560px,100%); max-height:calc(100dvh - 28px); overflow:auto; padding:22px; border:1px solid #d8e1dd; border-radius:16px; box-shadow:0 28px 90px rgba(5,27,37,.25); }
+.transaction-inline-form { display:grid; justify-content:center; width:100%; padding:0 0 28px; background:transparent; }
+.transaction-page-form { width:min(720px,100%); max-height:none; margin:0 auto; border:0; border-radius:0; box-shadow:none; }
+.transaction-inline-form .close { display:none; }
+.transaction-back { max-width: 230px; text-align: end; }
+.transaction-detail-page { display:grid; gap:24px; }
+.transaction-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.transaction-detail-grid article { display:grid; gap:6px; min-width:0; padding:16px; border:1px solid #dce7e2; border-radius:14px; background:#f8fbfa; }
+.transaction-detail-grid small { color:#647b76; font-weight:750; }
+.transaction-detail-grid strong { overflow-wrap:anywhere; color:#123d39; }
+.transaction-correction-form { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,1fr) auto; align-items:end; gap:16px; padding:20px; border:1px solid #e8d9a8; border-radius:16px; background:#fffcf2; }
+.transaction-correction-form label { display:grid; gap:6px; font-weight:750; }
+.transaction-correction-form input { min-height:44px; border:1px solid #cfdad5; border-radius:10px; padding:10px 12px; font:inherit; }
+@media (max-width: 760px) {
+  .transaction-detail-grid { grid-template-columns:1fr; }
+  .transaction-correction-form { grid-template-columns:1fr; }
+  .transaction-back { max-width:100%; text-align:start; }
+}
 .modal-backdrop { z-index:30; padding:14px; background:rgba(5,25,34,.62); backdrop-filter:blur(4px); }
+.transaction-detail-backdrop { position:fixed; inset:0; display:flex; justify-content:flex-end; padding:0; }
+.transaction-detail-drawer { width:min(560px,100%); height:100%; max-height:none; border-radius:16px 0 0 16px; }
+.transaction-center { min-height:calc(100dvh - 150px); }
+.control-center-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.control-center-card { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; min-height:76px; padding:14px; border:1px solid #d8e2de; border-radius:12px; color:#102a36; background:#fff; text-align:start; cursor:pointer; }
+.control-center-card:hover,.control-center-card:focus-visible { border-color:#2b7665; background:#f4faf7; }
+.control-center-card .app-icon { color:#2b7665; }
+.control-center-card strong,.control-center-card small { display:block; }
+.control-center-card small { margin-top:4px; color:#66787b; font-size:12px; }
+.transaction-category-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.transaction-category { padding:18px; border:1px solid #d8e2de; border-radius:14px; background:#fff; }
+.transaction-category h2 { display:flex; align-items:center; gap:9px; margin:0 0 14px; color:#123c35; font-size:17px; }
+.transaction-category h2 .app-icon { color:#2b7665; }
+.transaction-category > div { display:grid; gap:8px; }
+.transaction-action { display:flex; align-items:center; justify-content:space-between; min-height:44px; padding:10px 12px; border:1px solid #d8e2de; border-radius:9px; background:#f8faf8; color:#0b1f24; font:600 14px var(--font-sans); text-align:start; cursor:pointer; }
+.transaction-action:hover:not(:disabled), .transaction-action:focus-visible { border-color:#2b7665; background:#edf6f1; }
+.transaction-action:disabled { cursor:not-allowed; opacity:.55; }
+.hawala-status-actions { display:flex; align-items:center; gap:7px; }
+.hawala-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; margin-bottom:14px; padding:4px; border:1px solid #d8e1dd; border-radius:11px; background:#f3f5f2; }
+.hawala-tabs button { min-height:42px; border:0; border-radius:8px; color:#586b70; background:transparent; font:750 12px var(--font-sans); cursor:pointer; }
+.hawala-tabs button.active { color:#fff; background:#0d756c; }
+.hawala-payout-list { display:grid; gap:8px; }
+.hawala-payout-account { display:grid; gap:6px; margin-bottom:12px; }
+.hawala-payout-account select { min-height:43px; border:1px solid #ced9d4; border-radius:9px; background:#fff; font:inherit; }
+.hawala-payout-account input,.hawala-settlement-amount { min-height:43px; border:1px solid #ced9d4; border-radius:9px; background:#fff; font:inherit; }
+.status-pill { display:inline-flex; min-width:52px; justify-content:center; padding:4px 7px; border-radius:999px; color:#53656a; background:#eef2ef; font-size:10px; font-weight:750; text-transform:capitalize; }
+.status-created,.status-funded { color:#805d1c; background:#fff4d8; }
+.status-sent,.status-ready { color:#245c83; background:#e4f0fb; }
+.status-paid { color:#236646; background:#def1e7; }
+.status-cancelled { color:#8d3e3a; background:#fde9e6; }
 .modal-head { margin-bottom:12px; }
 .modal-head h2 { color:#102a36; font-size:21px; }
 .trade-mode-switch { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin:0 0 16px; padding:4px; border:1px solid #d8e1dd; border-radius:11px; background:#f3f5f2; }
@@ -2572,6 +2642,13 @@ td {
 .trade-optional-fields > .form-grid { margin-top:0; }
 .trade-account-flow { margin-bottom:14px; }
 .rate-box { border-radius:9px; }
+.rate-box .rate-warning { margin-inline-start:auto; color:#9a5a17; font-weight:800; }
+.rate-governance { display:grid; gap:12px; margin:-8px 0 20px; padding:15px; border:1px solid #d8e1dd; border-radius:10px; background:#fbfcfa; }
+.rate-governance.needs-attention { border-color:#dfb879; background:#fffaf0; }
+.rate-governance > small,.rate-governance > p { margin:0; color:#62726f; font-size:11px; line-height:1.55; }
+.rate-governance .choice-row { display:flex; flex-direction:row; align-items:center; gap:10px; margin:0; color:#263e43; font-weight:750; }
+.rate-governance .choice-row input { flex:0 0 auto; width:18px; min-height:18px; margin:0; }
+.rate-governance textarea { min-height:74px; resize:vertical; }
 
 .auth-shell { position:relative; overflow:hidden; padding:28px; background:#071d29; }
 .auth-shell::before { position:absolute; inset:0; content:""; pointer-events:none; background:radial-gradient(circle at 22% 30%,rgba(20,116,108,.22),transparent 34%),radial-gradient(circle at 78% 75%,rgba(200,154,72,.11),transparent 26%); }
@@ -2597,6 +2674,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .daily-action-grid { grid-template-columns:repeat(4,minmax(64px,1fr)); }
 }
 @media (max-width:680px) {
+  .control-center-grid { grid-template-columns:1fr; }
+  .transaction-category-grid { grid-template-columns:1fr; gap:10px; }
+  .transaction-center { min-height:calc(100dvh - 118px); }
+  .transaction-detail-backdrop { justify-content:stretch; }
+  .transaction-detail-drawer { width:100%; height:100%; border-radius:0; }
   .topbar { height:56px; padding-inline:13px; }
   .content-wrap { padding:12px 12px calc(84px + env(safe-area-inset-bottom)); }
   .dashboard-welcome { display:block; margin-bottom:8px; padding:11px; border-radius:13px; }

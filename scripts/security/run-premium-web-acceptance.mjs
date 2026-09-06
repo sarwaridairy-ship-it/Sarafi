@@ -162,6 +162,7 @@ const preferenceProbe = !disableApprovalNotice.error ? await cashier.rpc('reques
     sold_base_value: '1',
     bought_base_value: '1',
     base_currency: 'AFN',
+    client_command_id: crypto.randomUUID(),
     approval_reason: 'Notification preference acceptance probe',
   },
 }) : { data: null, error: disableApprovalNotice.error }

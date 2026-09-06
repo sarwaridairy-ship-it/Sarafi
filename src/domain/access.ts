@@ -1,8 +1,9 @@
-export type Role = 'owner' | 'manager' | 'accountant' | 'cashier' | 'viewer' | 'compliance_officer'
+export type Role = 'owner' | 'business_admin' | 'manager' | 'accountant' | 'cashier' | 'viewer' | 'compliance_officer'
 export type Permission = 'organization:manage' | 'financial:overview' | 'financial:post' | 'financial:report' | 'reconciliation:manage' | 'team:manage' | 'approval:decide' | 'compliance:review' | 'security:manage'
 
 const rolePermissions: Record<Role, Permission[]> = {
   owner: ['organization:manage', 'financial:overview', 'financial:post', 'financial:report', 'reconciliation:manage', 'team:manage', 'approval:decide', 'compliance:review', 'security:manage'],
+  business_admin: ['organization:manage', 'financial:overview', 'financial:post', 'financial:report', 'reconciliation:manage', 'team:manage', 'approval:decide', 'compliance:review', 'security:manage'],
   manager: ['financial:overview', 'financial:post', 'financial:report', 'reconciliation:manage', 'approval:decide'],
   accountant: ['financial:overview', 'financial:report', 'reconciliation:manage'],
   cashier: ['financial:post'],

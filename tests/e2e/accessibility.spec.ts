@@ -35,31 +35,34 @@ test.describe("accessibility acceptance", () => {
     }
   });
 
-  test("trade dialog traps focus, closes with Escape, and restores focus", async ({
+  test("trade page is keyboard usable and returns to the transaction types", async ({
     page,
   }) => {
     await page.goto("/");
     const launch = page.locator(".trade-launch");
     await launch.click();
-    const dialog = page.getByRole("dialog", { name: /Buy currency/ });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("textbox", { name: /We receive/ }).fill("1000");
-    await dialog.getByRole("button", { name: "Review transaction" }).click();
-    const confirm = dialog.getByRole("button", { name: "Confirm and save" });
-    const close = dialog.getByRole("button", { name: "Close trade" });
-    await confirm.focus();
-    await page.keyboard.press("Tab");
-    await expect(close).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(dialog).not.toBeVisible();
-    await expect(launch).toBeFocused();
+    await page.getByRole("button", { name: "Buy currency", exact: true }).click();
+    const form = page.locator(".transaction-page-form");
+    await expect(form).toBeVisible();
+    await expect(page).toHaveURL(/\/transactions\/new\/fx\?side=BUY_FX$/);
+    const amount = form.getByRole("textbox", { name: /We receive/ });
+    await amount.focus();
+    await expect(amount).toBeFocused();
+    await amount.fill("1000");
+    const back = form.getByRole("button", { name: "Close trade" });
+    await back.focus();
+    await expect(back).toBeFocused();
+    await back.click();
+    await expect(page).toHaveURL(/\/transactions\/new$/);
+    await expect(page.getByRole("heading", { name: "Make a Transaction" })).toBeVisible();
   });
 
-  test("trade dialog has no critical or serious automated violations", async ({
+  test("trade page has no critical or serious automated violations", async ({
     page,
   }) => {
     await page.goto("/");
     await page.locator(".trade-launch").click();
+    await page.getByRole("button", { name: "Buy currency", exact: true }).click();
     const results = await new AxeBuilder({ page })
       .include(".trade-modal")
       .setLegacyMode(true)

@@ -48,7 +48,6 @@ const locales = [
     peopleHeading: "مشتریان و صرافان",
     transactionsNav: "معاملات",
     transactionsHeading: "تاریخچه معاملات",
-    more: "بیشتر",
     reports: "گزارش‌ها",
     reportsHeading: "گزارش‌ها",
     rates: "نرخ‌ها",
@@ -76,7 +75,6 @@ const locales = [
     peopleHeading: "پېرودونکي او صرافان",
     transactionsNav: "معاملې",
     transactionsHeading: "د معاملو تاریخچه",
-    more: "نور",
     reports: "راپورونه",
     reportsHeading: "راپورونه",
     rates: "نرخونه",
@@ -110,6 +108,7 @@ for (const locale of locales) {
     await expectNoEnglishLeak(page, `${locale.code} home`);
 
     await page.locator(".trade-launch").click();
+    await page.getByRole("button", { name: locale.buy, exact: true }).click();
     await page.getByRole("tab", { name: locale.buy, exact: true }).click();
     await expect(
       page.getByRole("heading", { name: locale.buyHeading }),
@@ -121,40 +120,33 @@ for (const locale of locales) {
       page.getByRole("textbox", { name: locale.receive }),
     ).toBeVisible();
     await expectNoEnglishLeak(page, `${locale.code} buy`);
-    await page.locator(".trade-modal .close").click();
+    await page.locator(".transaction-back").click();
 
-    for (const [button, heading] of [
-      [locale.moneyNav, locale.moneyHeading],
-      [locale.peopleNav, locale.peopleHeading],
-      [locale.transactionsNav, locale.transactionsHeading],
+    for (const [path, heading] of [
+      ["/app/inspection/money", locale.moneyHeading],
+      ["/app/inspection/people", locale.peopleHeading],
+      ["/app/inspection/transactions", locale.transactionsHeading],
     ] as const) {
-      await page.getByRole("button", { name: new RegExp(button) }).click();
+      await page.goto(path);
       await expect(
         page.getByRole("heading", { name: heading, exact: true }),
       ).toBeVisible();
-      await expectNoEnglishLeak(page, `${locale.code} ${button}`);
+      await expectNoEnglishLeak(page, `${locale.code} ${path}`);
     }
 
-    const moreButton = page
-      .locator(".sidebar nav")
-      .getByRole("button", { name: new RegExp(locale.more) });
-    for (const [button, heading] of [
-      [locale.reports, locale.reportsHeading],
-      [locale.rates, locale.ratesHeading],
-      [locale.cashbox, locale.cashboxHeading],
-      [locale.team, locale.team],
-      [locale.settings, locale.settingsHeading],
-      [locale.importData, locale.importHeading],
-      [locale.hawala, locale.hawala],
+    for (const [path, heading] of [
+      ["/app/inspection/control/reports", locale.reportsHeading],
+      ["/app/inspection/control/rates", locale.ratesHeading],
+      ["/app/inspection/control/reconciliation", locale.cashboxHeading],
+      ["/app/inspection/control/team", locale.team],
+      ["/app/inspection/control", locale.code === "fa-AF" ? "مرکز کنترول" : "د کنټرول مرکز"],
+      ["/app/inspection/hawala", locale.hawala],
     ] as const) {
-      await moreButton.click();
-      await page.locator(".navigation-menu")
-        .getByRole("button", { name: new RegExp(`^${button}`) })
-        .click();
+      await page.goto(path);
       await expect(
         page.getByRole("heading", { name: heading, exact: true }),
       ).toBeVisible();
-      await expectNoEnglishLeak(page, `${locale.code} ${button}`);
+      await expectNoEnglishLeak(page, `${locale.code} ${path}`);
     }
   });
 }

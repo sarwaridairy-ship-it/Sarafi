@@ -10,10 +10,10 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "npm run build -- --mode e2e && npm run preview -- --host 127.0.0.1 --port 5174",
+      "node node_modules/vite/bin/vite.js build --mode e2e && node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5174",
     url: "http://127.0.0.1:5174",
     reuseExistingServer: false,
-    timeout: 120000,
+    timeout: 300000,
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

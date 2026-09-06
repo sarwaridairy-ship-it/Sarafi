@@ -6,6 +6,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/app/:path*",
+      "destination": "/index.html"
+    },
+    {
       "source": "/supabase/:path*",
       "destination": "https://vbvwuqzqtcorassvotke.supabase.co/:path*"
     }

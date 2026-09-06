@@ -4,6 +4,16 @@ import { test } from "@playwright/test";
 
 const outputDirectory = path.resolve("test-results/web-ux-production");
 
+const roles = [
+  "owner",
+  "business_admin",
+  "manager",
+  "cashier",
+  "accountant",
+  "compliance_officer",
+  "viewer",
+] as const;
+
 const locales = [
   {
     code: "en",
@@ -54,7 +64,7 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
     browserName !== "chromium",
     "One controlled Chromium visual matrix is sufficient",
   );
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
   await mkdir(outputDirectory, { recursive: true });
 
   for (const locale of locales) {
@@ -66,22 +76,17 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
       fullPage: true,
     });
 
-    await page.goto("/");
-    await page.locator("select.lang-button").selectOption(locale.code);
-    await page.screenshot({
-      path: path.join(outputDirectory, `owner-home-${locale.slug}-desktop.png`),
-      fullPage: true,
-    });
-
-    await page.goto("/?role=cashier");
-    await page.locator("select.lang-button").selectOption(locale.code);
-    await page.screenshot({
-      path: path.join(
-        outputDirectory,
-        `cashier-home-${locale.slug}-desktop.png`,
-      ),
-      fullPage: true,
-    });
+    for (const role of roles) {
+      await page.goto(`/?role=${role}`);
+      await page.locator("select.lang-button").selectOption(locale.code);
+      await page.screenshot({
+        path: path.join(
+          outputDirectory,
+          `${role.replaceAll("_", "-")}-home-${locale.slug}-desktop.png`,
+        ),
+        fullPage: true,
+      });
+    }
 
     await page.goto("/");
     await page.locator("select.lang-button").selectOption(locale.code);
@@ -106,7 +111,9 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
             : /موږ ورکوو/,
       ],
     ] as const) {
+      await page.goto("/");
       await page.locator(".trade-launch").click();
+      await page.getByRole("button", { name: button, exact: true }).click();
       await page.getByRole("tab", { name: button, exact: true }).click();
       await page
         .locator(".trade-modal")
@@ -127,57 +134,45 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
         path: path.join(outputDirectory, `${kind}-${locale.slug}-desktop.png`),
         fullPage: true,
       });
-      await page.locator(".trade-modal .close").click();
+      await page.locator(".transaction-back").click();
     }
 
-    for (const [route, button] of [
-      ["my-money", locale.money],
-      ["customers-debts", locale.people],
-      ["transactions", locale.transactions],
+    for (const [route, routePath] of [
+      ["my-money", "/app/inspection/money"],
+      ["customers-debts", "/app/inspection/customers"],
+      ["transactions", "/app/inspection/transactions"],
     ] as const) {
-      await page
-        .locator(".sidebar nav")
-        .getByRole("button", { name: button })
-        .click();
+      await page.goto(routePath);
       await page.screenshot({
         path: path.join(outputDirectory, `${route}-${locale.slug}-desktop.png`),
         fullPage: true,
       });
     }
 
-    await page.locator(".sidebar nav > button[aria-expanded]").click();
-    await page.screenshot({
-      path: path.join(outputDirectory, `more-${locale.slug}-desktop.png`),
-      fullPage: true,
-    });
-    await page.locator(".navigation-menu").getByRole("button", { name: locale.settings }).click();
+    await page.goto("/app/inspection/control/business");
     await page.screenshot({
       path: path.join(outputDirectory, `settings-${locale.slug}-desktop.png`),
       fullPage: true,
     });
-    await page.locator(".sidebar nav > button[aria-expanded]").click();
-    await page.locator(".navigation-menu").getByRole("button", { name: locale.compliance }).click();
+    await page.goto("/app/inspection/compliance");
     await page.screenshot({
       path: path.join(outputDirectory, `compliance-${locale.slug}-desktop.png`),
       fullPage: true,
     });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/");
-    await page.locator("select.lang-button").selectOption(locale.code);
-    await page.screenshot({
-      path: path.join(
-        outputDirectory,
-        `owner-home-${locale.slug}-mobile-390.png`,
-      ),
-      fullPage: true,
-    });
-    await page.locator(".mobile-nav > button[aria-expanded]").click();
-    await page.screenshot({
-      path: path.join(outputDirectory, `more-${locale.slug}-mobile-390.png`),
-      fullPage: true,
-    });
-    await page.locator(".mobile-more-menu").getByRole("button", { name: locale.settings }).click();
+    for (const role of roles) {
+      await page.goto(`/?role=${role}`);
+      await page.locator("select.lang-button").selectOption(locale.code);
+      await page.screenshot({
+        path: path.join(
+          outputDirectory,
+          `${role.replaceAll("_", "-")}-home-${locale.slug}-mobile-390.png`,
+        ),
+        fullPage: true,
+      });
+    }
+    await page.goto("/app/inspection/control/business");
     await page.screenshot({
       path: path.join(outputDirectory, `settings-${locale.slug}-mobile-390.png`),
       fullPage: true,

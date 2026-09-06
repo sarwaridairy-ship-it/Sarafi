@@ -34,12 +34,15 @@ const registerDevice = async (instance, label) => {
   if (result.error || !result.data?.id) throw new Error(`${label} device registration failed: ${result.error?.message ?? 'no device returned'}`)
   return result.data.id
 }
-const command = (id, soldAmount = '0.01') => ({
-  organization_id: env.BUSINESS_A_ID, branch_id: env.BRANCH_A1_ID, cashbox_id: env.CASHBOX_A1_ID,
-  side: 'sell_fx', sold_currency: env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD', bought_currency: env.SARAFI_STEP16_BOUGHT_CURRENCY ?? 'AFN',
-  sold_amount: soldAmount, bought_amount: soldAmount, sold_base_value: soldAmount, bought_base_value: new Decimal(soldAmount).plus(1).toString(),
-  base_currency: env.SARAFI_STEP16_BASE_CURRENCY ?? 'AFN', client_command_id: id,
-})
+const command = (id, soldAmount = '0.01', sellRate = '70') => {
+  const boughtAmount = new Decimal(soldAmount).mul(sellRate).toFixed(12)
+  return {
+    organization_id: env.BUSINESS_A_ID, branch_id: env.BRANCH_A1_ID, cashbox_id: env.CASHBOX_A1_ID,
+    side: 'sell_fx', sold_currency: env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD', bought_currency: env.SARAFI_STEP16_BOUGHT_CURRENCY ?? 'AFN',
+    sold_amount: soldAmount, bought_amount: boughtAmount, sold_base_value: boughtAmount, bought_base_value: boughtAmount,
+    base_currency: env.SARAFI_STEP16_BASE_CURRENCY ?? 'AFN', rate: sellRate, rate_source: 'shop_rate', client_command_id: id,
+  }
+}
 const rpc = (instance, payload) => instance.rpc('record_fx_trade', { command: payload })
 const getSnapshot = async (instance) => {
   const [journal, events, receipts, state, balanceAudit] = await Promise.all([
@@ -70,8 +73,37 @@ for (const [deviceId, label] of [[deviceA, 'primary'], [deviceB, 'second']]) {
   const trusted = await ownerA.rpc('trust_device', { target_device: deviceId, reason_input: `Step 16 ${label} device trust` })
   if (trusted.error) throw new Error(`${label} device trust failed: ${trusted.error.message}`)
 }
-const before = await getSnapshot(cashierA)
 const soldCurrency = env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD'
+const boughtCurrency = env.SARAFI_STEP16_BOUGHT_CURRENCY ?? 'AFN'
+let rateContext = await cashierA.rpc('get_transaction_rate_context', {
+  target_org: env.BUSINESS_A_ID,
+  target_branch: env.BRANCH_A1_ID,
+  source_currency: soldCurrency,
+  target_currency: boughtCurrency,
+})
+if (rateContext.error || !rateContext.data?.sell_rate || rateContext.data.stale) {
+  const fallbackBuyRate = rateContext.data?.buy_rate ?? '70'
+  const fallbackSellRate = rateContext.data?.sell_rate ?? '70'
+  const published = await ownerA.rpc('set_exchange_rate', {
+    target_org: env.BUSINESS_A_ID,
+    target_branch: env.BRANCH_A1_ID,
+    source_currency_input: soldCurrency,
+    target_currency_input: boughtCurrency,
+    buy_rate_input: fallbackBuyRate,
+    sell_rate_input: fallbackSellRate,
+  })
+  if (published.error) throw new Error(`Step 16 could not publish a current rate: ${published.error.message}`)
+  rateContext = await cashierA.rpc('get_transaction_rate_context', {
+    target_org: env.BUSINESS_A_ID,
+    target_branch: env.BRANCH_A1_ID,
+    source_currency: soldCurrency,
+    target_currency: boughtCurrency,
+  })
+}
+if (rateContext.error || !rateContext.data?.sell_rate || rateContext.data.stale)
+  throw new Error(`Step 16 requires a current ${soldCurrency}/${boughtCurrency} sell rate`)
+const sellRate = new Decimal(rateContext.data.sell_rate).toString()
+const before = await getSnapshot(cashierA)
 const availableBefore = new Decimal(
   before.state.find((row) => row.currency_code === soldCurrency)?.quantity ?? 0,
 )
@@ -80,19 +112,19 @@ if (!availableBefore.isFinite() || availableBefore.lte(0))
 const competingAmount = availableBefore.mul('0.75').toFixed(12)
 const retryAmount = availableBefore.mul('0.001').toFixed(12)
 const raceIds = [randomUUID(), randomUUID()]
-const race = await Promise.all([rpc(cashierA, { ...command(raceIds[0], competingAmount), device_id: deviceA }), rpc(cashierA, { ...command(raceIds[1], competingAmount), device_id: deviceB })])
+const race = await Promise.all([rpc(cashierA, { ...command(raceIds[0], competingAmount, sellRate), device_id: deviceA }), rpc(cashierA, { ...command(raceIds[1], competingAmount, sellRate), device_id: deviceB })])
 const successfulRacePosts = race.filter((result) => !result.error)
 const racePassed = successfulRacePosts.length === 1
 record('Concurrent sales cannot overspend available inventory', racePassed, `available=${availableBefore}; each_sale=${competingAmount}; successful_posts=${successfulRacePosts.length}; ${race.map((result) => result.error?.message ?? result.data?.id).join(' | ')}`)
 
 const retryId = randomUUID()
-const first = await rpc(cashierA, { ...command(retryId, retryAmount), device_id: deviceA })
-const retry = await Promise.all([rpc(cashierA, { ...command(retryId, retryAmount), device_id: deviceA }), rpc(cashierA, { ...command(retryId, retryAmount), device_id: deviceB })])
+const first = await rpc(cashierA, { ...command(retryId, retryAmount, sellRate), device_id: deviceA })
+const retry = await Promise.all([rpc(cashierA, { ...command(retryId, retryAmount, sellRate), device_id: deviceA }), rpc(cashierA, { ...command(retryId, retryAmount, sellRate), device_id: deviceB })])
 const retryIds = [first.data?.id, ...retry.map((result) => result.data?.id)].filter(Boolean)
 record('Retry after committed timeout produces one posting', new Set(retryIds).size === 1 && retry.every((result) => !result.error), retryIds.join(','))
 
 const sameId = randomUUID()
-const duplicate = await Promise.all([rpc(cashierA, { ...command(sameId, retryAmount), device_id: deviceA }), rpc(cashierA, { ...command(sameId, retryAmount), device_id: deviceA }), rpc(cashierA, { ...command(sameId, retryAmount), device_id: deviceB })])
+const duplicate = await Promise.all([rpc(cashierA, { ...command(sameId, retryAmount, sellRate), device_id: deviceA }), rpc(cashierA, { ...command(sameId, retryAmount, sellRate), device_id: deviceA }), rpc(cashierA, { ...command(sameId, retryAmount, sellRate), device_id: deviceB })])
 const duplicateIds = duplicate.map((result) => result.data?.id).filter(Boolean)
 record('Same idempotency key across devices has one economic effect', new Set(duplicateIds).size <= 1 && duplicate.every((result) => !result.error), duplicateIds.join(','))
 

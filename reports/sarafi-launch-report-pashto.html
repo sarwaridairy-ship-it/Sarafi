@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ps-AF" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>د صرافي د وېب د چمتووالي راپور</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #17241f; background: #eef3f1; font-family: Arial, Tahoma, sans-serif; font-size: 12.5px; line-height: 1.75; }
+    .page { position: relative; width: 210mm; min-height: 297mm; padding: 18mm 17mm 15mm; background: #fff; page-break-after: always; overflow: hidden; }
+    .page:last-child { page-break-after: auto; }
+    .topline { height: 4px; margin: -18mm -17mm 14mm; background: linear-gradient(90deg,#d8aa44,#0c725d); }
+    .brand { display: flex; align-items: center; justify-content: space-between; direction: ltr; }
+    .brandmark { display: flex; align-items: center; gap: 10px; color: #0c5648; }
+    .logo { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; color: white; background: #0c725d; font-weight: 800; font-size: 19px; }
+    .brand b { letter-spacing: 2px; font-size: 17px; }
+    .date { color: #60716a; font-size: 11px; }
+    .hero { margin-top: 25mm; padding: 20mm 16mm; border-radius: 22px; color: white; background: linear-gradient(145deg,#0c3d34,#0d725d); box-shadow: 0 12px 34px rgba(12,61,52,.18); }
+    .hero small { color: #c9e4dc; font-weight: 700; }
+    h1 { margin: 8px 0 12px; font-size: 31px; line-height: 1.35; }
+    .hero p { max-width: 135mm; margin: 0; color: #e6f3ef; font-size: 15px; }
+    .status { display: inline-flex; align-items: center; gap: 7px; margin-top: 18px; padding: 7px 12px; border-radius: 999px; color: #123b31; background: #dff5ec; font-weight: 800; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #16a36e; }
+    .summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 18mm; }
+    .summary div { padding: 14px; border: 1px solid #dce7e2; border-radius: 14px; background: #f7faf9; }
+    .summary b { display: block; color: #0c725d; font-size: 22px; direction: ltr; text-align: right; }
+    .summary span { color: #5b6a64; }
+    h2 { margin: 0 0 10px; color: #123f35; font-size: 21px; }
+    h3 { margin: 12px 0 4px; color: #0c725d; font-size: 14px; }
+    p { margin: 4px 0 9px; }
+    .lead { color: #566760; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+    .card { padding: 13px 14px; border: 1px solid #dce6e2; border-radius: 13px; background: #fafcfb; break-inside: avoid; }
+    .card strong { color: #0c5648; font-size: 14px; }
+    .card p { margin-bottom: 0; color: #4e5f58; }
+    .number { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-left: 6px; border-radius: 8px; color: white; background: #0c725d; direction: ltr; font-weight: 800; }
+    .role { display: grid; grid-template-columns: 33mm 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid #e4ebe8; break-inside: avoid; }
+    .role:last-child { border-bottom: 0; }
+    .role b { color: #0c5648; }
+    .note { margin: 12px 0; padding: 11px 13px; border-right: 4px solid #d8aa44; border-radius: 9px; background: #fff8e8; }
+    .good { border-right-color: #0c725d; background: #edf8f4; }
+    table { width: 100%; border-collapse: collapse; margin-top: 9px; font-size: 11.5px; }
+    th, td { padding: 8px; border-bottom: 1px solid #dfe8e4; text-align: right; vertical-align: top; }
+    th { color: #0c5648; background: #f1f7f4; }
+    .checklist { margin: 8px 0 0; padding: 0; list-style: none; }
+    .checklist li { position: relative; padding: 7px 29px 7px 0; border-bottom: 1px solid #e7ecea; }
+    .checklist li::before { content: "✓"; position: absolute; right: 2px; top: 7px; color: #0c725d; font-weight: 900; }
+    .pending li::before { content: "○"; color: #c18a1e; }
+    .footer { position: absolute; right: 17mm; left: 17mm; bottom: 8mm; display: flex; justify-content: space-between; color: #7a8782; font-size: 9.5px; direction: ltr; }
+    .url { direction: ltr; unicode-bidi: isolate; color: #0c725d; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <div class="topline"></div>
+    <div class="brand"><div class="brandmark"><span class="logo">S</span><b>SARAFI</b></div><span class="date">۲ سپتمبر ۲۰۲۶</span></div>
+    <div class="hero">
+      <small>د وېب نسخې د چمتووالي ساده راپور</small>
+      <h1>د صرافي وېب نسخه د عملي کار لپاره چمتو ده</h1>
+      <p>د صرافي ورځنی کار، کارکوونکي، د پیسو ځای، مشتریان، د بستې تادیه او مرکزي اداره ساده، جلا او خوندي جوړ شوي دي.</p>
+      <span class="status"><i class="dot"></i> اصلي نسخه فعاله ده</span>
+    </div>
+    <div class="summary">
+      <div><b>64 / 64</b><span>د براوزر ازموینې بریالۍ</span></div>
+      <div><b>68 / 68</b><span>د پروګرام ازموینې بریالۍ</span></div>
+      <div><b>44 / 44</b><span>ژوندۍ امنیتي ازموینې بریالۍ</span></div>
+    </div>
+    <div class="note good" style="margin-top:16mm"><b>ژوندۍ پته:</b> <span class="url">https://sarafi-swart.vercel.app/</span><br>نوې وېب نسخه او نوی ډیټابېس دواړه په اصلي چاپېریال کې فعال شوي دي.</div>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>1 / 4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"></div>
+    <h2>هر کارکوونکی جلا پاڼه او جلا دنده لري</h2>
+    <p class="lead">د کارکوونکو شمېر ثابت نه دی. مالک د صرافي د اړتیا له مخې خلک زیاتوي. کوچنۍ بسته تر ۵ کارکوونکو او تجارتي بسته تر ۲۵ کارکوونکو پورې ځای لري.</p>
+    <div class="role"><b>مالک</b><span>ټول کاروبار ویني؛ کارکوونکی رابولي؛ څانګه، صندوق، وسیله او د تادیې بسته اداره کوي.</span></div>
+    <div class="role"><b>د څانګې مدیر</b><span>ورځنی کار، راپور، حساب برابرول او لازمې پرېکړې ویني؛ بسته او مرکزي اداره نه کنترولوي.</span></div>
+    <div class="role"><b>صندوق‌دار</b><span>پېر، پلور، تبادله، پیسې اخیستل او ورکول یوازې په ورکړل شوې څانګه او صندوق کې ثبتوي؛ نوی مشتری هم جوړولی شي.</span></div>
+    <div class="role"><b>حسابدار</b><span>راپورونه او د حساب برابرول ویني؛ د پیسو حرکت نه شي ثبتولی.</span></div>
+    <div class="role"><b>د مطابقت مسئول</b><span>د مشتری اسناد، د خطر کتنه او د مطابقت کار ویني؛ د پیسو حرکت نه ثبتوي.</span></div>
+    <div class="role"><b>کتونکی</b><span>یوازې اجازه شوې مالومات ویني؛ هېڅ شی نه بدلوي او نه یې ثبتوي.</span></div>
+    <div class="role"><b>د سیستم مرکزي مدیر</b><span>په جلا پاڼه کې کارنان، بستې، د تادیې غوښتنې او دروازې اداره کوي؛ د صرافي مالي حساب ته مستقیم لاسرسی نه لري.</span></div>
+
+    <h2 style="margin-top:18px">هغه مهم کارونه چې اوس فعال دي</h2>
+    <div class="grid">
+      <div class="card"><strong><span class="number">۱</span>د اسعارو معامله</strong><p>پېر، پلور او تبادله جلا دي. نرخ او افغاني ارزښت کتل کېږي.</p></div>
+      <div class="card"><strong><span class="number">۲</span>زما پیسې چېرته دي</strong><p>صندوق، بانکي حساب او نور حسابونه په روښانه نوم ښکاري؛ له یوه حسابه بل ته انتقال کېږي.</p></div>
+      <div class="card"><strong><span class="number">۳</span>مشتری او پور</strong><p>مشتری جوړېږي، په معامله کې ټاکل کېږي او طلب یا پور یې څارل کېږي.</p></div>
+      <div class="card"><strong><span class="number">۴</span>د نړۍ اسعار</strong><p>مالک اړین اسعار فعالولی شي؛ پروګرام یوازې په درې پیسو نه دی محدود.</p></div>
+      <div class="card"><strong><span class="number">۵</span>ټیم او وسیله</strong><p>د کارکوونکي بلنه، د څانګې او صندوق ټاکل، او د براوزر منل یا بندول فعال دي.</p></div>
+      <div class="card"><strong><span class="number">۶</span>روښانه تاریخچه</strong><p>د مشتری، کارکوونکي، له کوم حسابه او کوم حساب ته حرکت شوی، ټول ښکاري.</p></div>
+    </div>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>2 / 4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"></div>
+    <h2>سادګي، موبایل او محلي ژبه</h2>
+    <ul class="checklist">
+      <li>د موبایل مېنو لنډه او ډلبندي شوې ده؛ پاڼه په ۳۶۰، ۳۹۰ او ۴۳۰ پکسله کې له پردې نه وځي.</li>
+      <li>د «زما پیسې چېرته دي» پاڼه لنډه ده؛ د حسابونو او اسنادو اوږد لست یوازې د اړتیا پر وخت خلاصېږي.</li>
+      <li>ستاسو رالېږل شوی د پرانیستلو انیمېشن په موبایل کې فعال دی او وروسته اصلي د ننوتلو پاڼه خلاصیږي.</li>
+      <li>دري او پښتو مهم متنونه وکتل شول؛ په اصلي برخو کې انګلیسي متن نه ورګډېږي.</li>
+      <li>د پیسو شمېرې په دوو اعشاري ځایونو او د زرو په نښه ښکاري؛ خام یا علمي عدد نه ښودل کېږي.</li>
+      <li>د مالک نوم‌لیکنه، د ټولو کارکوونکو ننوتل او د مرکزي مدیر ننوتل روښانه جلا دي.</li>
+    </ul>
+
+    <h2 style="margin-top:20px">بسته او تادیه</h2>
+    <table>
+      <thead><tr><th>برخه</th><th>اوسنی حالت</th><th>ساده مانا</th></tr></thead>
+      <tbody>
+        <tr><td>کوچنۍ بسته</td><td>په میاشت ۱۰۰۰ افغانۍ</td><td>۱ څانګه او تر ۵ کارکوونکو</td></tr>
+        <tr><td>تجارتي بسته</td><td>په میاشت ۲۵۰۰ افغانۍ</td><td>تر ۵ څانګو او ۲۵ کارکوونکو</td></tr>
+        <tr><td>بانکي یا د دفتر تادیه</td><td>فعاله</td><td>مالک د رسید شمېره لېږي؛ مرکزي مدیر یې مني یا ردوي.</td></tr>
+        <tr><td>حساب‌پی</td><td>تنظیم ته انتظار</td><td>تر سوداګریز حساب، خوندي کلۍ او د تایید پیغام پورې نه فعالیږي.</td></tr>
+        <tr><td>APS / بانکي دروازه</td><td>تنظیم ته انتظار</td><td>تر بانکي یا APS تړون پورې نه فعالیږي.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><b>د تادیې رښتینولي:</b> جعلي انلاین دروازه نه ده ښودل شوې. یوازې رښتینې موجوده لاره فعاله ده. مرکزي مدیر د تړون او خوندي معلوماتو وروسته بله دروازه فعالولی شي.</div>
+
+    <h2 style="margin-top:16px">مهم امنیت</h2>
+    <div class="grid">
+      <div class="card"><strong>د هر رول حد</strong><p>سرور د هر کارکوونکي اجازه ګوري؛ یوازې د تڼۍ پټول نه دي.</p></div>
+      <div class="card"><strong>باوري وسیله</strong><p>د کارکوونکي براوزر د مالک تر تایید مخکې باوري نه کېږي.</p></div>
+      <div class="card"><strong>د کاروبارونو بېلتون</strong><p>د یوې صرافي کارن د بلې صرافي معلومات نه ویني.</p></div>
+      <div class="card"><strong>مالي سابقه</strong><p>مالي معلومات نه ورکېږي او د هر حرکت لاره کتل کېدای شي.</p></div>
+    </div>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>3 / 4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"></div>
+    <h2>د ازموینو پایله او پاتې کارونه</h2>
+    <table>
+      <thead><tr><th>ازموینه</th><th>پایله</th><th>څه پکې شامل وو</th></tr></thead>
+      <tbody>
+        <tr><td>کروم براوزر</td><td>۶۴ بریالۍ، صفر ناکامه</td><td>ټول لینکونه، رولونه، معامله، مشتری، تادیه، ژبه، لاسرسی او د پاڼې اندازه</td></tr>
+        <tr><td>د پروګرام ازموینه</td><td>۶۸ بریالۍ، صفر ناکامه</td><td>حساب، ارزونه، کاري نېټه، راپور او مالي اصول</td></tr>
+        <tr><td>ژوندی ټیم</td><td>۷ بریالۍ</td><td>قوي ننوتل، د صندوق‌دار بلنه او د بلنې بندول</td></tr>
+        <tr><td>ژوندۍ پیسې</td><td>۲۲ بریالۍ</td><td>حسابونه، نړیوال اسعار، د دوو حسابونو انتقال، توازن او تاریخچه</td></tr>
+        <tr><td>ژوندۍ غوره نسخه</td><td>۱۵ بریالۍ</td><td>رولونه، بسته، تادیه، وسیله او د غیرمجاز مدیر بندول</td></tr>
+        <tr><td>ډیټابېس</td><td>بې تېروتنې</td><td>د جوړښت کتنه او د اصلي بدلون پلي کول</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note good"><b>هغه ادعا چې زه یې کولی شم:</b> د وېب نسخې هغه تخنیکي کار چې په دې پړاو کې زما په واک کې و، پلي، ازمویل او په اصلي چاپېریال کې خپور شوی دی.</div>
+
+    <h2 style="margin-top:18px">هغه کارونه چې د مالک پرېکړې یا معلوماتو ته اړتیا لري</h2>
+    <ul class="checklist pending">
+      <li>یو رښتینی او کتل شوی حساب باید د سیستم د لومړي مرکزي مدیر په توګه وټاکل شي. هېڅ مالک په خپله مرکزي مدیر شوی نه دی.</li>
+      <li>رښتیني د پېر او پلور نرخونه، د کاروبار نوم، څانګې، صندوقونه او رښتیني کارکوونکي باید مالک داخل کړي.</li>
+      <li>د حساب‌پی یا APS لپاره تړون، سوداګریز حساب، خوندي کلۍ او د تایید پیغام باید برابر شي.</li>
+      <li>له رښتینو پیسو سره تر عام کار مخکې دې مالک او د صرافي کارکوونکي یو وروستی انساني ازمویښت وکړي.</li>
+    </ul>
+
+    <h2 style="margin-top:18px">په قصد سره په دې پړاو کې شامل نه دي</h2>
+    <div class="note"><b>اصلي موبایل اپ، د نصب بسته او افلاین کار</b> ستاسو د لارښوونې له مخې بل پیغام ته پرېښودل شوي دي. اوسنۍ نسخه یو ځواب‌ویونکی وېب‌سایټ دی او په موبایل براوزر کې کار کوي.</div>
+    <p class="lead">وروستۍ پایله: د دې پړاو وېب نسخه د خپرېدو لپاره چمتو ده؛ خو د رښتینې تادیې دروازه او د مرکزي مدیر ټاکل د مالک له معلوماتو او تړون پرته امکان نه لري.</p>
+    <div class="footer"><span>SARAFI WEB LAUNCH REPORT</span><span>4 / 4</span></div>
+  </section>
+</body>
+</html>

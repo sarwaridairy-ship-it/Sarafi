@@ -18,12 +18,6 @@
           ['Incomplete records and reports', 'Daily and monthly reporting', 'and finding old records is difficult.'],
           ['Risk of losing information', 'Paper books can be damaged', 'and have no secure backup.'],
         ],
-        auth: {
-          welcome: 'Welcome to SARAFI', subtitle: 'Simple, accurate and secure transaction management',
-          login: 'Sign in', register: 'Register', modeLabel: 'Sign in or register', formLabel: 'Sign-in form',
-          identity: 'Mobile number or email', identityPlaceholder: 'Enter your number or email',
-          password: 'Password', forgot: 'Forgot your password?', loginButton: 'Sign in to your account', registerButton: 'Create a new account',
-        },
       },
       'fa-AF': {
         label: 'صفحه آغاز صرافی',
@@ -40,12 +34,6 @@
           ['سوابق و گزارش‌های ناقص', 'ساخت گزارش روزانه و ماهانه', 'و یافتن سابقه دشوار است.'],
           ['خطر گم‌شدن اطلاعات', 'دفتر کاغذی آسیب می‌بیند', 'و نسخهٔ پشتیبان ندارد.'],
         ],
-        auth: {
-          welcome: 'به صرافی خوش آمدید', subtitle: 'مدیریت ساده، دقیق و مصئون معاملات',
-          login: 'ورود', register: 'ثبت‌نام', modeLabel: 'ورود یا ثبت‌نام', formLabel: 'فرم ورود',
-          identity: 'شمارهٔ موبایل یا ایمیل', identityPlaceholder: 'شماره یا ایمیل خود را وارد کنید',
-          password: 'رمز عبور', forgot: 'رمز عبور را فراموش کرده‌اید؟', loginButton: 'ورود به حساب', registerButton: 'ایجاد حساب تازه',
-        },
       },
       'ps-AF': {
         label: 'د صرافي د پیل پرده',
@@ -62,12 +50,6 @@
           ['نیمګړي سوابق او راپورونه', 'ورځني او میاشتني راپورونه جوړول', 'او پخوانی حساب موندل ستونزمن دي.'],
           ['د معلوماتو د ورکېدو خطر', 'کاغذي کتاب زیانمنېدای شي', 'او خوندي شاتړ نه لري.'],
         ],
-        auth: {
-          welcome: 'صرافۍ ته ښه راغلاست', subtitle: 'د معاملو ساده، کره او خوندي مدیریت',
-          login: 'ننوتل', register: 'نوی حساب', modeLabel: 'ننوتل یا نوی حساب', formLabel: 'د ننوتلو فورمه',
-          identity: 'د موبایل شمېره یا برېښنالیک', identityPlaceholder: 'شمېره یا برېښنالیک ولیکئ',
-          password: 'پټنوم', forgot: 'پټنوم مو هېر شوی؟', loginButton: 'حساب ته ننوتل', registerButton: 'نوی حساب جوړول',
-        },
       },
     };
     const localized = copy[language];
@@ -96,25 +78,6 @@
       }
     });
     document.getElementById('corePaperText').textContent = localized.core;
-    const authText = {
-      authWelcome: localized.auth.welcome, authSubtitle: localized.auth.subtitle,
-      authLoginTab: localized.auth.login, authRegisterTab: localized.auth.register,
-      authIdentityLabel: localized.auth.identity, authIdentityPlaceholder: localized.auth.identityPlaceholder,
-      authPasswordLabel: localized.auth.password, authForgot: localized.auth.forgot,
-      authLoginButton: localized.auth.loginButton, authRegisterButton: localized.auth.registerButton,
-    };
-    Object.entries(authText).forEach(([id, value]) => { document.getElementById(id).textContent = value; });
-    document.getElementById('authModeGroup').setAttribute('aria-label', localized.auth.modeLabel);
-    document.getElementById('authFormGroup').setAttribute('aria-label', localized.auth.formLabel);
-    if (language === 'en') {
-      ['authIdentityLabel', 'authPasswordLabel', 'authForgot'].forEach(id => {
-        const element = document.getElementById(id); element.setAttribute('x', '208'); element.setAttribute('text-anchor', 'start'); element.setAttribute('direction', 'ltr');
-      });
-      const placeholder = document.getElementById('authIdentityPlaceholder');
-      placeholder.setAttribute('x', '244'); placeholder.setAttribute('text-anchor', 'start'); placeholder.setAttribute('direction', 'ltr');
-      document.getElementById('authSubtitle').setAttribute('font-size', '21');
-    }
-
     let returnUrl;
     try {
       returnUrl = new URL(params.get('return') || '/', location.origin);
@@ -129,7 +92,9 @@
       if (completionStarted) return;
       completionStarted = true;
       try { sessionStorage.setItem('sarafi-opening-seen', '1'); } catch { /* Continue without storage. */ }
-      const navigate = () => location.replace(`${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`);
+      const navigate = () => {
+        document.dispatchEvent(new CustomEvent('sarafi-opening-complete'));
+      };
       if (!fade) { navigate(); return; }
       document.getElementById('openingMain').classList.add('is-handing-off');
       window.setTimeout(navigate, 360);
@@ -152,8 +117,6 @@
     const paperLayer = document.getElementById('paperLayer');
     const centerPiece = document.getElementById('centerPiece');
     const brandName = document.getElementById('brandName');
-    const authPage = document.getElementById('authPage');
-    const authCard = document.getElementById('authCard');
     const halo = document.getElementById('halo');
     const corePaper = document.getElementById('corePaper');
     const corePaperRect = document.getElementById('corePaperRect');
@@ -317,9 +280,6 @@
       brandName.style.opacity=brandU*(1-smooth(clamp(orbitU/.52)));
       halo.style.opacity=.25*logoReady*(1-smooth(clamp(orbitU/.72)));
 
-      const authU=smoother(clamp((t-.895)/.105));
-      authPage.style.opacity=authU;
-      authCard.setAttribute('transform',`translate(0 ${mix(88,0,authU).toFixed(1)}) translate(540 960) scale(${mix(.95,1,authU).toFixed(3)}) translate(-540 -960)`);
     }
     function startPlayback(){
       if(fixed!==null){const previewFrame=Math.min(fixed,handoffProgress);render(previewFrame);svg.dataset.animationState='fixed';svg.dataset.animationProgress=String(previewFrame);return}

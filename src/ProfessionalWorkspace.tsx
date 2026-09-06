@@ -35,7 +35,6 @@ export type AppIconName =
   | "wallet"
   | "people"
   | "transactions"
-  | "more"
   | "eye"
   | "eyeOff"
   | "shield"
@@ -62,7 +61,6 @@ const iconPaths: Record<AppIconName, ReactNode> = {
   wallet: <><path d="M4 6.5h14a2 2 0 0 1 2 2V19H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12"/><path d="M15 11h5v5h-5a2.5 2.5 0 0 1 0-5Z"/></>,
   people: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
   transactions: <><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><circle cx="3.5" cy="6" r=".8"/><circle cx="3.5" cy="12" r=".8"/><circle cx="3.5" cy="18" r=".8"/></>,
-  more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
   eye: <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></>,
   eyeOff: <><path d="m3 3 18 18"/><path d="M10.6 6.2A10 10 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-2 2.7"/><path d="M6.6 6.6C3.6 8.3 2 12 2 12s3.5 6 10 6a10 10 0 0 0 4.1-.8"/></>,
   shield: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></>,
@@ -176,6 +174,8 @@ const professionalCopy = {
     customerRate: "Customer rate",
     print58: "Print 58 mm",
     print80: "Print 80 mm",
+    newSimilar: "New similar transaction",
+    viewTransaction: "View transaction",
     done: "Done",
     receiptPending: "Receipt number is being prepared",
   },
@@ -262,6 +262,8 @@ const professionalCopy = {
     customerRate: "نرخ مشتری",
     print58: "چاپ ۵۸ میلی‌متر",
     print80: "چاپ ۸۰ میلی‌متر",
+    newSimilar: "معامله مشابه جدید",
+    viewTransaction: "دیدن معامله",
     done: "تمام",
     receiptPending: "شماره رسید در حال آماده‌شدن است",
   },
@@ -348,6 +350,8 @@ const professionalCopy = {
     customerRate: "د پېرودونکي نرخ",
     print58: "۵۸ ملي‌متر چاپ",
     print80: "۸۰ ملي‌متر چاپ",
+    newSimilar: "نوې ورته معامله",
+    viewTransaction: "معامله کتل",
     done: "بشپړ",
     receiptPending: "د رسید شمېره چمتو کېږي",
   },
@@ -699,7 +703,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
             <form className="settings-editor" onSubmit={addCategory}><label>{c.categoryName}<input required minLength={2} value={newCategory} onChange={(event) => setNewCategory(event.target.value)} /></label><button className="primary-action" disabled={controlBusy === "category"}>{c.addCategory}</button></form>
           </article>
           <article className="settings-card">
-            <div className="settings-card-title"><AppIcon name="more" /><div><h2>{c.services}</h2></div></div>
+            <div className="settings-card-title"><AppIcon name="settings" /><div><h2>{c.services}</h2></div></div>
             <div className="notification-preferences">{["hawala", "advanced_compliance", "advanced_analytics", "imports"].map((feature) => <label key={feature}><span>{serviceLabel(language, feature)}</span><input type="checkbox" disabled={controlBusy === feature} checked={controls.features.find((item) => item.code === feature)?.enabled ?? false} onChange={(event) => void changeFeature(feature, event.target.checked)} /></label>)}</div>
           </article>
           <article className="settings-card">
@@ -849,7 +853,7 @@ export function ComplianceView({ language, organizationId, onDashboard }: { lang
 
 export type CompletedTrade = { receiptNumber: string | null; journalEntryId: string; givenAmount: string; givenCurrency: string; receivedAmount: string; receivedCurrency: string; rate: string; occurredAt: string };
 
-export function ReceiptSuccessDialog({ language, businessName, trade, onPrint, onDone }: { language: Language; businessName: string; trade: CompletedTrade; onPrint: (width: "58mm" | "80mm") => void; onDone: () => void }) {
+export function ReceiptSuccessDialog({ language, businessName, trade, onPrint, onNewSimilar, onViewTransaction, onDone }: { language: Language; businessName: string; trade: CompletedTrade; onPrint: (width: "58mm" | "80mm") => void; onNewSimilar: () => void; onViewTransaction: () => void; onDone: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -898,6 +902,8 @@ export function ReceiptSuccessDialog({ language, businessName, trade, onPrint, o
         <div className="receipt-actions">
           <button className="export-button" onClick={() => onPrint("58mm")}><AppIcon name="print" size={17} />{p(language, "print58")}</button>
           <button className="export-button" onClick={() => onPrint("80mm")}><AppIcon name="print" size={17} />{p(language, "print80")}</button>
+          <button className="export-button" onClick={onNewSimilar}>{p(language, "newSimilar")}</button>
+          <button className="export-button" onClick={onViewTransaction}>{p(language, "viewTransaction")}</button>
           <button autoFocus className="primary-action" onClick={onDone}>{p(language, "done")}</button>
         </div>
       </section>

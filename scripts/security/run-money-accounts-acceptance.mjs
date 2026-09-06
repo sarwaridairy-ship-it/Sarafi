@@ -191,7 +191,6 @@ if (source && destination) {
           cashbox_id: env.CASHBOX_A1_ID,
           currency: 'AFN',
           amount: openingAmount,
-          base_value: openingAmount,
           memo: 'Security acceptance opening money',
           client_command_id: `security-money-opening-${randomUUID()}`,
         },
@@ -210,7 +209,6 @@ if (source && destination) {
         operation: 'TRANSFER_CASH',
         currency: 'AFN',
         amount: '2',
-        base_amount: '2',
         source_money_account_id: source.id,
         destination_money_account_id: destination.id,
         memo: 'Security acceptance transfer',
@@ -227,14 +225,13 @@ if (source && destination) {
         operation: 'TRANSFER_CASH',
         currency: 'AFN',
         amount: '1',
-        base_amount: '1',
         source_money_account_id: source.id,
         destination_money_account_id: source.id,
         client_command_id: `security-same-account-${randomUUID()}`,
       },
     }),
   )
-  await expectDenied('Foreign operations require an AFN book value', () =>
+  await expectDenied('Foreign operations require a current approved shop rate', () =>
     owner.rpc('record_operation', {
       command: {
         organization_id: env.BUSINESS_A_ID,
@@ -243,7 +240,7 @@ if (source && destination) {
         currency: 'USD',
         amount: '0.01',
         source_money_account_id: source.id,
-        client_command_id: `security-missing-base-${randomUUID()}`,
+        client_command_id: `security-missing-rate-${randomUUID()}`,
       },
     }),
   )

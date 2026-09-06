@@ -25,7 +25,7 @@ test.describe("Stage 9 browser matrix", () => {
     await expect(
       page.getByRole("navigation", { name: "Workspace" }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /My money/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /My Money/ })).toBeVisible();
   });
 
   for (const viewport of [
@@ -69,20 +69,31 @@ test.describe("Stage 9 browser matrix", () => {
     });
   }
 
-  test("More remains grouped and readable on mobile", async ({ page }) => {
+  test("transaction pages fit the complete three-language viewport matrix", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "Chromium performs the complete visual-size matrix");
+    test.setTimeout(120_000);
+    for (const language of ["en", "fa-AF", "ps-AF"] as const) {
+      await page.goto("/");
+      await page.locator("select.lang-button").selectOption(language);
+      for (const width of [360, 390, 430, 768, 1024, 1366, 1440]) {
+        await page.setViewportSize({ width, height: width < 600 ? 900 : 1000 });
+        await page.goto("/app/inspection/transactions/new/fx?side=BUY_FX");
+        await expect(page.locator(".transaction-page-form")).toBeVisible();
+        await expect(page.locator(".modal-backdrop form")).toHaveCount(0);
+        const layout = await page.evaluate(() => ({
+          viewport: window.innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+        }));
+        expect(layout.documentWidth, `${language} at ${width}px`).toBeLessThanOrEqual(layout.viewport);
+      }
+    }
+  });
+
+  test("navigation has no hidden overflow menu", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
-    await page
-      .locator(".mobile-nav")
-      .getByRole("button", { name: /More/ })
-      .click();
-    const menu = page.locator(".mobile-more-menu");
-    await expect(menu).toBeVisible();
-    for (const group of ["Business", "Team", "Settings", "Advanced"]) {
-      await expect(
-        menu.locator(".menu-group-label").getByText(group, { exact: true }),
-      ).toBeVisible();
-    }
+    await expect(page.getByRole("button", { name: "More", exact: true })).toHaveCount(0);
+    await expect(page.locator(".mobile-nav button")).toHaveCount(5);
   });
 
   test("tablet view fits without horizontal overflow", async ({ page }) => {
@@ -96,27 +107,13 @@ test.describe("Stage 9 browser matrix", () => {
     ).toBe(true);
   });
 
-  test("desktop More menu stays inside the sidebar and every item is reachable", async ({
+  test("desktop navigation exposes its five primary destinations", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto("/");
-    await page
-      .locator(".sidebar nav")
-      .getByRole("button", { name: /More/ })
-      .click();
-    const menu = page.locator(".navigation-menu");
-    await expect(menu).toBeVisible();
-    const bounds = await menu.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return { top: rect.top, bottom: rect.bottom, viewport: window.innerHeight };
-    });
-    expect(bounds.top).toBeGreaterThanOrEqual(0);
-    expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewport);
-    await menu.getByRole("button", { name: /Settings/ }).click();
-    await expect(
-      page.getByRole("heading", { name: "Shop settings" }),
-    ).toBeVisible();
+    await expect(page.locator(".sidebar nav button")).toHaveCount(5);
+    await expect(page.getByRole("button", { name: /Control/ })).toBeVisible();
   });
 
   for (const viewport of [

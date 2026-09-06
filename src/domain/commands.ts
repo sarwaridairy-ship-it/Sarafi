@@ -22,6 +22,12 @@ export const fxTradeCommandSchema = z.object({
   fee_amount: decimalString.optional(),
   fee_currency: z.string().length(3).toUpperCase().optional(),
   customer_rate: decimalString.optional(),
+  device_id: uuid.optional(),
+  rate_source: z.enum(['shop_rate', 'transaction_override', 'approved_stale_shop_rate']).optional(),
+  override_reason: z.string().trim().min(3).max(500).optional(),
+  approval_reason: z.string().trim().min(3).max(500).optional(),
+  allow_stale_rate: z.boolean().optional(),
+  approval_id: uuid.optional(),
 }).superRefine((command, context) => {
   if (command.sold_currency === command.bought_currency) context.addIssue({ code: 'custom', path: ['bought_currency'], message: 'Trade currencies must differ' })
   if (command.sold_amount === '0' || command.bought_amount === '0') context.addIssue({ code: 'custom', path: ['sold_amount'], message: 'Trade amounts must be greater than zero' })

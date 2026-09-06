@@ -4,6 +4,7 @@ import { can, decideApproval, requestApproval, revokeDevice, type Membership } f
 const owner: Membership = { userId: 'owner-1', organizationId: 'org-a', role: 'owner', branchIds: ['branch-a'], cashboxIds: ['cash-a'], active: true }
 const cashier: Membership = { userId: 'cashier-1', organizationId: 'org-a', role: 'cashier', branchIds: ['branch-a'], cashboxIds: ['cash-a'], active: true }
 const accountant: Membership = { userId: 'accountant-1', organizationId: 'org-a', role: 'accountant', branchIds: [], cashboxIds: [], active: true }
+const businessAdmin: Membership = { userId: 'admin-1', organizationId: 'org-a', role: 'business_admin', branchIds: [], cashboxIds: [], active: true }
 
 describe('organization access controls', () => {
   it('limits cashier posting to assigned branch and cashbox', () => {
@@ -15,6 +16,13 @@ describe('organization access controls', () => {
   it('gives accountants reporting without team administration', () => {
     expect(can(accountant, 'financial:report')).toBe(true)
     expect(can(accountant, 'team:manage')).toBe(false)
+  })
+
+  it('keeps delegated business administration aligned with server permissions', () => {
+    expect(can(businessAdmin, 'organization:manage')).toBe(true)
+    expect(can(businessAdmin, 'financial:post')).toBe(true)
+    expect(can(businessAdmin, 'team:manage')).toBe(true)
+    expect(can(businessAdmin, 'security:manage')).toBe(true)
   })
 
   it('prevents approval self-bypass and requires a reason', () => {
