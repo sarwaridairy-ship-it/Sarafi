@@ -20,14 +20,8 @@ test.describe("accessibility acceptance", () => {
   test("cashier actions are keyboard reachable in the public workspace", async ({
     page,
   }) => {
-    await page.goto("/");
-    for (const action of [
-      /New transaction/,
-      /Receive money/,
-      /Pay money/,
-      /^Debts$/,
-      /Transfer cash/,
-    ]) {
+    await page.goto("/app/inspection/transactions/new?role=cashier");
+    for (const action of [/Buy currency/, /Sell currency/, /Currency Exchange/, /Money In/, /Money Out/, /Move Our Money/, /^Debt/, /^Hawala/]) {
       const control = page.getByRole("button", { name: action }).first();
       await expect(control).toBeVisible();
       await control.focus();
@@ -38,13 +32,12 @@ test.describe("accessibility acceptance", () => {
   test("trade page is keyboard usable and returns to the transaction types", async ({
     page,
   }) => {
-    await page.goto("/");
-    const launch = page.locator(".trade-launch");
-    await launch.click();
+    await page.goto("/app/inspection/transactions/new?role=owner");
+    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
     await page.getByRole("button", { name: "Buy currency", exact: true }).click();
     const form = page.locator(".transaction-page-form");
     await expect(form).toBeVisible();
-    await expect(page).toHaveURL(/\/transactions\/new\/fx\?side=BUY_FX$/);
+    await expect(page).toHaveURL(/\/transactions\/new\/fx\/buy$/);
     const amount = form.getByRole("textbox", { name: /We receive/ });
     await amount.focus();
     await expect(amount).toBeFocused();
@@ -60,11 +53,11 @@ test.describe("accessibility acceptance", () => {
   test("trade page has no critical or serious automated violations", async ({
     page,
   }) => {
-    await page.goto("/");
-    await page.locator(".trade-launch").click();
+    await page.goto("/app/inspection/transactions/new?role=owner");
+    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
     await page.getByRole("button", { name: "Buy currency", exact: true }).click();
     const results = await new AxeBuilder({ page })
-      .include(".trade-modal")
+      .include(".financial-task-form")
       .setLegacyMode(true)
       .analyze();
     expect(

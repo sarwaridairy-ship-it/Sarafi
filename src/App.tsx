@@ -3,9 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Decimal from "decimal.js";
 import "./App.css";
 import "./professional.css";
+import "./styles/calm-premium.css";
 import { validateClientEnvironment } from "./lib/env";
 import { readPublicSupabaseConfig } from "./lib/supabase";
-import { calculateCounterAmount } from "./domain/valuation";
 import { deriveTradeAmounts } from "./domain/tradePricing";
 import { buildCsvReport } from "./domain/reporting";
 import { isRtl, translate, type Language } from "./lib/i18n";
@@ -21,9 +21,14 @@ import {
   getOwnerDashboard,
   getWorkspaceSettings,
   getTeamControlPlane,
+  getMembershipCapabilityMatrix,
   getMyWorkspaceContext,
   acceptTeamInvitation,
   acceptTeamConnectionCode,
+  requestBusinessAccess,
+  listWorkerJoinRequests,
+  createOrganizationJoinCode,
+  reviewWorkerJoinRequest,
   cancelTeamInvitation,
   createTeamInvitation,
   createCounterparty,
@@ -51,7 +56,6 @@ import {
   recordHawalaIncoming,
   payHawalaBeneficiary,
   settleHawalaPartner,
-  transitionHawalaStatus,
   recordOpeningBalance,
   recordOperation,
   createMoneyAccount,
@@ -64,6 +68,7 @@ import {
   requestReversal,
   settleDebt,
   updateTeamMembership,
+  updateTeamAssignment,
   trustTeamDevice,
   uploadPrivateCounterpartyDocument,
   type DashboardSnapshot,
@@ -78,6 +83,8 @@ import {
   type TeamMemberRecord,
   type TeamInvitationRecord,
   type TeamScopeRecord,
+  type WorkerJoinRequestRecord,
+  type MembershipCapabilityMatrixRecord,
   type CreatedTeamInvitation,
   type DeviceRecord,
   type LinkedDeviceRecord,
@@ -120,6 +127,20 @@ import { OpeningExperience } from "./OpeningExperience";
 import { AppIcon, type AppIconName } from "./AppIcon";
 import type { CompletedTrade } from "./ProfessionalWorkspace";
 import { getPublicPlatformStatus, type PublicPlatformStatus } from "./lib/platformApi";
+import {
+  canOpenSection,
+  financialPostCapabilities,
+  hasAnyCapability,
+  hasCapability,
+  inspectionCapabilities,
+  navigationSections,
+  type Capability,
+  type WorkspaceRole,
+} from "./app/capabilities";
+import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot } from "./app/routes";
+import { TransactionCenter } from "./features/transactions/TransactionCenter";
+import { RoleHome } from "./features/home/RoleHome";
+import { ManageSarafi } from "./features/manage/ManageSarafi";
 
 const loadExports = () => import("./lib/exports");
 const SettingsView = lazy(() => import("./ProfessionalWorkspace").then((module) => ({ default: module.SettingsView })));
@@ -280,15 +301,6 @@ type OperationKind =
   | "OWNER_WITHDRAWAL"
   | "BANK_DEPOSIT"
   | "BANK_WITHDRAWAL";
-type WorkspaceRole =
-  | "owner"
-  | "business_admin"
-  | "manager"
-  | "accountant"
-  | "cashier"
-  | "compliance_officer"
-  | "viewer";
-
 const inspectionCurrencies: CurrencyCatalogRecord[] = [
   ["AFN", "Afghan Afghani", "افغانی", "افغانۍ", "؋"],
   ["USD", "United States Dollar", "دالر امریکایی", "امریکايي ډالر", "$"],
@@ -424,6 +436,8 @@ function App() {
     setShowOpening(false);
   }, [navigate]);
   const sectionFromPath = (pathname: string, search = "") => {
+    if (pathname.includes("/transactions/new/debt/") || pathname.includes("/transactions/new/debts/") || pathname.includes("/transactions/new/money-in/debt-payment") || pathname.includes("/transactions/new/money-out/debt-payment")) return "Debts";
+    if (pathname.includes("/transactions/new/hawala/")) return "Hawala";
     if (pathname.endsWith("/transactions/new/debt")) return "Debts";
     if (pathname.endsWith("/transactions/new/hawala")) return "Hawala";
     if (pathname.endsWith("/transactions/new/correction")) return "Transactions";
@@ -432,7 +446,7 @@ function App() {
     if (pathname.endsWith("/transactions")) return "Transactions";
     if (pathname.endsWith("/activity")) return "Transactions";
     if (pathname.endsWith("/money")) return "Cash & Accounts";
-    if (pathname.endsWith("/debts")) return "Debts";
+    if (pathname.endsWith("/debts") || pathname.includes("/debts/")) return "Debts";
     if (pathname.endsWith("/people") || pathname.includes("/customers")) return "People";
     if (pathname.endsWith("/hawala")) return "Hawala";
     if (pathname.endsWith("/cashbox-close")) return "Cashbox Close";
@@ -455,12 +469,14 @@ function App() {
       return "Business Settings";
     }
     if (pathname.endsWith("/control")) return "Control";
+    if (pathname.endsWith("/offline")) return "Offline";
     return "Dashboard";
   };
   const activeSection = sectionFromPath(location.pathname, location.search);
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRecord[]>(() =>
@@ -480,7 +496,6 @@ function App() {
     useState("");
   const [operationCategory, setOperationCategory] = useState("Other");
   const [operationMemo, setOperationMemo] = useState("");
-  const [activityFilter, setActivityFilter] = useState("Today");
   const [privacy, setPrivacy] = useState(false);
   const [language, setLanguage] = useState<Language>(() => {
     const saved = window.localStorage.getItem("sarafi-language");
@@ -491,7 +506,7 @@ function App() {
   );
   const [trades, setTrades] = useState<Trade[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
-  const [dashboardError, setDashboardError] = useState("");
+  const [, setDashboardError] = useState("");
   const [dashboardRefresh, setDashboardRefresh] = useState(0);
   const [amount, setAmount] = useState("");
   const [tradeSide, setTradeSide] = useState<
@@ -511,11 +526,9 @@ function App() {
   const [completedTrade, setCompletedTrade] = useState<CompletedTrade | null>(
     null,
   );
-  const [calculatorAmount, setCalculatorAmount] = useState("1000");
   const [rate, setRateState] = useState(
     inspectionMode && inspectionRateScenario !== "missing" ? "70.25" : "",
   );
-  const setRate = (_value: string) => undefined;
   const [sellRate, setSellRate] = useState(
     inspectionMode && inspectionRateScenario !== "missing" ? "70.35" : "",
   );
@@ -583,11 +596,14 @@ function App() {
   const currencyCatalog = inspectionMode
     ? inspectionCurrencies
     : loadedCurrencyCatalog;
-  const moneyAccounts = inspectionMode
-    ? inspectionMoneyAccounts(language)
-    : organizationId
-      ? loadedMoneyAccounts
-      : [];
+  const moneyAccounts = useMemo(
+    () => inspectionMode
+      ? inspectionMoneyAccounts(language)
+      : organizationId
+        ? loadedMoneyAccounts
+        : [],
+    [inspectionMode, language, loadedMoneyAccounts, organizationId],
+  );
   const [moneyContextRefresh, setMoneyContextRefresh] = useState(0);
   const [organizationLoading, setOrganizationLoading] =
     useState(!inspectionMode);
@@ -629,6 +645,8 @@ function App() {
   const [invitationFailure, setInvitationFailure] = useState("");
   const [workspaceEntryMode, setWorkspaceEntryMode] = useState<"join" | "business">("join");
   const [connectionCode, setConnectionCode] = useState("");
+  const [connectionKind, setConnectionKind] = useState<"invitation" | "request">("invitation");
+  const [connectionName, setConnectionName] = useState("");
   const [connectionBusy, setConnectionBusy] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState("");
   const [authMode, setAuthMode] = useState<"signIn" | "signUp" | "reset">(
@@ -651,7 +669,6 @@ function App() {
     window.localStorage.setItem(key, created);
     return created;
   });
-  const hidden = privacy ? "••••••" : "";
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const controlLabel = language === "en" ? "Control" : language === "fa-AF" ? "کنترول" : "کنټرول";
@@ -889,15 +906,12 @@ function App() {
   const tradeCurrencies = enabledCurrencyCodes.filter(
     (currency) => currency !== "AFN",
   );
-  const branchMoneyAccounts = moneyAccounts.filter(
-    (account) => !account.branch_id || !branchId || account.branch_id === branchId,
+  const branchMoneyAccounts = useMemo(
+    () => moneyAccounts.filter(
+      (account) => !account.branch_id || !branchId || account.branch_id === branchId,
+    ),
+    [branchId, moneyAccounts],
   );
-  const hasRecordedMoney = moneyAccounts.some((account) =>
-    account.balances.some((balance) => {
-      try { return !new Decimal(balance.amount).isZero(); } catch { return false; }
-    }),
-  );
-
   useEffect(() => {
     if (inspectionMode) return;
     if (!organizationId) return;
@@ -1020,11 +1034,18 @@ function App() {
     event.preventDefault();
     if (connectionBusy) return;
     const normalized = connectionCode.replaceAll(/[^A-Za-z0-9]/g, "").toUpperCase();
-    if (normalized.length !== 10) {
-      setConnectionMessage(language === "en" ? "Enter the complete 10-character code." : language === "fa-AF" ? "رمز ده‌حرفی کامل را وارد کنید." : "بشپړ لس توري کوډ ولیکئ.");
+    const expectedLength = connectionKind === "invitation" ? 10 : 12;
+    if (normalized.length !== expectedLength || (connectionKind === "request" && connectionName.trim().length < 2)) {
+      setConnectionMessage(connectionKind === "invitation"
+        ? (language === "en" ? "Enter the complete 10-character code." : language === "fa-AF" ? "رمز ده‌حرفی کامل را وارد کنید." : "بشپړ لس توري کوډ ولیکئ.")
+        : (language === "en" ? "Enter your name and the complete 12-character workplace code." : language === "fa-AF" ? "نام و رمز دوازده‌حرفی محل کار را کامل وارد کنید." : "خپل نوم او د کاري ځای بشپړ دولس توري کوډ ولیکئ."));
       return;
     }
     if (inspectionMode) {
+      if (connectionKind === "request") {
+        setConnectionMessage(language === "en" ? "Request sent. You will enter after the owner approves your access." : language === "fa-AF" ? "درخواست فرستاده شد. پس از تأیید مالک وارد می‌شوید." : "غوښتنه ولېږل شوه. د مالک له تایید وروسته به ننوځئ.");
+        return;
+      }
       setOrganizationId("inspection");
       setOrganizationName("Kabul Central Exchange");
       setBranchId("inspection-branch");
@@ -1036,6 +1057,17 @@ function App() {
     }
     setConnectionBusy(true);
     setConnectionMessage("");
+    if (connectionKind === "request") {
+      const request = await requestBusinessAccess(normalized, connectionName);
+      setConnectionBusy(false);
+      if (request.error || !request.data) {
+        setConnectionMessage(localizedInvitationError(language, request.error ?? "Request failed"));
+        return;
+      }
+      setConnectionCode("");
+      setConnectionMessage(language === "en" ? "Request sent. You will enter after the owner approves your access." : language === "fa-AF" ? "درخواست فرستاده شد. پس از تأیید مالک وارد می‌شوید." : "غوښتنه ولېږل شوه. د مالک له تایید وروسته به ننوځئ.");
+      return;
+    }
     const result = await acceptTeamConnectionCode(normalized);
     setConnectionBusy(false);
     if (result.error || !result.data) {
@@ -1226,97 +1258,13 @@ function App() {
     );
   };
 
-  const exportActivity = async () => {
-    if (!organizationId) {
-      setToast(u("exportUnavailable"));
-      return;
-    }
-    const authorization = await recordReportExport({
-      organization_id: organizationId,
-      report_name: u("recentActivity"),
-      format: "csv",
-      filters: { scope: "loaded_activity" },
-    });
-    if (authorization.error) {
-      setToast(u("exportUnavailable"));
-      return;
-    }
-    const csv = buildCsvReport(
-      trades.map((trade) => ({
-        entryId: `trade_${trade.id}`,
-        occurredAt: trade.time,
-        type: trade.direction,
-        branchId: branchName || t("mainBranch"),
-        status: trade.status.toLowerCase(),
-        realizedProfit: "0",
-      })),
-      organizationName || u("yourBusiness"),
-      u("recentActivity"),
-      new Date().toISOString(),
-    );
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(
-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
-    );
-    link.download = "sarafi-recent-activity.csv";
-    link.click();
-    URL.revokeObjectURL(link.href);
-    setToast(u("exportReady"));
-  };
-
-  const openOperation = (kind: OperationKind) => {
-    const activeAccount =
-      (cashboxId
-        ? branchMoneyAccounts.find((account) => account.cashbox_id === cashboxId)
-        : undefined) ??
-      branchMoneyAccounts.find((account) => account.account_type === "cashbox") ??
-      branchMoneyAccounts[0];
-    const bankAccount = branchMoneyAccounts.find(
-      (account) => account.account_type === "bank",
-    );
-    const secondAccount = branchMoneyAccounts.find(
-      (account) => account.id !== activeAccount?.id,
-    );
-    if (operationKind !== kind) {
-      setOperationKind(kind);
-      setOperationAmount("");
-      setOperationMemo("");
-      setOperationCategory("Other");
-    }
-    if (kind === "BANK_WITHDRAWAL") {
-      setOperationSourceAccount(bankAccount?.id ?? "");
-      setOperationDestinationAccount(activeAccount?.id ?? "");
-    } else if (kind === "BANK_DEPOSIT") {
-      setOperationSourceAccount(activeAccount?.id ?? "");
-      setOperationDestinationAccount(bankAccount?.id ?? "");
-    } else if (kind === "TRANSFER_CASH") {
-      setOperationSourceAccount(activeAccount?.id ?? "");
-      setOperationDestinationAccount(secondAccount?.id ?? "");
-    } else if (
-      kind === "RECEIVE_MONEY" ||
-      kind === "RECORD_INCOME" ||
-      kind === "OWNER_INVESTMENT"
-    ) {
-      setOperationSourceAccount("");
-      setOperationDestinationAccount(activeAccount?.id ?? "");
-    } else {
-      setOperationSourceAccount(activeAccount?.id ?? "");
-      setOperationDestinationAccount("");
-    }
-    const destination = ["RECEIVE_MONEY", "RECORD_INCOME", "OWNER_INVESTMENT"].includes(kind)
-      ? "Transaction Money In"
-      : ["PAY_MONEY", "RECORD_EXPENSE", "OWNER_WITHDRAWAL"].includes(kind)
-        ? "Transaction Money Out"
-        : "Transaction Move Money";
-    navigate(`${sectionPath(destination)}?action=${kind}`);
-  };
-
   const openTrade = (
     side?: typeof tradeSide,
   ) => {
     if (side) setTradeSide(side);
     setTradeReviewing(false);
-    navigate(`${sectionPath("Transaction FX")}?side=${side ?? tradeSide}`);
+    const nextSide = side ?? tradeSide;
+    navigate(financialRoute(organizationId, nextSide === "BUY_FX" ? "/fx/buy" : nextSide === "SELL_FX" ? "/fx/sell" : "/fx/exchange"));
   };
 
   const submitOperation = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1385,12 +1333,12 @@ function App() {
     return ({
       Dashboard: `${root}/home`,
       Trade: `${root}/transactions/new`,
-      "Transaction FX": `${root}/transactions/new/fx`,
-      "Transaction Money In": `${root}/transactions/new/money-in`,
-      "Transaction Money Out": `${root}/transactions/new/money-out`,
-      "Transaction Move Money": `${root}/transactions/new/move-money`,
-      "Transaction Debt": `${root}/transactions/new/debt`,
-      "Transaction Hawala": `${root}/transactions/new/hawala`,
+      "Transaction FX": `${root}/transactions/new/fx/buy`,
+      "Transaction Money In": `${root}/transactions/new/money-in/customer`,
+      "Transaction Money Out": `${root}/transactions/new/money-out/customer`,
+      "Transaction Move Money": `${root}/transactions/new/move/cashbox`,
+      "Transaction Debt": `${root}/transactions/new/debt/receivable`,
+      "Transaction Hawala": `${root}/transactions/new/hawala/send`,
       "Transaction Correction": `${root}/transactions/new/correction`,
       "Transaction Opening": `${root}/transactions/new/opening-money`,
       Transactions: `${root}/transactions`,
@@ -1411,6 +1359,7 @@ function App() {
       Security: `${root}/control/security`,
       Import: `${root}/control/import`,
       Billing: `${root}/control/billing`,
+      Offline: `${root}/offline`,
     } as Record<string, string>)[section] ?? `${root}/home`;
   };
   const openSection = (section: string, replace = false) => {
@@ -1491,20 +1440,23 @@ function App() {
 
   const dashboardView = activeSection === "Dashboard";
   const transactionCenterActive = activeSection === "Trade";
+  const activeFinancialRoute = financialRouteSuffix(location.pathname);
   const transactionFormActive =
     transactionCenterActive && !location.pathname.endsWith("/transactions/new");
-  const fxFormActive = location.pathname.endsWith("/transactions/new/fx");
+  const fxFormActive = activeFinancialRoute?.startsWith("/fx/") ?? location.pathname.endsWith("/transactions/new/fx");
   const openingFormActive = location.pathname.endsWith("/transactions/new/opening-money");
   /* oxlint-disable react/set-state-in-effect -- shareable routes restore resumable financial form state. */
   useEffect(() => {
     if (!transactionFormActive) return;
     const params = new URLSearchParams(location.search);
     const side = params.get("side");
-    if (location.pathname.endsWith("/transactions/new/fx")) {
+    if (fxFormActive) {
       // URL navigation is an external source of truth for this resumable form.
       // oxlint-disable-next-line react/set-state-in-effect
-      if (side === "BUY_FX" || side === "SELL_FX" || side === "EXCHANGE_FX")
-        setTradeSide(side);
+      if (activeFinancialRoute === "/fx/buy") setTradeSide("BUY_FX");
+      else if (activeFinancialRoute === "/fx/sell") setTradeSide("SELL_FX");
+      else if (activeFinancialRoute === "/fx/exchange") setTradeSide("EXCHANGE_FX");
+      else if (side === "BUY_FX" || side === "SELL_FX" || side === "EXCHANGE_FX") setTradeSide(side);
       setOperationKind(null);
       return;
     }
@@ -1512,21 +1464,47 @@ function App() {
       setOperationKind(null);
       return;
     }
-    const action = params.get("action")
+    const action = params.get("action") ?? ({
+      "/money-in/customer": "RECEIVE_MONEY",
+      "/money-in/income": "RECORD_INCOME",
+      "/money-in/owner-capital": "OWNER_INVESTMENT",
+      "/money-out/customer": "PAY_MONEY",
+      "/money-out/expense": "RECORD_EXPENSE",
+      "/money-out/owner-withdrawal": "OWNER_WITHDRAWAL",
+      "/move/cashbox": "TRANSFER_CASH",
+      "/move/branch": "TRANSFER_CASH",
+      "/move/bank": "BANK_DEPOSIT",
+    } as Partial<Record<NonNullable<typeof activeFinancialRoute>, OperationKind>>)[activeFinancialRoute ?? "/fx/buy"]
       ?? (location.pathname.endsWith("/transactions/new/money-in") ? "RECEIVE_MONEY"
         : location.pathname.endsWith("/transactions/new/money-out") ? "PAY_MONEY"
           : location.pathname.endsWith("/transactions/new/move-money") ? "TRANSFER_CASH"
             : null);
     if (["RECEIVE_MONEY", "PAY_MONEY", "TRANSFER_CASH", "RECORD_EXPENSE", "RECORD_INCOME", "OWNER_INVESTMENT", "OWNER_WITHDRAWAL", "BANK_DEPOSIT", "BANK_WITHDRAWAL"].includes(action ?? ""))
       setOperationKind(action as OperationKind);
-  }, [location.pathname, location.search, openingFormActive, transactionFormActive]);
+  }, [activeFinancialRoute, fxFormActive, location.pathname, location.search, openingFormActive, transactionFormActive]);
+  useEffect(() => {
+    if (!operationKind || !branchMoneyAccounts.length) return;
+    const preferred = branchMoneyAccounts.find((account) => account.account_type === "cashbox") ?? branchMoneyAccounts[0];
+    const alternate = branchMoneyAccounts.find((account) => account.id !== preferred.id) ?? preferred;
+    const incoming = ["RECEIVE_MONEY", "RECORD_INCOME", "OWNER_INVESTMENT"].includes(operationKind);
+    const transfer = ["TRANSFER_CASH", "BANK_DEPOSIT", "BANK_WITHDRAWAL"].includes(operationKind);
+    if (incoming || transfer) {
+      const desiredDestination = transfer ? alternate : preferred;
+      setOperationDestinationAccount((current) => branchMoneyAccounts.some((account) => account.id === current) && (!transfer || current !== preferred.id) ? current : desiredDestination.id);
+    }
+    if (!incoming)
+      setOperationSourceAccount((current) => branchMoneyAccounts.some((account) => account.id === current) ? current : preferred.id);
+  }, [branchMoneyAccounts, operationKind]);
   /* oxlint-enable react/set-state-in-effect */
   const hawalaEnabled = enabledFeatureCodes.includes("hawala");
+  const activeWorkspaceContext = workspaceContexts.find((context) => context.membership_id === activeMembershipId) ?? workspaceContexts.find((context) => context.organization_id === organizationId);
+  const workspaceCapabilities = inspectionMode
+    ? inspectionCapabilities(workspaceRole)
+    : activeWorkspaceContext?.capabilities ?? [];
+  const capability = (required: Capability) => hasCapability(workspaceCapabilities, required);
   const canPostFinancial =
-    workspaceRole === "owner" ||
-    workspaceRole === "business_admin" ||
-    workspaceRole === "manager" ||
-    (workspaceRole === "cashier" && linkedDevice?.status === "trusted");
+    hasAnyCapability(workspaceCapabilities, financialPostCapabilities) &&
+    (workspaceRole !== "cashier" || linkedDevice?.status === "trusted");
   const cashierDeviceWaiting =
     workspaceRole === "cashier" && linkedDevice?.status !== "trusted";
   const postingAccessNotice = cashierDeviceWaiting
@@ -1536,30 +1514,23 @@ function App() {
   const myActivityLabel = language === "en" ? "My Activity" : language === "fa-AF" ? "فعالیت من" : "زما فعالیت";
   const makeTransactionLabel = language === "en" ? "Make a Transaction" : t("newTransaction");
   const myMoneyLabel = language === "en" ? "My Money" : t("myMoney");
-  const controlCenterLabel = language === "en" ? "Control Center" : controlLabel;
   const customersLabel = language === "en" ? "Customers" : t("people");
-  const moneyLabel = language === "en" ? "Money" : t("myMoney");
   const reconcileLabel = language === "en" ? "Reconcile" : t("reconciliation");
   const manageSarafiLabel = language === "en" ? "Manage Sarafi" : language === "fa-AF" ? "مدیریت سرافی" : "سرافي اداره کړئ";
-  const cashboxesLabel = language === "en" ? "Cashboxes" : language === "fa-AF" ? "صندوق‌ها" : "صندوقونه";
-  const closeCashboxLabel = language === "en" ? "Close Cashbox" : language === "fa-AF" ? "بستن صندوق" : "صندوق تړل";
-  const teamLabel = language === "en" ? "Team" : language === "fa-AF" ? "تیم" : "ډله";
   const reviewsLabel = language === "en" ? "Reviews" : language === "fa-AF" ? "بررسی‌ها" : "څېړنې";
-  const casesLabel = language === "en" ? "Cases" : language === "fa-AF" ? "قضایا" : "قضیې";
-  const searchLabel = language === "en" ? "Search" : language === "fa-AF" ? "جستجو" : "لټون";
-  const primaryNavigation: Array<[string, string, AppIconName]> = workspaceRole === "owner"
-    ? [["Dashboard", t("home"), "home"], ["Trade", makeTransactionLabel, "trade"], ["Cash & Accounts", myMoneyLabel, "wallet"], ["Transactions", activityLabel, "transactions"], ["Control", controlCenterLabel, "settings"]]
-    : workspaceRole === "business_admin"
-      ? [["Dashboard", t("home"), "home"], ["Trade", makeTransactionLabel, "trade"], ["People", customersLabel, "people"], ["Transactions", activityLabel, "transactions"], ["Control", manageSarafiLabel, "settings"]]
-    : workspaceRole === "manager"
-      ? [["Dashboard", t("home"), "home"], ["Trade", makeTransactionLabel, "trade"], ["Reconciliation", cashboxesLabel, "cashbox"], ["Transactions", activityLabel, "transactions"], ["Team & Devices", teamLabel, "people"]]
-      : workspaceRole === "cashier"
-        ? [["Dashboard", t("home"), "home"], ["Trade", makeTransactionLabel, "trade"], ["People", customersLabel, "people"], ["Transactions", myActivityLabel, "transactions"], ["Cashbox Close", closeCashboxLabel, "cashbox"]]
-        : workspaceRole === "accountant"
-          ? [["Dashboard", t("home"), "home"], ["Transactions", t("transactions"), "transactions"], ["Reports", t("reports"), "report"], ["Debts", t("debts"), "debt"], ["Reconciliation", reconcileLabel, "cashbox"]]
-          : workspaceRole === "compliance_officer"
-            ? [["Dashboard", t("home"), "home"], ["Hawala", t("hawala"), "hawala"], ["Compliance Reviews", reviewsLabel, "shield"], ["Compliance Cases", casesLabel, "transactions"], ["Search", searchLabel, "search"]]
-            : [["Dashboard", t("home"), "home"], ["Cash & Accounts", moneyLabel, "wallet"], ["Transactions", t("transactions"), "transactions"], ["Reports", t("reports"), "report"], ["Search", searchLabel, "search"]];
+  const navigationLabel: Record<string, [string, AppIconName]> = {
+    Dashboard: [t("home"), "home"],
+    Trade: [makeTransactionLabel, "trade"],
+    Transactions: [workspaceRole === "cashier" ? myActivityLabel : activityLabel, "transactions"],
+    "Cash & Accounts": [myMoneyLabel, "wallet"],
+    People: [customersLabel, "people"],
+    Reports: [t("reports"), "report"],
+    Reconciliation: [reconcileLabel, "cashbox"],
+    "Compliance Reviews": [reviewsLabel, "shield"],
+    Control: [manageSarafiLabel, "settings"],
+  };
+  const primaryNavigation: Array<[string, string, AppIconName]> = navigationSections(workspaceCapabilities)
+    .map((section) => [section, navigationLabel[section][0], navigationLabel[section][1]]);
   const roleName = (role: string) =>
     ({
       owner: u("owner"),
@@ -1571,16 +1542,12 @@ function App() {
       viewer: u("viewer"),
     } satisfies Record<WorkspaceRole, string>)[role as WorkspaceRole] ?? role;
   const roleLabel = roleName(workspaceRole);
-  const routeAccess: Record<WorkspaceRole, string[]> = {
-    owner: ["Dashboard", "Trade", "Transactions", "Cash & Accounts", "People", "Debts", "Rates", "Reports", "Team & Devices", "Control", "Business Settings", "Security", "Reconciliation", "Cashbox Close", "Hawala", "Compliance", "Compliance Reviews", "Compliance Cases", "Import", "Billing", "Offline"],
-    business_admin: ["Dashboard", "Trade", "Transactions", "Cash & Accounts", "People", "Debts", "Rates", "Reports", "Team & Devices", "Control", "Business Settings", "Security", "Reconciliation", "Cashbox Close", "Hawala", "Compliance", "Compliance Reviews", "Compliance Cases", "Import", "Offline"],
-    manager: ["Dashboard", "Trade", "Transactions", "Cash & Accounts", "People", "Debts", "Reports", "Team & Devices", "Reconciliation", "Cashbox Close", "Hawala", "Offline"],
-    cashier: ["Dashboard", "Trade", "Transactions", "Cash & Accounts", "People", "Debts", "Reconciliation", "Cashbox Close", "Hawala", "Offline"],
-    accountant: ["Dashboard", "Transactions", "Cash & Accounts", "Debts", "Reports", "Reconciliation", "Cashbox Close"],
-    compliance_officer: ["Dashboard", "Transactions", "Hawala", "Compliance", "Compliance Reviews", "Compliance Cases"],
-    viewer: ["Dashboard", "Transactions", "Cash & Accounts", "Reports"],
-  };
-  const routeAuthorized = routeAccess[workspaceRole].includes(activeSection);
+  const exactFinancialRoute = financialRouteSuffix(location.pathname);
+  const routeAuthorized = canOpenSection(workspaceCapabilities, activeSection)
+    && (!exactFinancialRoute || (
+      hasCapability(workspaceCapabilities, capabilityForFinancialRoute(exactFinancialRoute))
+      && (!exactFinancialRoute.startsWith("/hawala/") || hawalaEnabled)
+    ));
   const normalizedSearch = globalSearch.trim().toLocaleLowerCase(language);
   const globalSearchResults = normalizedSearch
     ? [
@@ -1601,26 +1568,13 @@ function App() {
       BANK_DEPOSIT: u("bankDeposit"),
       BANK_WITHDRAWAL: u("bankWithdrawal"),
     })[kind];
-  const activityDirectionLabel = (value: string) =>
-    ({
-      BUY_FX: t("buy"),
-      SELL_FX: t("sell"),
-      EXCHANGE_FX: t("exchange"),
-    })[value] ?? u("recordedTransaction");
-  const activityStatusLabel = (value: string) =>
-    ({
-      posted: t("posted"),
-      pending: t("pending"),
-      reversed: u("reversed"),
-      corrected: u("reversed"),
-    })[value.toLowerCase()] ?? u("review");
   const shopTradeRate = tradeSide === "BUY_FX" ? rate : sellRate;
   const effectiveTradeRate = tradeSide === "EXCHANGE_FX"
     ? tradeExchangeRate
     : rateOverrideEnabled
       ? rateOverride
       : shopTradeRate;
-  const canPublishTransactionRate = workspaceRole === "owner" || workspaceRole === "business_admin";
+  const canPublishTransactionRate = capability("rates.manage");
   const rateWorkflowCopy = language === "en"
     ? {
         noRate: "No shop rate is published for this currency.",
@@ -1835,11 +1789,19 @@ function App() {
       <WorkerConnectionLobby
         language={language}
         code={connectionCode}
+        kind={connectionKind}
+        name={connectionName}
         busy={connectionBusy}
         message={connectionMessage}
         onLanguageChange={setLanguage}
+        onKindChange={(kind) => {
+          setConnectionKind(kind);
+          setConnectionCode("");
+          setConnectionMessage("");
+        }}
+        onNameChange={setConnectionName}
         onCodeChange={(value) => {
-          setConnectionCode(value.replaceAll(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10));
+          setConnectionCode(value.replaceAll(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, connectionKind === "invitation" ? 10 : 12));
           setConnectionMessage("");
         }}
         onSubmit={submitConnectionCode}
@@ -1954,14 +1916,6 @@ function App() {
                 : roleLabel}
             </small>
           </span>
-          {!inspectionMode && (
-            <button
-              aria-label={u("signOut")}
-              onClick={() => void handleSignOut()}
-            >
-              ↪
-            </button>
-          )}
         </div>
       </aside>
       <nav className="mobile-nav" aria-label={t("workspace")}>
@@ -2022,30 +1976,23 @@ function App() {
                 </article>) : <p>{notificationUi[language].empty}</p>}
               </section>}
             </div>
-            <button
-              className="icon-button"
-              onClick={() => setPrivacy(!privacy)}
-              aria-label={privacy ? u("showAmounts") : u("hideAmounts")}
-            >
-              <AppIcon name={privacy ? "eye" : "eyeOff"} />
-            </button>
-            <select
-              className="lang-button"
-              value={language}
-              onChange={(event) => setLanguage(event.target.value as Language)}
-              aria-label={u("changeLanguage")}
-            >
-              <option value="en">English</option>
-              <option value="fa-AF">دری</option>
-              <option value="ps-AF">پښتو</option>
-            </select>
-            <button
-              className="help-button"
-              onClick={() => setShowHelp(true)}
-              aria-label={u("openHelp")}
-            >
-              ?
-            </button>
+            <div className="profile-control">
+              <button
+                className="profile-button"
+                onClick={() => { setShowProfileMenu((value) => !value); setShowSearch(false); setShowNotifications(false); }}
+                aria-label={language === "en" ? "Profile and preferences" : language === "fa-AF" ? "پروفایل و ترجیحات" : "پروفایل او غوره توبونه"}
+                aria-expanded={showProfileMenu}
+              >
+                <span>{inspectionMode ? "AI" : (user?.email?.slice(0, 2).toUpperCase() ?? "MA")}</span>
+              </button>
+              {showProfileMenu ? <section className="profile-popover" aria-label={language === "en" ? "Profile and preferences" : language === "fa-AF" ? "پروفایل و ترجیحات" : "پروفایل او غوره توبونه"}>
+                <header><strong>{user?.email ?? t("readOnlyInspection")}</strong><small>{roleLabel}</small></header>
+                <label>{u("changeLanguage")}<select value={language} onChange={(event) => setLanguage(event.target.value as Language)}><option value="en">English</option><option value="fa-AF">دری</option><option value="ps-AF">پښتو</option></select></label>
+                <button type="button" onClick={() => setPrivacy((value) => !value)}><AppIcon name={privacy ? "eye" : "eyeOff"} size={18} />{privacy ? u("showAmounts") : u("hideAmounts")}</button>
+                <button type="button" onClick={() => { setShowHelp(true); setShowProfileMenu(false); }}>?<span>{u("openHelp")}</span></button>
+                {!inspectionMode ? <button type="button" className="profile-sign-out" onClick={() => void handleSignOut()}>↪<span>{u("signOut")}</span></button> : null}
+              </section> : null}
+            </div>
           </div>
         </header>
         <div className="content-wrap">
@@ -2060,22 +2007,19 @@ function App() {
             </section>
           )}
           {routeAuthorized && !dashboardView && (
-            transactionCenterActive ? (
-              <TransactionCenterView
+            transactionCenterActive && !transactionFormActive ? (
+              <TransactionCenter
                 language={language}
-                canPostFinancial={canPostFinancial}
-                workspaceRole={workspaceRole}
+                capabilities={workspaceCapabilities}
                 hawalaEnabled={hawalaEnabled}
-                formActive={transactionFormActive}
-                onTrade={(side) => openTrade(side)}
-                onOperation={openOperation}
-                onNavigate={openSection}
+                onOpen={(route) => navigate(financialRoute(organizationId, route))}
               />
-            ) : (
+            ) : !transactionCenterActive ? (
               <Suspense fallback={<section className="panel" role="status">{t("working")}</section>}>
                 <WorkspaceView
                   language={language}
                   section={activeSection}
+                  pathname={location.pathname}
                   dashboard={dashboard}
                   businessDate={dashboardDate}
                   organizationId={organizationId}
@@ -2084,16 +2028,20 @@ function App() {
                     inspectionMode ? t("mainBranch") : branchName || t("mainBranch")
                   }
                   roleLabel={roleLabel}
-                  canManageTeam={workspaceRole === "owner" || workspaceRole === "business_admin"}
-                  canDecideApprovals={workspaceRole === "owner" || workspaceRole === "business_admin" || workspaceRole === "manager"}
-                  canApproveReconciliation={workspaceRole === "owner" || workspaceRole === "business_admin" || workspaceRole === "manager"}
-                  canManageMoney={workspaceRole === "owner" || workspaceRole === "business_admin"}
+                  canManageTeam={capability("team.manage")}
+                  canManageCapabilities={capability("team.capabilities.manage")}
+                  canInviteBusinessAdmin={capability("ownership.transfer")}
+                  canDecideApprovals={capability("approval.decide")}
+                  canApproveReconciliation={capability("reconciliation.approve")}
+                  canManageMoney={hasAnyCapability(workspaceCapabilities, ["organization.manage", "money_accounts.manage", "rates.manage"])}
+                  canReverse={capability("financial.reverse")}
                   userId={user?.id ?? "inspection-user"}
                   deviceId={linkedDevice?.id ?? ""}
                   branchId={branchId}
                   cashboxId={cashboxId}
                   onDashboard={() => openSection("Dashboard")}
                   onNavigate={openSection}
+                  onRoute={(path) => navigate(path)}
                   onToast={setToast}
                   onMoneyContextChanged={() =>
                     setMoneyContextRefresh((value) => value + 1)
@@ -2104,393 +2052,27 @@ function App() {
                   }}
                 />
               </Suspense>
-            )
+            ) : null
           )}
           {routeAuthorized && dashboardView && (
-            <>
-              <section className="welcome dashboard-welcome">
-                <div className="dashboard-welcome-copy">
-                  <p className="kicker" dir="ltr">
-                    {dashboardDate}
-                  </p>
-                  <h1>
-                    {t("goodMorning")}
-                  </h1>
-                  <p className="subtitle">{t("businessStand")}</p>
-                  <div className="dashboard-connection" role="status">
-                    <span className={`sync-dot ${online ? "online" : "offline"}`} />
-                    <span>{online ? t("connected") : t("stillOffline")}</span>
-                    <small>{supabaseConfigured ? u("connectionNotice") : t("localWorkspace")}</small>
-                  </div>
-                  {!canPostFinancial && (
-                    <p className="role-access-note" id="posting-access-note">
-                      {postingAccessNotice}
-                    </p>
-                  )}
-                </div>
-                <div className="action-wrap daily-command-center">
-                  <div className="dashboard-action-heading">
-                    <b>{u("startTransaction")}</b>
-                    <small>{u("chooseDailyAction")}</small>
-                  </div>
-                  <div
-                    className="daily-primary-actions"
-                    aria-label={u("coreCashierActions")}
-                  >
-                    <button
-                      disabled={!online || !canPostFinancial}
-                      className="trade-launch"
-                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? postingAccessNotice : undefined}
-                      onClick={() => openSection("Trade")}
-                    >
-                      <span className="daily-action-icon"><AppIcon name="trade" size={24} /></span>
-                      <span><b>{t("newTransaction")}</b><small>{t("buy")} · {t("sell")} · {t("exchange")}</small></span>
-                    </button>
-                    <button
-                      disabled={!online || !canPostFinancial}
-                      className="daily-money-action"
-                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? postingAccessNotice : undefined}
-                      onClick={() => openOperation("RECEIVE_MONEY")}
-                    >
-                      <AppIcon name="receive" size={21} />
-                      <span>{t("receive")}</span>
-                    </button>
-                    <button
-                      disabled={!online || !canPostFinancial}
-                      className="daily-money-action"
-                      aria-describedby={!canPostFinancial ? "posting-access-note" : undefined}
-                      title={!canPostFinancial ? postingAccessNotice : undefined}
-                      onClick={() => openOperation("PAY_MONEY")}
-                    >
-                      <AppIcon name="pay" size={21} />
-                      <span>{t("pay")}</span>
-                    </button>
-                  </div>
-                  <div className="daily-action-grid">
-                    {workspaceRole !== "compliance_officer" && workspaceRole !== "viewer" && <button className="daily-action-tile" onClick={() => openSection("Debts")}>
-                      <AppIcon name="debt" /><span>{t("debts")}</span>
-                    </button>}
-                    {canPostFinancial && <button className="daily-action-tile" disabled={!online} onClick={() => openOperation("TRANSFER_CASH")}>
-                      <AppIcon name="transfer" /><span>{t("transfer")}</span>
-                    </button>}
-                    {canPostFinancial && <button className="daily-action-tile" disabled={!online} onClick={() => openOperation("RECORD_EXPENSE")}>
-                      <AppIcon name="expense" /><span>{t("expense")}</span>
-                    </button>}
-                    {workspaceRole === "manager" && <><button className="daily-action-tile" onClick={() => openSection("Reconciliation")}><AppIcon name="cashbox" /><span>{t("reconciliation")}</span></button><button className="daily-action-tile" onClick={() => openSection("Team & Devices")}><AppIcon name="people" /><span>{t("teamDevices")}</span></button></>}
-                    {workspaceRole === "cashier" && <><button className="daily-action-tile" onClick={() => openSection("Cashbox Close")}><AppIcon name="cashbox" /><span>{closeCashboxLabel}</span></button><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{myActivityLabel}</span></button></>}
-                    {workspaceRole === "accountant" && <><button className="daily-action-tile" onClick={() => openSection("Reports")}><AppIcon name="report" /><span>{t("reports")}</span></button><button className="daily-action-tile" onClick={() => openSection("Reconciliation")}><AppIcon name="cashbox" /><span>{t("reconciliation")}</span></button><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{t("transactions")}</span></button><button className="daily-action-tile" onClick={() => openSection("Cash & Accounts")}><AppIcon name="wallet" /><span>{t("myMoney")}</span></button></>}
-                    {workspaceRole === "compliance_officer" && <><button className="daily-action-tile" onClick={() => openSection("Compliance")}><AppIcon name="shield" /><span>{u("compliance")}</span></button><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{t("transactions")}</span></button></>}
-                    {workspaceRole === "viewer" && <><button className="daily-action-tile" onClick={() => openSection("Transactions")}><AppIcon name="transactions" /><span>{t("transactions")}</span></button><button className="daily-action-tile" onClick={() => openSection("Cash & Accounts")}><AppIcon name="wallet" /><span>{t("myMoney")}</span></button></>}
-                  </div>
-                </div>
-              </section>
-              {workspaceRole === "owner" && !hasRecordedMoney && (
-                <section className="first-day-setup" aria-labelledby="first-day-title">
-                  <div><p className="kicker">1 · 2 · 3 · 4</p><h2 id="first-day-title">{u("firstDayTitle")}</h2><p>{u("firstDayIntro")}</p></div>
-                  <div className="first-day-steps">
-                    <button onClick={() => openSection("Transaction Opening")}><span>1</span><AppIcon name="cashbox" />{u("openingBalance")}</button>
-                    <button onClick={() => openSection("Cash & Accounts")}><span>2</span><AppIcon name="wallet" />{t("myMoney")}</button>
-                    <button onClick={() => openSection("Rates")}><span>3</span><AppIcon name="rates" />{t("rates")}</button>
-                    <button onClick={() => openSection("Team & Devices")}><span>4</span><AppIcon name="people" />{t("teamDevices")}</button>
-                  </div>
-                </section>
-              )}
-              <section className={`role-home-card role-${workspaceRole}`}>
-                <div>
-                  <span>{roleLabel}</span>
-                  <h2>{u(`roleHomeTitle_${workspaceRole}` as Parameters<typeof ux>[1])}</h2>
-                  <p>{u(`roleHomeDescription_${workspaceRole}` as Parameters<typeof ux>[1])}</p>
-                </div>
-                <div className="role-home-links">
-                  {workspaceRole === "cashier" && <button onClick={() => openSection("Reconciliation")}>{u("cashierCloseShortcut")}</button>}
-                  {workspaceRole === "accountant" && <><button onClick={() => openSection("Reports")}>{t("reports")}</button><button onClick={() => openSection("Reconciliation")}>{t("reconciliation")}</button></>}
-                  {workspaceRole === "compliance_officer" && <button onClick={() => openSection("Compliance")}>{u("compliance")}</button>}
-                  {workspaceRole === "viewer" && <button onClick={() => openSection("Transactions")}>{t("transactions")}</button>}
-                  {workspaceRole === "manager" && <button onClick={() => openSection("Team & Devices")}>{t("teamDevices")}</button>}
-                  {workspaceRole === "owner" && <button onClick={() => openSection("Billing")}>{u("planPayment")}</button>}
-                </div>
-              </section>
-              {!online && (
-                <div className="notice" role="alert">
-                  <span className="sync-dot offline" />
-                  <span><b>{t("stillOffline")}</b> · {u("postingPaused")}</span>
-                </div>
-              )}
-              {dashboardError && (
-                <div className="notice error" role="alert">
-                  {dashboardError}
-                  <button
-                    onClick={() => setDashboardRefresh((value) => value + 1)}
-                  >
-                    {u("retry")}
-                  </button>
-                </div>
-              )}
-              <section className="rate-strip dashboard-rate-strip">
-                <div className="rate-title">
-                  <span className="rate-live" />{" "}
-                  <div>
-                    <b>{t("rates")}</b>
-                    <small>{t("retailRateContext")}</small>
-                  </div>
-                </div>
-                <label>
-                  {t("buyRate")}
-                  <input
-                    aria-label={u("liveBuyRate")}
-                    value={rate}
-                    onChange={(event) => setRate(event.target.value)}
-                    placeholder={u("liveRate")}
-                    readOnly
-                  />
-                </label>
-                <label>
-                  {t("sellRate")}
-                  <input
-                    aria-label={u("liveSellRate")}
-                    value={sellRate}
-                    readOnly
-                    placeholder={u("liveRate")}
-                  />
-                </label>
-                <div className="calculator">
-                  <input
-                    aria-label={u("rateCalculator")}
-                    value={calculatorAmount}
-                    onChange={(event) =>
-                      setCalculatorAmount(event.target.value)
-                    }
-                  />
-                  <span aria-label={u("sourceCurrency")}>{tradeCurrency}</span>
-                  <b>=</b>
-                  <strong>
-                    {rate
-                      ? calculateCounterAmount(
-                          calculatorAmount || "0",
-                          rate,
-                          "AFN_PER_UNIT",
-                          2,
-                        )
-                      : "—"}
-                  </strong>
-                  <span aria-label={u("targetCurrency")}>AFN</span>
-                </div>
-                <label>
-                  {u("businessDate")}
-                  <input
-                    aria-label={u("businessDate")}
-                    type="date"
-                    value={dashboardDate}
-                    onChange={(event) => setDashboardDate(event.target.value)}
-                  />
-                </label>
-                <button
-                  className="text-button"
-                  onClick={() => openSection("Rates")}
-                >
-                  {t("history")} →
-                </button>
-              </section>
-              {workspaceRole !== "cashier" && workspaceRole !== "compliance_officer" && <section className="metric-grid">
-                <article className="metric-card hero-metric">
-                  <div className="card-head">
-                    <span>{t("netPosition")} AFN</span>
-                    <button
-                      aria-label={privacy ? u("showAmounts") : u("hideAmounts")}
-                      onClick={() => setPrivacy(!privacy)}
-                    >
-                      ◌
-                    </button>
-                  </div>
-                  <strong>
-                    {hidden || (dashboard ? formatFinancialAmount(dashboard.net_position_base) : "—")}
-                  </strong>
-                  <div className="metric-foot">
-                    <span>{t("ledgerDerivedAfn")}</span>
-                  </div>
-                  <div className="sparkline">
-                    {Array.from({ length: 12 }, (_, index) => (
-                      <i key={index} />
-                    ))}
-                  </div>
-                </article>
-                <article className="metric-card">
-                  <div className="card-head">
-                    <span>{t("todayVolume")}</span>
-                    <span className="card-symbol">↗</span>
-                  </div>
-                  <strong>{hidden || (dashboard ? formatFinancialAmount(dashboard.volume_base) : "—")}</strong>
-                  <div className="metric-foot">
-                    <span>
-                      {dashboard
-                        ? `${dashboard.transaction_count} ${t("posted")}`
-                        : t("awaitingLiveLedger")}
-                    </span>
-                  </div>
-                </article>
-                <article className="metric-card">
-                  <div className="card-head">
-                    <span>{t("realizedProfit")}</span>
-                    <span className="card-symbol profit">✦</span>
-                  </div>
-                  <strong className="profit-text">
-                    {hidden || (dashboard ? formatFinancialAmount(dashboard.realized_profit) : "—")}
-                  </strong>
-                  <div className="metric-foot">
-                    <span>
-                      {t("operatingExpenses")}: {hidden || (dashboard ? formatFinancialAmount(dashboard.expenses) : "—")}
-                    </span>
-                  </div>
-                </article>
-              </section>}
-              <section className="dashboard-grid">
-                <article className="panel balances">
-                  <div className="panel-header">
-                    <div>
-                      <h2>{t("whereMoney")}</h2>
-                      <p>{t("journalBalances")}</p>
-                    </div>
-                    <button
-                      className="text-button"
-                      onClick={() => openSection("Cash & Accounts")}
-                    >
-                      {t("viewAll")} -&gt;
-                    </button>
-                  </div>
-                  {dashboard?.locations.length ? (
-                    <div className="balance-list">
-                      {dashboard.locations.slice(0, 6).map((location) => (
-                        <div
-                          className="balance-row"
-                          key={`${location.location_id}-${location.currency}`}
-                        >
-                          <span className="currency-badge usd">
-                            {location.currency}
-                          </span>
-                          <span className="balance-name">
-                            <b>{location.location_name}</b>
-                            <small>{t("assetLocation")}</small>
-                          </span>
-                          <strong>{hidden || formatFinancialAmount(location.quantity)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="empty-live">{t("awaitingLiveLedger")}</div>
-                  )}
-                </article>
-                <article className="panel attention">
-                  <div className="panel-header">
-                    <div>
-                      <h2>{t("needsAttention")}</h2>
-                      <p>{t("liveReviewQueue")}</p>
-                    </div>
-                    <span className="attention-count">
-                      {dashboard?.pending_approvals ?? "—"}
-                    </span>
-                  </div>
-                  <div className="empty-live">
-                    {dashboard
-                      ? `${dashboard.pending_approvals} ${t("pending")}`
-                      : t("loadingReviewQueue")}
-                  </div>
-                </article>
-              </section>
-              <section className="panel activity">
-                <div className="panel-header">
-                  <div>
-                    <h2>{u("recentActivity")}</h2>
-                    <p>{u("traceable")}</p>
-                  </div>
-                  <div className="activity-actions">
-                    <button
-                      className="filter-button"
-                      onClick={() =>
-                        setActivityFilter(
-                          activityFilter === "Today" ? "All time" : "Today",
-                        )
-                      }
-                    >
-                      {activityFilter === "Today" ? t("today") : u("allTime")}{" "}
-                      <span>⌄</span>
-                    </button>
-                    <button
-                      className="export-button"
-                      onClick={() => void exportActivity()}
-                    >
-                      {t("exportCsv")}
-                    </button>
-                  </div>
-                </div>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>{t("transaction")}</th>
-                        <th>{t("direction")}</th>
-                        <th>{t("amount")}</th>
-                        <th>{t("time")}</th>
-                        <th>{u("status")}</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trades.map((trade) => (
-                        <tr key={trade.id}>
-                          <td>
-                            <span className="transaction-icon">↕</span>
-                            <span className="table-person">
-                              <b>{trade.customer}</b>
-                              <small>
-                                {u("tradeReference")} #
-                                {String(trade.id).padStart(5, "0")}
-                              </small>
-                            </span>
-                          </td>
-                          <td>{activityDirectionLabel(trade.direction)}</td>
-                          <td>
-                            <b>
-                              {privacy
-                                ? "••••"
-                                : trade.amount === "Recorded"
-                                  ? u("recordedTransaction")
-                                  : trade.amount}
-                            </b>
-                            <small>@ {trade.rate}</small>
-                          </td>
-                          <td>{trade.time}</td>
-                          <td>
-                            <span
-                              className={`status ${trade.status.toLowerCase()}`}
-                            >
-                              {activityStatusLabel(trade.status)}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              className="more"
-                              onClick={() => setToast(u("detailsAfterSync"))}
-                              aria-label={`${u("viewTradeDetails")} ${trade.id}`}
-                            >
-                              •••
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </>
+            <RoleHome
+              language={language}
+              role={workspaceRole}
+              roleLabel={roleLabel}
+              dashboard={dashboard}
+              businessDate={dashboardDate}
+              online={online}
+              privacy={privacy}
+              onTogglePrivacy={() => setPrivacy((value) => !value)}
+              onNavigate={openSection}
+            />
           )}
         </div>
       </main>
       {routeAuthorized && fxFormActive && transactionFormActive && (
         <div className="transaction-inline-form">
           <form
-            className="trade-modal transaction-page-form"
+            className="financial-task-form transaction-page-form"
             onSubmit={addTrade}
             aria-labelledby="trade-dialog-title"
           >
@@ -2669,24 +2251,24 @@ function App() {
             </div>
             {tradeSide !== "EXCHANGE_FX" && (
               <section className={`rate-governance ${rateContext.missing || rateContext.stale ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
-                {rateContext.effectiveFrom && (
-                  <small>{new Date(rateContext.effectiveFrom).toLocaleString(language)} · {language === "en" ? "Allowed difference" : language === "fa-AF" ? "تفاوت مجاز" : "اجازه شوی توپیر"}: {rateContext.tolerance}</small>
-                )}
+                <div className="applied-rate-row">
+                  <small>{rateContext.effectiveFrom ? new Date(rateContext.effectiveFrom).toLocaleString(language) : (rateContext.missing ? rateWorkflowCopy.noRate : rateWorkflowCopy.current)}</small>
+                  {!rateOverrideEnabled && <button type="button" className="text-button" onClick={() => { setRateOverrideEnabled(true); setAllowStaleRate(false); setPublishRate(false); setTradeReviewing(false); }}>{language === "en" ? "Change" : language === "fa-AF" ? "تغییر" : "بدلول"}</button>}
+                </div>
                 {rateContext.stale && !rateContext.missing && (
                   <label className="choice-row">
                     <input type="checkbox" checked={allowStaleRate} disabled={tradeReviewing || tradeBusy || rateOverrideEnabled} onChange={(event) => { setAllowStaleRate(event.target.checked); setTradeReviewing(false); }} />
                     <span>{rateWorkflowCopy.continueStale}</span>
                   </label>
                 )}
-                <label className="choice-row">
-                  <input type="checkbox" checked={rateOverrideEnabled} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverrideEnabled(event.target.checked); setAllowStaleRate(false); setPublishRate(false); setTradeReviewing(false); }} />
-                  <span>{rateWorkflowCopy.useDifferent}</span>
-                </label>
-                {rateOverrideEnabled && (
-                  <label>
-                    {rateWorkflowCopy.newRate}
-                    <input required min="0.000001" step="any" inputMode="decimal" value={rateOverride} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverride(event.target.value); setTradeReviewing(false); }} placeholder="0.00" />
-                  </label>
+                {(rateOverrideEnabled || rateContext.missing) && (
+                  <>
+                    <label>
+                      {rateWorkflowCopy.newRate}
+                      <input required min="0.000001" step="any" inputMode="decimal" value={rateOverride} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverrideEnabled(true); setRateOverride(event.target.value); setTradeReviewing(false); }} placeholder="0.00" />
+                    </label>
+                    {!rateContext.missing && <button type="button" className="text-button" onClick={() => { setRateOverrideEnabled(false); setRateOverride(""); setRateOverrideReason(""); setPublishRate(false); }}>{language === "en" ? "Use shop rate" : language === "fa-AF" ? "استفاده نرخ صرافی" : "د صرافۍ نرخ وکاروئ"}</button>}
+                  </>
                 )}
                 {(rateOverrideEnabled || allowStaleRate) && (
                   <label>
@@ -2700,7 +2282,7 @@ function App() {
                     <span>{rateWorkflowCopy.publish}</span>
                   </label>
                 )}
-                {workspaceRole === "cashier" && (rateOverrideEnabled || allowStaleRate || rateContext.missing) && <p>{rateWorkflowCopy.approval}</p>}
+                {capability("approval.request") && !capability("approval.decide") && (rateOverrideEnabled || allowStaleRate || rateContext.missing) && <p>{rateWorkflowCopy.approval}</p>}
               </section>
             )}
             {(
@@ -2771,7 +2353,7 @@ function App() {
       {routeAuthorized && operationKind && transactionFormActive && (
         <div className="transaction-inline-form">
           <form
-            className="trade-modal transaction-page-form"
+            className="financial-task-form transaction-page-form"
             onSubmit={submitOperation}
             aria-labelledby="operation-dialog-title"
           >
@@ -2959,7 +2541,7 @@ function App() {
       {showHelp && (
         <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
           <section
-            className="trade-modal"
+            className="calm-dialog"
             role="dialog"
             aria-modal="true"
             aria-labelledby="help-title"
@@ -3000,7 +2582,7 @@ function App() {
       {routeAuthorized && openingFormActive && (
         <div className="transaction-inline-form">
           <form
-            className="trade-modal transaction-page-form"
+            className="financial-task-form transaction-page-form"
             onSubmit={submitOpeningBalance}
             aria-labelledby="opening-money-title"
           >
@@ -3084,90 +2666,6 @@ function App() {
   );
 }
 
-function TransactionCenterView({
-  language,
-  canPostFinancial,
-  workspaceRole,
-  hawalaEnabled,
-  formActive,
-  onTrade,
-  onOperation,
-  onNavigate,
-}: {
-  language: Language;
-  canPostFinancial: boolean;
-  workspaceRole: WorkspaceRole;
-  hawalaEnabled: boolean;
-  formActive: boolean;
-  onTrade: (side?: "BUY_FX" | "SELL_FX" | "EXCHANGE_FX") => void;
-  onOperation: (kind: OperationKind) => void;
-  onNavigate: (section: string) => void;
-}) {
-  const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
-  const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const groups = [
-    { title: language === "en" ? "Currency exchange" : language === "fa-AF" ? "تبادله اسعار" : "د اسعارو تبادله", icon: "trade" as const, actions: [[t("buy"), () => onTrade("BUY_FX")], [t("sell"), () => onTrade("SELL_FX")], [t("exchange"), () => onTrade("EXCHANGE_FX")]] },
-    { title: language === "en" ? "Money in" : language === "fa-AF" ? "ورود پول" : "د پیسو داخل", icon: "wallet" as const, actions: [[t("receive"), () => onOperation("RECEIVE_MONEY")], [u("income"), () => onOperation("RECORD_INCOME")], ...(workspaceRole === "owner" ? [[language === "en" ? "Owner investment" : language === "fa-AF" ? "سرمایه‌گذاری مالک" : "د مالک پانګه", () => onOperation("OWNER_INVESTMENT")] as [string, () => void], [u("openingBalance"), () => onNavigate("Transaction Opening")] as [string, () => void]] : [])] },
-    { title: language === "en" ? "Money out" : language === "fa-AF" ? "خروج پول" : "د پیسو وتل", icon: "expense" as const, actions: [[t("pay"), () => onOperation("PAY_MONEY")], [t("expense"), () => onOperation("RECORD_EXPENSE")], ...(workspaceRole === "owner" ? [[u("ownerWithdrawal"), () => onOperation("OWNER_WITHDRAWAL")] as [string, () => void]] : [])] },
-    { title: t("debts"), icon: "debt" as const, actions: [[language === "en" ? "Create receivable" : language === "fa-AF" ? "ایجاد طلب" : "طلب جوړول", () => onNavigate("Transaction Debt")], [language === "en" ? "Create payable" : language === "fa-AF" ? "ایجاد قرض" : "پور جوړول", () => onNavigate("Transaction Debt")], [u("settleDebt"), () => onNavigate("Transaction Debt")]] },
-    { title: language === "en" ? "Move money" : language === "fa-AF" ? "انتقال پول" : "د پیسو لېږد", icon: "transfer" as const, actions: [[t("transfer"), () => onOperation("TRANSFER_CASH")], [u("bankDeposit"), () => onOperation("BANK_DEPOSIT")], [u("bankWithdrawal"), () => onOperation("BANK_WITHDRAWAL")]] },
-    ...(hawalaEnabled ? [{ title: t("hawala"), icon: "hawala" as const, actions: [[language === "en" ? "Send Hawala" : language === "fa-AF" ? "فرستادن حواله" : "حواله لېږل", () => onNavigate("Transaction Hawala")], [language === "en" ? "Incoming instruction" : language === "fa-AF" ? "حواله رسیده" : "رارسېدلې حواله", () => onNavigate("Transaction Hawala")], [language === "en" ? "Pay beneficiary" : language === "fa-AF" ? "پرداخت به گیرنده" : "ګټه‌اخیستونکي ته ورکول", () => onNavigate("Transaction Hawala")], [language === "en" ? "Settle partner" : language === "fa-AF" ? "تسویه همکار" : "له همکار سره تصفیه", () => onNavigate("Transaction Hawala")]] }] : []),
-  ];
-  if (formActive) return null;
-  return <section className="panel transaction-center" aria-labelledby="transaction-center-title">
-    <div className="panel-header"><div><p className="kicker">{t("workspace")}</p><h1 id="transaction-center-title">{language === "en" ? "Make a Transaction" : language === "fa-AF" ? "ثبت معامله" : "معامله ثبتول"}</h1><p>{language === "en" ? "Choose what happened with the money." : language === "fa-AF" ? "انتخاب کنید با پول چه اتفاق افتاده است." : "وټاکئ چې له پیسو سره څه شوي دي."}</p></div></div>
-    {!canPostFinancial && <div className="role-access-note" role="status">{u("readOnlyRoleNotice")}</div>}
-    <div className="transaction-category-grid">{groups.map((group) => <section className="transaction-category" key={group.title}><h2><AppIcon name={group.icon} />{group.title}</h2><div>{group.actions.map(([label, action]) => <button className="transaction-action" key={String(label)} disabled={!canPostFinancial && group.title !== t("debts")} onClick={action as () => void}>{String(label)}<span aria-hidden="true">→</span></button>)}</div></section>)}</div>
-  </section>;
-}
-
-function ControlCenterView({
-  language,
-  roleLabel,
-  canManageTeam,
-  canManageMoney,
-  onNavigate,
-}: {
-  language: Language;
-  roleLabel: string;
-  canManageTeam: boolean;
-  canManageMoney: boolean;
-  onNavigate: (section: string) => void;
-}) {
-  const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
-  const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const controls = [
-    { id: "Team & Devices", title: t("teamDevices"), copy: u("teamAccess"), icon: "people" as const, visible: canManageTeam },
-    { id: "Reconciliation", title: t("reconciliation"), copy: u("cashboxTitle"), icon: "cashbox" as const, visible: true },
-    { id: "Rates", title: t("rates"), copy: u("ratesDescription"), icon: "rates" as const, visible: canManageMoney },
-    { id: "Reports", title: t("reports"), copy: u("reportsDescription"), icon: "report" as const, visible: true },
-    { id: "Compliance", title: u("compliance"), copy: u("settingsDescription"), icon: "shield" as const, visible: true },
-    { id: "Security", title: language === "en" ? "Security" : language === "fa-AF" ? "امنیت" : "امنیت", copy: language === "en" ? "Devices, two-step safeguards, and security history." : u("settingsDescription"), icon: "shield" as const, visible: canManageTeam },
-    { id: "Import", title: u("importData"), copy: u("settingsDescription"), icon: "settings" as const, visible: canManageMoney },
-    { id: "Business Settings", title: t("settings"), copy: u("settingsDescription"), icon: "settings" as const, visible: canManageMoney },
-  ];
-  return (
-    <section className="panel control-center-panel">
-      <div className="panel-header">
-        <div>
-          <p className="kicker">{t("workspace")}</p>
-          <h1>{language === "en" ? "Control center" : language === "fa-AF" ? "مرکز کنترول" : "د کنټرول مرکز"}</h1>
-          <p>{roleLabel} · {language === "en" ? "Manage access, closing, rates, reports, and business safeguards." : u("settingsDescription")}</p>
-        </div>
-      </div>
-      <div className="control-center-grid">
-        {controls.filter((control) => control.visible).map((control) => (
-          <button className="control-center-card" key={control.id} onClick={() => onNavigate(control.id)}>
-            <AppIcon name={control.icon} />
-            <span><strong>{control.title}</strong><small>{control.copy}</small></span>
-            <span aria-hidden="true">→</span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function SecurityOverviewView({
   language,
   onNavigate,
@@ -3218,6 +2716,7 @@ function SecurityOverviewView({
 function WorkspaceView({
   language,
   section,
+  pathname,
   dashboard,
   businessDate,
   organizationId,
@@ -3225,21 +2724,26 @@ function WorkspaceView({
   branchName,
   roleLabel,
   canManageTeam,
+  canManageCapabilities,
+  canInviteBusinessAdmin,
   canDecideApprovals,
   canApproveReconciliation,
   canManageMoney,
+  canReverse,
   userId,
   deviceId,
   branchId,
   cashboxId,
   onDashboard,
   onNavigate,
+  onRoute,
   onToast,
   onMoneyContextChanged,
   onCounterpartyChanged,
 }: {
   language: Language;
   section: string;
+  pathname: string;
   dashboard: DashboardSnapshot | null;
   businessDate: string;
   organizationId: string | null;
@@ -3247,15 +2751,19 @@ function WorkspaceView({
   branchName: string;
   roleLabel: string;
   canManageTeam: boolean;
+  canManageCapabilities: boolean;
+  canInviteBusinessAdmin: boolean;
   canDecideApprovals: boolean;
   canApproveReconciliation: boolean;
   canManageMoney: boolean;
+  canReverse: boolean;
   userId: string;
   deviceId: string;
   branchId: string | null;
   cashboxId: string | null;
   onDashboard: () => void;
   onNavigate: (section: string) => void;
+  onRoute: (path: string) => void;
   onToast: (message: string) => void;
   onMoneyContextChanged: () => void;
   onCounterpartyChanged: (person?: CounterpartyRecord) => void;
@@ -3271,7 +2779,7 @@ function WorkspaceView({
     );
   if (section === "Control")
     return (
-      <ControlCenterView
+      <ManageSarafi
         language={language}
         roleLabel={roleLabel}
         canManageTeam={canManageTeam}
@@ -3306,6 +2814,7 @@ function WorkspaceView({
       <TransactionsView
         language={language}
         organizationId={organizationId}
+        canReverse={canReverse}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3363,6 +2872,8 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         canManage={canManageTeam}
+        canManageCapabilities={canManageCapabilities}
+        canInviteBusinessAdmin={canInviteBusinessAdmin}
         canDecideApprovals={canDecideApprovals}
         onDashboard={onDashboard}
         onToast={onToast}
@@ -3374,6 +2885,8 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         branchId={branchId}
+        pathname={pathname}
+        onRoute={onRoute}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3396,6 +2909,7 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         branchId={branchId}
+        pathname={pathname}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3539,7 +3053,7 @@ function OfflineView({
           restored.
         </span>
       </div>
-      <form className="trade-modal" onSubmit={saveDraft}>
+      <form className="financial-task-form" onSubmit={saveDraft}>
         <div className="form-grid">
           <label>
             Operation
@@ -3616,6 +3130,8 @@ function TeamDevicesView({
   language,
   organizationId,
   canManage,
+  canManageCapabilities,
+  canInviteBusinessAdmin,
   canDecideApprovals,
   onDashboard,
   onToast,
@@ -3623,6 +3139,8 @@ function TeamDevicesView({
   language: Language;
   organizationId: string | null;
   canManage: boolean;
+  canManageCapabilities: boolean;
+  canInviteBusinessAdmin: boolean;
   canDecideApprovals: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
@@ -3698,6 +3216,19 @@ function TeamDevicesView({
   );
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
+  const [joinRequests, setJoinRequests] = useState<WorkerJoinRequestRecord[]>(inspection ? [{ id: "inspection-request", display_name: language === "en" ? "Ahmad Rahimi" : language === "fa-AF" ? "احمد رحیمی" : "احمد رحیمي", email: "ahmad@example.com", status: "pending", requested_at: new Date().toISOString(), assigned_role: null, branch_ids: [], cashbox_ids: [], capability_overrides: [], limits: {}, mfa_required: true, device_review_required: true }] : []);
+  const [capabilityMatrix, setCapabilityMatrix] = useState<MembershipCapabilityMatrixRecord[]>([]);
+  const [teamSection, setTeamSection] = useState<"people" | "invitations" | "requests" | "devices" | "roles">("people");
+  const [inviteStep, setInviteStep] = useState<1 | 2 | 3>(1);
+  const [workplaceCode, setWorkplaceCode] = useState(inspection ? "AB12CD34EF56" : "");
+  const [requestBusy, setRequestBusy] = useState("");
+  const [reviewingRequest, setReviewingRequest] = useState<WorkerJoinRequestRecord | null>(null);
+  const [requestRole, setRequestRole] = useState("viewer");
+  const [requestBranches, setRequestBranches] = useState<string[]>([]);
+  const [requestCashboxes, setRequestCashboxes] = useState<string[]>([]);
+  const [requestCapabilities, setRequestCapabilities] = useState<string[]>([]);
+  const [requestAmountLimit, setRequestAmountLimit] = useState("");
+  const [requestReviewReason, setRequestReviewReason] = useState("");
   const [loading, setLoading] = useState(!inspection);
   const [refresh, setRefresh] = useState(0);
   const [showInvite, setShowInvite] = useState(false);
@@ -3706,6 +3237,8 @@ function TeamDevicesView({
   const [inviteRole, setInviteRole] = useState("cashier");
   const [inviteBranches, setInviteBranches] = useState<string[]>([]);
   const [inviteCashboxes, setInviteCashboxes] = useState<string[]>([]);
+  const [inviteCapabilities, setInviteCapabilities] = useState<string[]>(["financial.post.fx", "financial.post.money", "financial.post.debt", "financial.post.hawala"]);
+  const [inviteAmountLimit, setInviteAmountLimit] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [createdInvitation, setCreatedInvitation] =
     useState<CreatedTeamInvitation | null>(null);
@@ -3724,6 +3257,8 @@ function TeamDevicesView({
   const [editRole, setEditRole] = useState("cashier");
   const [editBranches, setEditBranches] = useState<string[]>([]);
   const [editCashboxes, setEditCashboxes] = useState<string[]>([]);
+  const [editCapabilities, setEditCapabilities] = useState<string[]>([]);
+  const [editAmountLimit, setEditAmountLimit] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [editReason, setEditReason] = useState("");
   const [editBusy, setEditBusy] = useState(false);
@@ -3733,7 +3268,7 @@ function TeamDevicesView({
   const [approvalBusy, setApprovalBusy] = useState("");
 
   const roleOptions = [
-    "business_admin",
+    ...(canInviteBusinessAdmin ? ["business_admin"] : []),
     "manager",
     "accountant",
     "cashier",
@@ -3741,10 +3276,17 @@ function TeamDevicesView({
     "compliance_officer",
   ];
 
+  const assignableActions: Array<{ capability: Capability; label: string }> = [
+    { capability: "financial.post.fx", label: language === "en" ? "Currency exchange" : language === "fa-AF" ? "خرید و فروش ارز" : "د اسعارو راکړه ورکړه" },
+    { capability: "financial.post.money", label: language === "en" ? "Money in, out & movement" : language === "fa-AF" ? "ورود، خروج و انتقال پول" : "د پیسو ترلاسه کول، ورکول او لېږد" },
+    { capability: "financial.post.debt", label: language === "en" ? "Debts & settlements" : language === "fa-AF" ? "قرض‌ها و تصفیه" : "پورونه او تصفیه" },
+    { capability: "financial.post.hawala", label: language === "en" ? "Hawala operations" : language === "fa-AF" ? "عملیات حواله" : "د حوالې چارې" },
+  ];
+
   useEffect(() => {
     if (!organizationId) return;
     if (inspection) return;
-    void getTeamControlPlane(organizationId).then((result) => {
+    void Promise.all([getTeamControlPlane(organizationId), listWorkerJoinRequests(organizationId), getMembershipCapabilityMatrix(organizationId)]).then(([result, requestResult, capabilityResult]) => {
         if (result.data) {
           setMembers(result.data.members);
           setInvitations(result.data.invitations);
@@ -3753,7 +3295,9 @@ function TeamDevicesView({
           setDevices(result.data.devices);
           setApprovals(result.data.approvals);
         }
-        if (result.error) onToast(ux(language, "teamLoadFailed"));
+        if (requestResult.data) setJoinRequests(requestResult.data);
+        if (capabilityResult.data) setCapabilityMatrix(capabilityResult.data);
+        if (result.error || requestResult.error || capabilityResult.error) onToast(ux(language, "teamLoadFailed"));
         setLoading(false);
       });
   }, [inspection, language, onToast, organizationId, refresh]);
@@ -3780,12 +3324,67 @@ function TeamDevicesView({
     setInviteRole("cashier");
     setInviteBranches(branches[0] ? [branches[0].id] : []);
     setInviteCashboxes(cashboxes[0] ? [cashboxes[0].id] : []);
+    setInviteCapabilities(["financial.post.fx", "financial.post.money", "financial.post.debt", "financial.post.hawala"]);
+    setInviteAmountLimit("");
   };
 
   const openInvite = () => {
     resetInvite();
+    setInviteStep(1);
     setCreatedInvitation(null);
     setShowInvite(true);
+    setTeamSection("invitations");
+  };
+
+  const makeWorkplaceCode = async () => {
+    if (!organizationId || requestBusy) return;
+    setRequestBusy("code");
+    if (inspection) {
+      setWorkplaceCode("AB12CD34EF56");
+      setRequestBusy("");
+      return;
+    }
+    const result = await createOrganizationJoinCode(organizationId);
+    setRequestBusy("");
+    if (result.error || !result.data) onToast(result.error?.includes("AAL2") ? u("secureTeamIntro") : u("teamSaveFailed"));
+    else setWorkplaceCode(result.data.connection_code);
+  };
+
+  const openJoinReview = (request: WorkerJoinRequestRecord) => {
+    setReviewingRequest(request);
+    setRequestRole("viewer");
+    setRequestBranches([]);
+    setRequestCashboxes([]);
+    setRequestCapabilities([]);
+    setRequestAmountLimit("");
+    setRequestReviewReason("");
+  };
+
+  const decideJoinRequest = async (request: WorkerJoinRequestRecord, decision: "approved" | "rejected") => {
+    if (decision === "approved" && !mfa.verified) { onToast(u("secureTeamIntro")); return; }
+    if (requestReviewReason.trim().length < 2) { onToast(u("accessChangeReason")); return; }
+    if (decision === "approved" && requestRole === "cashier" && (!requestBranches.length || !requestCashboxes.length)) { onToast(u("cashierScopeRequired")); return; }
+    setRequestBusy(request.id);
+    if (inspection) {
+      setJoinRequests((current) => current.map((item) => item.id === request.id ? { ...item, status: decision } : item));
+      setRequestBusy("");
+      setReviewingRequest(null);
+      return;
+    }
+    const result = await reviewWorkerJoinRequest({
+      requestId: request.id,
+      decision,
+      role: decision === "approved" ? requestRole : undefined,
+      branchIds: decision === "approved" ? requestBranches : [],
+      cashboxIds: decision === "approved" ? requestCashboxes : [],
+      capabilityOverrides: decision === "approved" ? assignableActions.map(({ capability }) => ({ capability, allowed: requestCapabilities.includes(capability) })) : [],
+      limits: decision === "approved" && requestAmountLimit ? { max_transaction_amount_base: Number(requestAmountLimit) } : {},
+      requiresMfa: true,
+      reason: requestReviewReason,
+    });
+    setRequestBusy("");
+    if (result.error) onToast(result.error.includes("AAL2") ? u("secureTeamIntro") : u("teamSaveFailed"));
+    else { setReviewingRequest(null); setRefresh((value) => value + 1); }
   };
 
   const beginAuthenticatorSetup = async () => {
@@ -3828,6 +3427,10 @@ function TeamDevicesView({
       (!inviteBranches.length || !inviteCashboxes.length)
     ) {
       onToast(u("cashierScopeRequired"));
+      return;
+    }
+    if (inviteAmountLimit && (!Number.isFinite(Number(inviteAmountLimit)) || Number(inviteAmountLimit) < 0)) {
+      onToast(u("teamSaveFailed"));
       return;
     }
     if (!mfa.verified) {
@@ -3878,6 +3481,9 @@ function TeamDevicesView({
       role: inviteRole,
       branchIds: inviteBranches,
       cashboxIds: inviteCashboxes,
+      capabilityOverrides: assignableActions.map(({ capability }) => ({ capability, allowed: inviteCapabilities.includes(capability) })),
+      limits: inviteAmountLimit ? { max_transaction_amount_base: Number(inviteAmountLimit) } : {},
+      requiresMfa: true,
     });
     setInviteBusy(false);
     if (result.error || !result.data) {
@@ -3951,10 +3557,15 @@ function TeamDevicesView({
   };
 
   const openMemberEditor = (member: TeamMemberRecord, active = member.active) => {
+    setTeamSection("roles");
     setEditingMember(member);
     setEditRole(member.role_code);
     setEditBranches(member.branches.map((item) => item.id));
     setEditCashboxes(member.cashboxes.map((item) => item.id));
+    const matrix = capabilityMatrix.find((item) => item.membership_id === member.id);
+    setEditCapabilities(assignableActions.filter((item) => matrix?.effective_capabilities.includes(item.capability) ?? inspectionCapabilities(member.role_code as WorkspaceRole).includes(item.capability)).map((item) => item.capability));
+    const firstLimit = matrix?.overrides.map((item) => item.limits.max_transaction_amount_base).find((value) => typeof value === "number" || typeof value === "string");
+    setEditAmountLimit(firstLimit === undefined ? "" : String(firstLimit));
     setEditActive(active);
     setEditReason("");
   };
@@ -3968,6 +3579,10 @@ function TeamDevicesView({
       (!editBranches.length || !editCashboxes.length)
     ) {
       onToast(u("cashierScopeRequired"));
+      return;
+    }
+    if (editAmountLimit && (!Number.isFinite(Number(editAmountLimit)) || Number(editAmountLimit) < 0)) {
+      onToast(u("teamSaveFailed"));
       return;
     }
     if (!mfa.verified) {
@@ -3997,7 +3612,16 @@ function TeamDevicesView({
       setEditingMember(null);
       return;
     }
-    const result = await updateTeamMembership({
+    const result = canManageCapabilities ? await updateTeamAssignment({
+      membershipId: editingMember.id,
+      role: editRole,
+      branchIds: editBranches,
+      cashboxIds: editCashboxes,
+      active: editActive,
+      reason: editReason,
+      capabilityOverrides: assignableActions.map(({ capability }) => ({ capability, allowed: editCapabilities.includes(capability) })),
+      limits: editAmountLimit ? { max_transaction_amount_base: Number(editAmountLimit) } : {},
+    }) : await updateTeamMembership({
       membershipId: editingMember.id,
       role: editRole,
       branchIds: editBranches,
@@ -4085,7 +3709,17 @@ function TeamDevicesView({
         </div>
       </div>
 
-      {canManage && !mfa.verified && (
+      <nav className="calm-subnav" aria-label={language === "en" ? "Team areas" : language === "fa-AF" ? "بخش‌های تیم" : "د ډلې برخې"}>
+        {([
+          ["people", language === "en" ? "People" : language === "fa-AF" ? "افراد" : "خلک"],
+          ["invitations", language === "en" ? "Invitations" : language === "fa-AF" ? "دعوت‌ها" : "بلنې"],
+          ["requests", language === "en" ? "Join Requests" : language === "fa-AF" ? "درخواست‌های عضویت" : "د یوځای کېدو غوښتنې"],
+          ["devices", language === "en" ? "Devices" : language === "fa-AF" ? "دستگاه‌ها" : "وسایل"],
+          ["roles", language === "en" ? "Roles & Limits" : language === "fa-AF" ? "نقش‌ها و حدود" : "دندې او حدود"],
+        ] as const).map(([id, label]) => <button key={id} type="button" className={teamSection === id ? "active" : ""} aria-current={teamSection === id ? "page" : undefined} onClick={() => setTeamSection(id)}>{label}</button>)}
+      </nav>
+
+      {canManage && teamSection !== "people" && !mfa.verified && (
         <section className="team-security-gate" aria-labelledby="team-security-title">
           <div className="settings-card-title">
             <AppIcon name="shield" />
@@ -4140,7 +3774,7 @@ function TeamDevicesView({
         </section>
       )}
 
-      {createdInvitation && (
+      {teamSection === "invitations" && createdInvitation && (
         <section className="invite-success" aria-live="polite">
           <div className="invite-success-copy">
             <p className="kicker">{u("inviteCreated")}</p>
@@ -4173,7 +3807,7 @@ function TeamDevicesView({
         </section>
       )}
 
-      {showInvite && (
+      {teamSection === "invitations" && showInvite && (
         <form className="team-editor" onSubmit={submitInvitation}>
           <div className="panel-header">
             <div>
@@ -4184,7 +3818,12 @@ function TeamDevicesView({
               ×
             </button>
           </div>
-          <div className="team-form-grid">
+          <ol className="invite-steps" aria-label={language === "en" ? "Invitation steps" : undefined}>
+            <li className={inviteStep === 1 ? "active" : ""}>1 · {language === "en" ? "Identity" : language === "fa-AF" ? "هویت" : "پېژندنه"}</li>
+            <li className={inviteStep === 2 ? "active" : ""}>2 · {language === "en" ? "Assignment" : language === "fa-AF" ? "تعیین دسترسی" : "ټاکنه"}</li>
+            <li className={inviteStep === 3 ? "active" : ""}>3 · {language === "en" ? "Review" : language === "fa-AF" ? "بازبینی" : "کتنه"}</li>
+          </ol>
+          {inviteStep === 1 ? <div className="team-form-grid">
             <label>
               {u("fullName")}
               <input required minLength={2} maxLength={100} value={inviteName} onChange={(event) => setInviteName(event.target.value)} />
@@ -4193,13 +3832,15 @@ function TeamDevicesView({
               {u("workEmail")}
               <input required type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
             </label>
-            <label>
+          </div> : null}
+          {inviteStep === 2 ? <><div className="team-form-grid"><label>
               {u("employeeRole")}
               <select
                 value={inviteRole}
                 onChange={(event) => {
                   const nextRole = event.target.value;
                   setInviteRole(nextRole);
+                  setInviteCapabilities(assignableActions.filter((item) => inspectionCapabilities(nextRole as WorkspaceRole).includes(item.capability)).map((item) => item.capability));
                   if (nextRole === "cashier") {
                     if (!inviteBranches.length && branches[0])
                       setInviteBranches([branches[0].id]);
@@ -4253,10 +3894,24 @@ function TeamDevicesView({
           ) : (
             <p className="form-note">{u("businessWideAccess")}</p>
           )}
+          {inviteRole !== "business_admin" ? <div className="role-limit-grid">
+            <fieldset>
+              <legend>{language === "en" ? "Allowed action types" : language === "fa-AF" ? "نوع کارهای مجاز" : "اجازه شوې چارې"}</legend>
+              {assignableActions.map((action) => <label key={action.capability}>
+                <input type="checkbox" checked={inviteCapabilities.includes(action.capability)} onChange={() => toggleScope(action.capability, inviteCapabilities, setInviteCapabilities)} />
+                {action.label}
+              </label>)}
+            </fieldset>
+            <label>{language === "en" ? "Maximum transaction (AFN base)" : language === "fa-AF" ? "حد اکثر معامله (به افغانی)" : "د معاملې لوړه کچه (افغانۍ)"}
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={inviteAmountLimit} onChange={(event) => setInviteAmountLimit(event.target.value)} placeholder={language === "en" ? "No limit" : language === "fa-AF" ? "بدون حد" : "بې حده"} />
+              <small>{language === "en" ? "Leave empty only when this role has no transaction ceiling." : language === "fa-AF" ? "تنها در صورت نبود سقف معامله خالی بگذارید." : "یوازې هغه وخت تش پرېږدئ چې حد نه لري."}</small>
+            </label>
+          </div> : <p className="form-note">{language === "en" ? "Business Administrator uses the delegated non-owner policy; owner powers remain unavailable." : language === "fa-AF" ? "مدیر اجرایی صلاحیت‌های غیرمالک را می‌گیرد؛ صلاحیت‌های مالک بسته می‌ماند." : "اجرائیوي مدیر ته غیرمالکي واکونه ورکول کېږي؛ د مالک واکونه تړلي پاتې کېږي."}</p>}
+          </> : null}
+          {inviteStep === 3 ? <section className="invite-review"><h3>{language === "en" ? "Review invitation" : language === "fa-AF" ? "بازبینی دعوت" : "بلنه وګورئ"}</h3><p><strong>{inviteName}</strong> · <bdi>{inviteEmail}</bdi></p><p>{roleName(inviteRole)} · {scopeSummary(branches.filter((item) => inviteBranches.includes(item.id)), cashboxes.filter((item) => inviteCashboxes.includes(item.id)))}</p>{inviteRole !== "business_admin" ? <><p>{assignableActions.filter((item) => inviteCapabilities.includes(item.capability)).map((item) => item.label).join(" · ") || (language === "en" ? "No financial posting" : language === "fa-AF" ? "بدون ثبت مالی" : "مالي ثبت نشته")}</p><p>{language === "en" ? "Transaction ceiling" : language === "fa-AF" ? "سقف معامله" : "د معاملې حد"}: {inviteAmountLimit ? `${inviteAmountLimit} AFN` : (language === "en" ? "No limit" : language === "fa-AF" ? "بدون حد" : "بې حده")}</p></> : null}<small>{language === "en" ? "Sending this invitation is protected by just-in-time two-step verification." : language === "fa-AF" ? "فرستادن این دعوت با تأیید دومرحله‌ای در لحظه محافظت می‌شود." : "د دې بلنې لېږل د هماغه وخت په دوه پړاوه تایید خوندي کېږي."}</small></section> : null}
           <div className="team-form-actions">
-            <button className="primary-action" disabled={inviteBusy || !mfa.verified}>
-              {inviteBusy ? u("sendingInvite") : u("sendInvite")}
-            </button>
+            {inviteStep > 1 ? <button className="secondary-action" type="button" onClick={() => setInviteStep((inviteStep - 1) as 1 | 2)}>{language === "en" ? "Back" : language === "fa-AF" ? "بازگشت" : "شاته"}</button> : null}
+            {inviteStep < 3 ? <button key={`continue-${inviteStep}`} className="primary-action" type="button" disabled={inviteStep === 1 ? inviteName.trim().length < 2 || !inviteEmail.includes("@") : inviteRole === "cashier" && (!inviteBranches.length || !inviteCashboxes.length)} onClick={() => setInviteStep((inviteStep + 1) as 2 | 3)}>{language === "en" ? "Continue" : language === "fa-AF" ? "ادامه" : "دوام"}</button> : <button key="submit-invitation" className="primary-action" type="submit" disabled={inviteBusy || !mfa.verified}>{inviteBusy ? u("sendingInvite") : u("sendInvite")}</button>}
             <button className="secondary-action" type="button" onClick={() => setShowInvite(false)}>
               {u("cancelAction")}
             </button>
@@ -4264,7 +3919,43 @@ function TeamDevicesView({
         </form>
       )}
 
-      {editingMember && (
+      {teamSection === "requests" ? <section className="team-section join-request-workspace">
+        <div className="panel-header compact-header">
+          <div><h2>{language === "en" ? "Independent join requests" : language === "fa-AF" ? "درخواست‌های مستقل عضویت" : "د خپلواک یوځای کېدو غوښتنې"}</h2><p>{language === "en" ? "Share the workplace code. Every request stays outside the business until an authorized reviewer assigns access." : language === "fa-AF" ? "رمز محل کار را شریک کنید. هر درخواست تا تعیین دسترسی بیرون از صرافی می‌ماند." : "د کاري ځای کوډ شریک کړئ. هره غوښتنه د لاسرسي تر ټاکلو پورې له صرافۍ بهر پاتې کېږي."}</p></div>
+          {canManage ? <button className="primary-action" type="button" disabled={requestBusy === "code" || !mfa.verified} onClick={() => void makeWorkplaceCode()}>{workplaceCode ? (language === "en" ? "Rotate code" : language === "fa-AF" ? "تغییر رمز" : "کوډ بدلول") : (language === "en" ? "Create workplace code" : language === "fa-AF" ? "ساخت رمز محل کار" : "د کاري ځای کوډ جوړول")}</button> : null}
+        </div>
+        {workplaceCode ? <label className="connection-code-field">{language === "en" ? "12-character workplace code" : language === "fa-AF" ? "رمز دوازده‌حرفی محل کار" : "دولس توري د کاري ځای کوډ"}<input readOnly dir="ltr" value={workplaceCode} /></label> : null}
+        <div className="balance-list">
+          {joinRequests.length ? joinRequests.map((request) => <article className="team-member-card" key={request.id}>
+            <span className="currency-badge usd">?</span>
+            <span className="balance-name"><b>{request.display_name}</b><small>{request.email}</small><small>{new Date(request.requested_at).toLocaleString(language)} · {statusName(request.status)}</small><small>{language === "en" ? "Approval creates a Viewer membership; refine role and limits afterward." : language === "fa-AF" ? "تأیید، عضویت مشاهده‌گر می‌سازد؛ سپس نقش و حدود را تنظیم کنید." : "تایید د کتونکې غړیتوب جوړوي؛ وروسته دنده او حدود برابر کړئ."}</small></span>
+            {canManage && request.status === "pending" ? <div className="member-actions"><button className="text-button" type="button" disabled={requestBusy === request.id} onClick={() => openJoinReview(request)}>{language === "en" ? "Review access" : language === "fa-AF" ? "بررسی دسترسی" : "لاسرسی وګورئ"}</button></div> : <strong>{statusName(request.status)}</strong>}
+          </article>) : <div className="empty-live">{language === "en" ? "No pending join requests." : language === "fa-AF" ? "درخواست عضویت در انتظار نیست." : "د یوځای کېدو غوښتنه نشته."}</div>}
+        </div>
+        {reviewingRequest ? <form className="team-editor join-review-editor" onSubmit={(event) => { event.preventDefault(); void decideJoinRequest(reviewingRequest, "approved"); }}>
+          <div className="panel-header compact-header"><div><h3>{language === "en" ? "Assign access" : language === "fa-AF" ? "تعیین دسترسی" : "لاسرسی وټاکئ"} · {reviewingRequest.display_name}</h3><p>{reviewingRequest.email}</p></div><button className="text-button" type="button" onClick={() => setReviewingRequest(null)}>×</button></div>
+          <div className="team-form-grid"><label>{u("employeeRole")}<select value={requestRole} onChange={(event) => { const nextRole = event.target.value; setRequestRole(nextRole); setRequestCapabilities(assignableActions.filter((item) => inspectionCapabilities(nextRole as WorkspaceRole).includes(item.capability)).map((item) => item.capability)); }}>{roleOptions.map((role) => <option key={role} value={role}>{roleName(role)}</option>)}</select></label><label>{u("accessChangeReason")}<input required minLength={2} value={requestReviewReason} onChange={(event) => setRequestReviewReason(event.target.value)} /></label></div>
+          {requestRole === "cashier" ? <div className="scope-grid"><fieldset><legend>{u("branchAccess")}</legend>{branches.map((branch) => <label key={branch.id}><input type="checkbox" checked={requestBranches.includes(branch.id)} onChange={() => toggleScope(branch.id, requestBranches, setRequestBranches)} />{branch.name}</label>)}</fieldset><fieldset><legend>{u("cashboxAccess")}</legend>{cashboxes.filter((cashbox) => !cashbox.branch_id || requestBranches.includes(cashbox.branch_id)).map((cashbox) => <label key={cashbox.id}><input type="checkbox" checked={requestCashboxes.includes(cashbox.id)} onChange={() => toggleScope(cashbox.id, requestCashboxes, setRequestCashboxes)} />{cashbox.name}</label>)}</fieldset></div> : <p className="form-note">{u("businessWideAccess")}</p>}
+          {requestRole !== "business_admin" ? <div className="role-limit-grid"><fieldset><legend>{language === "en" ? "Allowed action types" : language === "fa-AF" ? "نوع کارهای مجاز" : "اجازه شوې چارې"}</legend>{assignableActions.map((action) => <label key={action.capability}><input type="checkbox" checked={requestCapabilities.includes(action.capability)} onChange={() => toggleScope(action.capability, requestCapabilities, setRequestCapabilities)} />{action.label}</label>)}</fieldset><label>{language === "en" ? "Maximum transaction (AFN base)" : language === "fa-AF" ? "حد اکثر معامله (به افغانی)" : "د معاملې لوړه کچه (افغانۍ)"}<input type="number" min="0" step="0.01" value={requestAmountLimit} onChange={(event) => setRequestAmountLimit(event.target.value)} placeholder={language === "en" ? "No limit" : language === "fa-AF" ? "بدون حد" : "بې حده"} /></label></div> : null}
+          <div className="team-form-actions"><button className="primary-action" disabled={requestBusy === reviewingRequest.id || !mfa.verified}>{u("approved")}</button><button className="secondary-action danger" type="button" disabled={requestBusy === reviewingRequest.id} onClick={() => void decideJoinRequest(reviewingRequest, "rejected")}>{u("rejected")}</button></div>
+        </form> : null}
+      </section> : null}
+
+      {teamSection === "roles" && !editingMember && (
+        <section className="team-section role-matrix-list">
+          <div className="panel-header compact-header"><div><h2>{language === "en" ? "Role assignments and limits" : language === "fa-AF" ? "نقش‌ها و حدود معامله" : "دندې او د معاملې حدونه"}</h2><p>{language === "en" ? "Review each person’s real posting abilities, scope, and transaction ceiling." : language === "fa-AF" ? "صلاحیت واقعی ثبت، ساحه و سقف معامله هر شخص را بررسی کنید." : "د هر کس ریښتیني ثبت واکونه، ساحه او د معاملې حد وګورئ."}</p></div></div>
+          <div className="balance-list">
+            {members.filter((member) => member.role_code !== "owner").map((member) => {
+              const matrix = capabilityMatrix.find((item) => item.membership_id === member.id);
+              const effective = matrix?.effective_capabilities ?? inspectionCapabilities(member.role_code as WorkspaceRole);
+              const limit = matrix?.overrides.map((item) => item.limits.max_transaction_amount_base).find((value) => value !== undefined);
+              return <article className="team-member-card" key={`limits-${member.id}`}><span className="currency-badge usd">{member.display_name.slice(0, 1).toUpperCase()}</span><span className="balance-name"><b>{member.display_name} · {roleName(member.role_code)}</b><small>{assignableActions.filter((item) => effective.includes(item.capability)).map((item) => item.label).join(" · ") || (language === "en" ? "No financial posting" : language === "fa-AF" ? "بدون ثبت مالی" : "مالي ثبت نشته")}</small><small>{language === "en" ? "Transaction ceiling" : language === "fa-AF" ? "سقف معامله" : "د معاملې حد"}: {limit === undefined ? (language === "en" ? "No limit" : language === "fa-AF" ? "بدون حد" : "بې حده") : `${String(limit)} AFN`}</small><small>{scopeSummary(member.branches, member.cashboxes)}</small></span>{canManageCapabilities ? <button className="text-button" type="button" onClick={() => openMemberEditor(member)}>{u("editAccess")}</button> : null}</article>;
+            })}
+          </div>
+        </section>
+      )}
+
+      {teamSection === "roles" && editingMember && (
         <form className="team-editor" onSubmit={saveMember}>
           <div className="panel-header">
             <div>
@@ -4316,6 +4007,18 @@ function TeamDevicesView({
           ) : (
             <p className="form-note">{u("businessWideAccess")}</p>
           )}
+          {canManageCapabilities ? <div className="role-limit-grid">
+            <fieldset>
+              <legend>{language === "en" ? "Allowed action types" : language === "fa-AF" ? "نوع کارهای مجاز" : "اجازه شوې چارې"}</legend>
+              {assignableActions.map((action) => <label key={action.capability}>
+                <input type="checkbox" checked={editCapabilities.includes(action.capability)} onChange={() => toggleScope(action.capability, editCapabilities, setEditCapabilities)} />
+                {action.label}
+              </label>)}
+            </fieldset>
+            <label>{language === "en" ? "Maximum transaction (AFN base)" : language === "fa-AF" ? "حد اکثر معامله (به افغانی)" : "د معاملې لوړه کچه (افغانۍ)"}
+              <input type="number" inputMode="decimal" min="0" step="0.01" value={editAmountLimit} onChange={(event) => setEditAmountLimit(event.target.value)} placeholder={language === "en" ? "No limit" : language === "fa-AF" ? "بدون حد" : "بې حده"} />
+            </label>
+          </div> : null}
           <div className="team-form-actions">
             <button className="primary-action" disabled={editBusy || !mfa.verified}>
               {editBusy ? u("loading") : u("saveAccess")}
@@ -4328,7 +4031,7 @@ function TeamDevicesView({
       )}
 
       <div className="team-grid">
-        <div className="team-section">
+        <div className="team-section" hidden={teamSection !== "people"}>
           <h2>{u("teamAccess")}</h2>
           <div className="balance-list">
             {loading ? (
@@ -4371,7 +4074,7 @@ function TeamDevicesView({
             )}
           </div>
         </div>
-        <div className="team-section">
+        <div className="team-section" hidden={teamSection !== "invitations"}>
           <h2>{u("pendingInvitations")}</h2>
           <div className="balance-list">
             {invitations.length ? invitations.map((invitation) => (
@@ -4394,7 +4097,7 @@ function TeamDevicesView({
         </div>
       </div>
 
-      <div className="dashboard-grid team-secondary-grid">
+      <div className="dashboard-grid team-secondary-grid" hidden={teamSection !== "devices"}>
         <div>
           <div className="panel-header compact-header">
             <div><h2>{u("registeredDevices")}</h2><p>{u("deviceControlIntro")}</p></div>
@@ -4428,7 +4131,7 @@ function TeamDevicesView({
           </div>
         </div>
       </div>
-      <div className="panel">
+      <div className="panel" hidden={teamSection !== "roles"}>
         <div className="panel-header">
           <div>
             <h2>{u("approvalInbox")}</h2>
@@ -5421,11 +5124,13 @@ function PeopleView({
 function TransactionsView({
   language,
   organizationId,
+  canReverse,
   onDashboard,
   onToast,
 }: {
   language: Language;
   organizationId: string | null;
+  canReverse: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -5581,7 +5286,7 @@ function TransactionsView({
           {selected.received_amount && <article><small>{u("weReceivedLabel")}</small><strong>{formatFinancialAmount(selected.received_amount)} {selected.received_currency}</strong></article>}
           <article><small>{t("note")}</small><strong>{selected.memo || "—"}</strong></article>
         </div>
-        {selected.status === "posted" && (
+        {canReverse && selected.status === "posted" && (
           <form className="transaction-correction-form" onSubmit={reverse}>
             <div><p className="kicker">{u("correction")}</p><h2>{u("correctTransaction")}</h2><p>{u("originalReference")}: {selected.id.slice(0, 12)}</p></div>
             <label>{t("note")}<input required minLength={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={u("correctionReason")} /></label>
@@ -6115,6 +5820,15 @@ function ReportsView({
       }
     });
   };
+  const reportGroups = [
+    { title: language === "en" ? "Daily operations" : language === "fa-AF" ? "عملیات روزانه" : "ورځني کارونه", codes: ["daily_transactions", "transaction_journal", "cash_movement", "branch_balance", "currency_position"] },
+    { title: language === "en" ? "Finance & performance" : language === "fa-AF" ? "مالی و عملکرد" : "مالي او فعالیت", codes: ["fx_profit", "commission", "expenses", "profit_loss", "balance_sheet", "trial_balance", "owner_capital"] },
+    { title: language === "en" ? "Customers, debt & Hawala" : language === "fa-AF" ? "مشتریان، قرض و حواله" : "پېرودونکي، پور او حواله", codes: ["receivables", "payables", "aging", "counterparty_statement", "hawala"] },
+    { title: language === "en" ? "Control & audit" : language === "fa-AF" ? "کنترول و بررسی" : "کنټرول او پلټنه", codes: ["employee_activity", "reversals", "reconciliation", "rate_history", "security_activity"] },
+  ];
+  const favoriteCodes = ["daily_transactions", "cash_movement", "profit_loss", "receivables"];
+  const showCurrencyFilter = !["employee_activity", "security_activity", "rate_history"].includes(namedReportCode);
+  const showStatusFilter = !["balance_sheet", "trial_balance", "currency_position", "branch_balance", "rate_history"].includes(namedReportCode);
   return (
     <section className="panel">
       <div className="panel-header">
@@ -6127,17 +5841,23 @@ function ReportsView({
           {u("backHome")} →
         </button>
       </div>
-      <div className="report-snapshot">
+      <section className="daily-summary" aria-labelledby="daily-summary-title">
+        <h2 id="daily-summary-title">{language === "en" ? "Daily Summary" : language === "fa-AF" ? "خلاصه روزانه" : "ورځنۍ لنډیز"}</h2>
+        <div className="report-snapshot">
         <article><span>{t("transactions")}</span><b>{dashboard?.transaction_count ?? reportRows.length}</b></article>
         <article><span>{t("todayVolume")}</span><b><bdi>{formatFinancialAmount(dashboard?.volume_base ?? "0")} AFN</bdi></b></article>
         <article><span>{t("realizedProfit")}</span><b><bdi>{formatFinancialAmount(dashboard?.realized_profit ?? "0")} AFN</bdi></b></article>
         <article><span>{t("operatingExpenses")}</span><b><bdi>{formatFinancialAmount(dashboard?.expenses ?? "0")} AFN</bdi></b></article>
+        </div>
+      </section>
+      <div className="report-favorites" aria-label={language === "en" ? "Favorite reports" : undefined}>
+        {favoriteCodes.map((code) => <button key={code} type="button" className={namedReportCode === code ? "active" : ""} onClick={() => { setNamedReportCode(code); setReportPage(0); }}>{reportCopy.reports.find(([candidate]) => candidate === code)?.[1]}</button>)}
       </div>
       <div className="rate-strip">
         <label>
           {reportCopy.choose}
           <select value={namedReportCode} onChange={(event) => { setNamedReportCode(event.target.value); setReportPage(0); }}>
-            {reportCopy.reports.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+            {reportGroups.map((group) => <optgroup key={group.title} label={group.title}>{group.codes.map((code) => { const report = reportCopy.reports.find(([candidate]) => candidate === code); return report ? <option key={code} value={code}>{report[1]}</option> : null; })}</optgroup>)}
           </select>
         </label>
         <label>
@@ -6156,7 +5876,7 @@ function ReportsView({
             onChange={(event) => { setTo(event.target.value); setReportPage(0); }}
           />
         </label>
-        <label>
+        {showCurrencyFilter ? <label>
           {t("currency")}
           <select
             value={currency}
@@ -6169,8 +5889,8 @@ function ReportsView({
               </option>
             ))}
           </select>
-        </label>
-        <label>
+        </label> : null}
+        {showStatusFilter ? <label>
           {u("status")}
           <select
             value={status}
@@ -6181,9 +5901,11 @@ function ReportsView({
             <option value="pending">{t("pending")}</option>
             <option value="reversed">{u("reversed")}</option>
           </select>
-        </label>
+        </label> : null}
       </div>
-      <div className="activity-actions">
+      <details className="export-menu">
+        <summary className="export-button">{language === "en" ? "Export" : language === "fa-AF" ? "گرفتن خروجی" : "راپور اخیستل"}</summary>
+        <div className="activity-actions">
         <button className="export-button" onClick={downloadCsv}>{t("exportCsv")}</button>
         <button className="export-button" onClick={downloadXlsx}>{language === "en" ? "Export Excel" : language === "fa-AF" ? "گرفتن فایل اکسل" : "د اکسل فایل اخیستل"}</button>
         <button
@@ -6246,7 +5968,8 @@ function ReportsView({
         <button className="export-button" onClick={() => void share()}>
           {u("shareWhatsApp")}
         </button>
-      </div>
+        </div>
+      </details>
       <section className="named-report-results" aria-live="polite">
         <div className="panel-header"><div><h2>{reportName}</h2><p>{namedFilteredRows.length} {reportCopy.rows}</p></div>{pageCount > 1 && <div className="report-pagination"><button disabled={reportPage === 0} onClick={() => setReportPage((page) => Math.max(0, page - 1))}>{reportCopy.previous}</button><b><bdi>{reportPage + 1} / {pageCount}</bdi></b><button disabled={reportPage + 1 >= pageCount} onClick={() => setReportPage((page) => Math.min(pageCount - 1, page + 1))}>{reportCopy.next}</button></div>}</div>
         {namedLoading ? <div className="empty-live">{u("reportLoading")}</div> : pageRows.length ? <div className="named-report-table" role="table">{pageRows.map((row, index) => <article role="row" key={`${row.reference}-${index}`}><span><b>{localReportTerm(row.label)}</b><small><bdi>{row.reference}</bdi> · <bdi>{new Date(row.date).toLocaleString(language)}</bdi>{row.detail ? ` · ${localReportTerm(row.detail)}` : ""}</small></span><strong><bdi>{formatFinancialAmount(String(row.amount ?? "0"))} {row.currency}</bdi>{row.secondary_amount !== undefined && <small><bdi>{formatFinancialAmount(String(row.secondary_amount))}</bdi></small>}</strong><em>{reportStatuses[row.status] ?? localReportTerm(row.status)}</em></article>)}</div> : <div className="empty-live">{reportCopy.empty}</div>}
@@ -6256,10 +5979,10 @@ function ReportsView({
           ? `${reportRows.length} ${u("reportsReady")}`
           : u("noReportRows")}
       </div>
-      <section className="report-export-history" aria-label={reportHistoryUi[language].title}>
-        <h2>{reportHistoryUi[language].title}</h2>
+      <details className="report-export-history">
+        <summary>{reportHistoryUi[language].title}</summary>
         {exportHistory.length ? <div className="report-export-list">{exportHistory.map((item) => <article key={item.id}><span><b>{item.report_name}</b><small>{reportHistoryUi[language].created}: {new Date(item.generated_at).toLocaleString(language)}</small></span><strong>{item.format.toUpperCase()}</strong></article>)}</div> : <p>{reportHistoryUi[language].empty}</p>}
-      </section>
+      </details>
     </section>
   );
 }
@@ -6268,32 +5991,46 @@ function DebtsView({
   language,
   organizationId,
   branchId,
+  pathname,
+  onRoute,
   onDashboard,
   onToast,
 }: {
   language: Language;
   organizationId: string | null;
   branchId: string | null;
+  pathname: string;
+  onRoute: (path: string) => void;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const [debts, setDebts] = useState<DebtRecord[]>([]);
-  const [people, setPeople] = useState<CounterpartyRecord[]>([]);
-  const [direction, setDirection] = useState<"receivable" | "payable">(
-    "receivable",
-  );
+  const inspection = organizationId === "inspection";
+  const [debts, setDebts] = useState<DebtRecord[]>(() => inspection ? [{ id: "inspection-debt", counterparty_id: "inspection-customer", direction: "receivable", currency_code: "AFN", original_amount: "18000", outstanding_amount: "18000", due_at: null, notes: null }] : []);
+  const [people, setPeople] = useState<CounterpartyRecord[]>(() => inspection ? [{ id: "inspection-customer", display_name: ux(language, "previewCustomer"), counterparty_type: "customer", risk_status: "standard" }] : []);
   const [counterpartyId, setCounterpartyId] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("AFN");
-  const [moneyAccountId, setMoneyAccountId] = useState("");
-  const [accounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
-  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
-  const [selectedDebt, setSelectedDebt] = useState<DebtRecord | null>(null);
+  const [moneyAccountId, setMoneyAccountId] = useState(inspection ? "inspection-cashbox" : "");
+  const [accounts, setAccounts] = useState<MoneyAccountRecord[]>(() => inspection ? inspectionMoneyAccounts(language) : []);
+  const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>(() => inspection ? inspectionCurrencies : []);
+  const [selectedDebtChoice, setSelectedDebt] = useState<DebtRecord | null>(null);
   const [settlementAmount, setSettlementAmount] = useState("");
-  const [settlementAccountId, setSettlementAccountId] = useState("");
+  const [settlementAccountId, setSettlementAccountId] = useState(inspection ? "inspection-cashbox" : "");
   const [busy, setBusy] = useState(false);
+  const journey = pathname.includes("/transactions/new/debt/receivable")
+    ? "receivable"
+    : pathname.includes("/transactions/new/debt/payable")
+      ? "payable"
+      : pathname.includes("/transactions/new/debts/settle") || pathname.includes("/transactions/new/money-in/debt-payment") || pathname.includes("/transactions/new/money-out/debt-payment") || pathname.endsWith("/settle")
+        ? "settle"
+        : /\/debts\/[^/]+$/.test(pathname)
+          ? "detail"
+           : "list";
+  const direction: "receivable" | "payable" = journey === "payable" ? "payable" : "receivable";
+  const debtIdFromPath = pathname.includes("/transactions/new/") ? null : pathname.match(/\/debts\/([^/]+)/)?.[1] ?? null;
+  const selectedDebt = debtIdFromPath ? debts.find((debt) => debt.id === debtIdFromPath) ?? null : selectedDebtChoice;
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
     void Promise.all([
@@ -6389,19 +6126,9 @@ function DebtsView({
           {u("backHome")} →
         </button>
       </div>
-      <form className="trade-modal" onSubmit={submit}>
-        <label>
-          {u("direction")}
-          <select
-            value={direction}
-            onChange={(event) =>
-              setDirection(event.target.value as typeof direction)
-            }
-          >
-            <option value="receivable">{u("theyOweUs")}</option>
-            <option value="payable">{u("weOweThem")}</option>
-          </select>
-        </label>
+      {!selectedDebt && journey === "settle" && <header className="family-heading"><AppIcon name="debt" /><div><h2>{language === "en" ? "Settle a debt" : language === "fa-AF" ? "تصفیه قرض" : "پور تصفیه کول"}</h2><p>{language === "en" ? "Choose an open debt to record its payment." : language === "fa-AF" ? "یک قرض باز را برای ثبت پرداخت انتخاب کنید." : "د ورکړې د ثبت لپاره یو پرانیستی پور وټاکئ."}</p></div></header>}
+      {(journey === "receivable" || journey === "payable") && <form className="financial-task-form" onSubmit={submit}>
+        <h2 className="debt-direction-summary"><AppIcon name="debt" />{direction === "receivable" ? u("theyOweUs") : u("weOweThem")}</h2>
         <label>
           {u("person")}
           <select
@@ -6457,8 +6184,8 @@ function DebtsView({
         <button className="primary-action full" type="submit" disabled={busy}>
           {busy ? u("posting") : u("postDebt")} <span>→</span>
         </button>
-      </form>
-      <div className="balance-list">
+      </form>}
+      {!selectedDebt && (journey === "list" || journey === "settle") && <div className="balance-list debt-selection-list">
         {debts.length ? (
           debts.map((debt) => (
             <button
@@ -6467,6 +6194,7 @@ function DebtsView({
               onClick={() => {
                 setSelectedDebt(debt);
                 setSettlementAmount(debt.outstanding_amount);
+                onRoute(`${workspaceRoot(organizationId)}/debts/${debt.id}${journey === "settle" ? "/settle" : ""}`);
               }}
             >
               <span className="currency-badge usd">{debt.currency_code}</span>
@@ -6487,9 +6215,15 @@ function DebtsView({
         ) : (
           <div className="empty-live">{u("noDebts")}</div>
         )}
-      </div>
-      {selectedDebt && (
-        <form className="trade-modal" onSubmit={settle}>
+      </div>}
+      {selectedDebt && journey === "detail" && <section className="debt-detail-card" aria-labelledby="debt-detail-title">
+        <p className="kicker">{selectedDebt.direction === "receivable" ? u("theyOweUs") : u("weOweThem")}</p>
+        <h2 id="debt-detail-title">{people.find((person) => person.id === selectedDebt.counterparty_id)?.display_name ?? u("counterparty")}</h2>
+        <dl><div><dt>{u("outstanding")}</dt><dd dir="ltr">{selectedDebt.outstanding_amount} {selectedDebt.currency_code}</dd></div><div><dt>{u("direction")}</dt><dd>{selectedDebt.direction === "receivable" ? u("theyOweUs") : u("weOweThem")}</dd></div></dl>
+        <button className="primary-action" type="button" onClick={() => onRoute(`${workspaceRoot(organizationId)}/debts/${selectedDebt.id}/settle`)}>{u("settleDebt")} <span>→</span></button>
+      </section>}
+      {selectedDebt && journey === "settle" && (
+        <form className="financial-task-form" onSubmit={settle}>
           <div className="modal-head">
             <div>
               <p className="kicker">{u("settleDebt")}</p>
@@ -6533,7 +6267,7 @@ function DebtsView({
           </button>
         </form>
       )}
-      <div className="empty-live">{u("settlementNote")}</div>
+      {(journey === "list" || journey === "settle") && <div className="empty-live">{u("settlementNote")}</div>}
     </section>
   );
 }
@@ -6661,7 +6395,7 @@ function ReconciliationView({
           </div>
         ))}
       </div>
-      <form className="trade-modal" onSubmit={submit}>
+      <form className="financial-task-form" onSubmit={submit}>
         {countedCurrencies.map((currency) => (
           <label key={currency.code}>
             {u("countedAmount")} · {currency.code} · {currencyName(language, currency)}
@@ -6702,12 +6436,14 @@ function HawalaView({
   language,
   organizationId,
   branchId,
+  pathname,
   onDashboard,
   onToast,
 }: {
   language: Language;
   organizationId: string | null;
   branchId: string | null;
+  pathname: string;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -6715,9 +6451,11 @@ function HawalaView({
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [transfers, setTransfers] = useState<HawalaTransferRecord[]>([]);
   const [beneficiary, setBeneficiary] = useState("");
-  const [hawalaMode, setHawalaMode] = useState<"send" | "incoming" | "payout" | "settle">("send");
+  const hawalaMode = pathname.includes("/hawala/incoming") ? "incoming" : pathname.includes("/hawala/payout") ? "payout" : pathname.includes("/hawala/settlement") ? "settle" : pathname.includes("/hawala/send") ? "send" : "overview";
   const [origin, setOrigin] = useState("");
   const [settlementPartnerId, setSettlementPartnerId] = useState("");
+  const [partners, setPartners] = useState<CounterpartyRecord[]>(organizationId === "inspection" ? [{ id: "inspection-partner", display_name: "Herat Partner Exchange", counterparty_type: "saraf", risk_status: "approved" }] : []);
+  const [payoutCode, setPayoutCode] = useState("");
   const [settlementAmount, setSettlementAmount] = useState("");
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
@@ -6744,13 +6482,15 @@ function HawalaView({
         listHawalaTransfers(organizationId),
         listMoneyAccounts(organizationId),
         listCurrencyCatalog(organizationId),
-      ]).then(([result, accountResult, currencyResult]) => {
+        listCounterparties(organizationId),
+      ]).then(([result, accountResult, currencyResult, partnerResult]) => {
         if (result.data) setTransfers(result.data);
         if (accountResult.data) {
           setAccounts(accountResult.data);
           setMoneyAccountId((current) => current || accountResult.data?.[0]?.id || "");
         }
         if (currencyResult.data) setCatalog(currencyResult.data);
+        if (partnerResult.data) setPartners(partnerResult.data.filter((person) => person.counterparty_type === "saraf" || person.counterparty_type === "partner"));
       });
   }, [language, organizationId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -6790,25 +6530,9 @@ function HawalaView({
       }
     }
   };
-  const nextStatus = (status: string) => ({
-    created: "funded",
-    funded: "sent",
-    sent: "ready",
-    ready: "paid",
-  } as Record<string, string>)[status] ?? null;
-  const advanceTransfer = async (transfer: HawalaTransferRecord) => {
-    const status = nextStatus(transfer.status);
-    if (!status || !organizationId) return;
-    setTransitionBusy(transfer.id);
-    const result = await transitionHawalaStatus({ transfer_id: transfer.id, status, reason: "Workflow action" });
-    setTransitionBusy(null);
-    if (result.error) {
-      onToast(u("couldNotSave"));
-      return;
-    }
-    setTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, status } : item));
-    onToast(u("savedSuccessfully"));
-  };
+  const matchingPayout = payoutCode.trim().length >= 4
+    ? transfers.find((transfer) => transfer.status === "ready" && transfer.reference_code.toLocaleLowerCase() === payoutCode.trim().toLocaleLowerCase()) ?? null
+    : null;
   return (
     <section className="panel">
       <div className="panel-header">
@@ -6821,134 +6545,43 @@ function HawalaView({
           {u("backHome")} →
         </button>
       </div>
-      <div className="hawala-tabs" role="tablist" aria-label={u("hawalaTitle")}>
-        {(["send", "incoming", "payout", "settle"] as const).map((tab) => (
-          <button key={tab} type="button" role="tab" aria-selected={hawalaMode === tab} className={hawalaMode === tab ? "active" : ""} onClick={() => setHawalaMode(tab)}>
-            {tab === "send" ? (language === "en" ? "Send" : language === "fa-AF" ? "فرستادن" : "لېږل") : tab === "incoming" ? (language === "en" ? "Incoming instruction" : language === "fa-AF" ? "حواله رسیده" : "رارسېدلې حواله") : tab === "payout" ? (language === "en" ? "Pay beneficiary" : language === "fa-AF" ? "پرداخت گیرنده" : "ګټه‌اخیستونکي ته ورکول") : (language === "en" ? "Settle partner" : language === "fa-AF" ? "تسویه همکار" : "له همکار سره تصفیه")}
-          </button>
-        ))}
-      </div>
       {hawalaMode === "settle" ? (
-        <div className="balance-list hawala-payout-list">
-          <label className="hawala-payout-account">{language === "en" ? "Partner ID" : language === "fa-AF" ? "شناسه همکار" : "د همکار پېژندنه"}<input required value={settlementPartnerId} onChange={(event) => setSettlementPartnerId(event.target.value)} placeholder="UUID" dir="ltr" /></label>
-          <label className="hawala-payout-account">{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-          {transfers.filter((transfer) => transfer.status === "paid").map((transfer) => <article className="balance-row" key={transfer.id}><span className="balance-name"><b>{transfer.beneficiary_name}</b><small><bdi>{transfer.reference_code}</bdi> · {transfer.currency_code}</small></span><input className="hawala-settlement-amount" required min="0.01" step="0.01" value={settlementAmount} onChange={(event) => setSettlementAmount(event.target.value)} placeholder={transfer.amount} inputMode="decimal" /><button className="primary-action" type="button" disabled={transitionBusy === transfer.id} onClick={() => { setTransitionBusy(transfer.id); void settleHawalaPartner({ transfer_id: transfer.id, partner_id: settlementPartnerId, money_account_id: moneyAccountId, amount: settlementAmount, client_command_id: crypto.randomUUID() }).then((result) => { setTransitionBusy(null); if (result.error) onToast(u("couldNotSave")); else { setSettlementAmount(""); onToast(u("savedSuccessfully")); } }); }}>{transitionBusy === transfer.id ? "…" : (language === "en" ? "Settle" : language === "fa-AF" ? "تسویه" : "تصفیه")}</button></article>)}
-          {!transfers.some((transfer) => transfer.status === "paid") && <div className="empty-live">{u("noHawala")}</div>}
-        </div>
+        <section className="financial-task-form hawala-settlement-form" aria-labelledby="hawala-settlement-title">
+          <h2 id="hawala-settlement-title">{language === "en" ? "Settle a Hawala partner" : language === "fa-AF" ? "تصفیه همکار حواله" : "د حوالې له همکار سره تصفیه"}</h2>
+          <label>{language === "en" ? "Partner" : language === "fa-AF" ? "همکار" : "همکار"}<select required value={settlementPartnerId} onChange={(event) => setSettlementPartnerId(event.target.value)}><option value="">{language === "en" ? "Search or choose a partner" : language === "fa-AF" ? "همکار را جستجو یا انتخاب کنید" : "همکار ولټوئ یا وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.display_name}</option>)}</select></label>
+          <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+          <div className="partner-statement-summary"><span>{language === "en" ? "Paid transfers waiting for settlement" : language === "fa-AF" ? "حواله‌های پرداخت‌شده منتظر تصفیه" : "ورکړل شوې حوالې چې تصفیې ته منتظرې دي"}</span><strong>{transfers.filter((transfer) => transfer.status === "paid").length}</strong></div>
+          <div className="balance-list hawala-payout-list">
+            {transfers.filter((transfer) => transfer.status === "paid").map((transfer) => <article className="balance-row" key={transfer.id}><span className="balance-name"><b>{transfer.beneficiary_name}</b><small><bdi>{transfer.reference_code}</bdi> · {transfer.currency_code}</small></span><input className="hawala-settlement-amount" aria-label={t("amount")} required min="0.01" step="0.01" value={settlementAmount} onChange={(event) => setSettlementAmount(event.target.value)} placeholder={transfer.amount} inputMode="decimal" /><button className="primary-action" type="button" disabled={transitionBusy === transfer.id || !settlementPartnerId || !moneyAccountId} onClick={() => { setTransitionBusy(transfer.id); void settleHawalaPartner({ transfer_id: transfer.id, partner_id: settlementPartnerId, money_account_id: moneyAccountId, amount: settlementAmount, client_command_id: crypto.randomUUID() }).then((result) => { setTransitionBusy(null); if (result.error) onToast(u("couldNotSave")); else { setSettlementAmount(""); onToast(u("savedSuccessfully")); } }); }}>{transitionBusy === transfer.id ? "…" : (language === "en" ? "Settle" : language === "fa-AF" ? "تصفیه" : "تصفیه")}</button></article>)}
+            {!transfers.some((transfer) => transfer.status === "paid") ? <div className="empty-live">{u("noHawala")}</div> : null}
+          </div>
+        </section>
       ) : hawalaMode === "payout" ? (
-        <div className="balance-list hawala-payout-list">
-          <label className="hawala-payout-account">{u("destinationAccount")}
-            <select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}>
-              <option value="">{u("chooseDestinationAccount")}</option>
-              {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select>
-          </label>
-          {transfers.filter((transfer) => transfer.status === "ready").map((transfer) => (
-            <article className="balance-row" key={transfer.id}>
-              <span className="balance-name"><b>{transfer.beneficiary_name}</b><small><bdi>{transfer.reference_code}</bdi> · {transfer.destination_location}</small></span>
-              <strong><bdi>{formatFinancialAmount(transfer.amount)}</bdi> {transfer.currency_code}</strong>
-              <button className="primary-action" type="button" disabled={transitionBusy === transfer.id} onClick={() => {
-                setTransitionBusy(transfer.id);
-                void payHawalaBeneficiary({ transfer_id: transfer.id, money_account_id: moneyAccountId, client_command_id: crypto.randomUUID() }).then((result) => {
-                  setTransitionBusy(null);
-                  if (result.error) onToast(u("couldNotSave"));
-                  else { setTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, status: "paid" } : item)); onToast(u("savedSuccessfully")); }
-                });
-              }}>{transitionBusy === transfer.id ? "…" : (language === "en" ? "Pay" : language === "fa-AF" ? "پرداخت" : "ورکړه")}</button>
-            </article>
-          ))}
-          {!transfers.some((transfer) => transfer.status === "ready") && <div className="empty-live">{u("noHawala")}</div>}
-        </div>
-      ) : (
-      <form className="trade-modal" onSubmit={submit}>
-        <label>
-          {u("receiver")}
-          <input
-            required
-            value={beneficiary}
-            onChange={(event) => setBeneficiary(event.target.value)}
-            placeholder={u("fullBeneficiaryName")}
-          />
-        </label>
-        <label>
-          {t("destination")}
-          <input
-            required
-            value={destination}
-            onChange={(event) => setDestination(event.target.value)}
-            placeholder={u("cityCountry")}
-          />
-        </label>
-        <div className="form-grid">
-          <label>
-            {t("amount")}
-            <input
-              required
-              min="0.01"
-              step="0.01"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              placeholder="0.00"
-            />
-          </label>
-          <label>
-            {t("fee")}
-            <input
-              min="0"
-              step="0.01"
-              value={fee}
-              onChange={(event) => setFee(event.target.value)}
-            />
-          </label>
-        </div>
-        {hawalaMode === "incoming" && (
-          <label>
-            {language === "en" ? "Origin location" : language === "fa-AF" ? "محل مبدأ" : "د پیل ځای"}
-            <input required value={origin} onChange={(event) => setOrigin(event.target.value)} placeholder={u("cityCountry")} />
-          </label>
-        )}
-        <label>
-          {t("currency")}
-          <select
-            value={currency}
-            onChange={(event) => setCurrency(event.target.value)}
-          >
-            {catalog.filter((item) => item.enabled).map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.code} · {currencyName(language, item)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {u("destinationAccount")}
-          <select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}>
-            <option value="">{u("chooseDestinationAccount")}</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>{account.name}</option>
-            ))}
-          </select>
-        </label>
-        <div className="money-flow-summary">
-          <span><small>{u("sourceAccount")}</small><b>{u("hawalaCustomer")}</b></span>
-          <strong aria-hidden="true">→</strong>
-          <span><small>{u("destinationAccount")}</small><b>{accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount")}</b></span>
-        </div>
-        <label>
-          {t("referenceCode")}
-          <input
-            required
-            value={reference}
-            onChange={(event) => setReference(event.target.value)}
-            placeholder={u("uniqueReference")}
-          />
-        </label>
-        <button className="primary-action full" type="submit" disabled={busy}>
-          {busy ? u("postingHawala") : u("saveHawala")} <span>→</span>
-        </button>
-      </form>
-      )}
-      <div className="balance-list">
+        <section className="financial-task-form hawala-payout-form" aria-labelledby="hawala-payout-title">
+          <h2 id="hawala-payout-title">{language === "en" ? "Pay by reference code" : language === "fa-AF" ? "پرداخت با رمز حواله" : "د حوالې په کوډ ورکړه"}</h2>
+          <p>{language === "en" ? "Enter the customer’s code. SARAFI shows only the matching ready transfer." : language === "fa-AF" ? "رمز مشتری را وارد کنید. سرافی فقط حواله آماده و مطابق را نشان می‌دهد." : "د پېرېدونکي کوډ ولیکئ. سرافي یوازې برابره چمتو حواله ښيي."}</p>
+          <label>{t("referenceCode")}<input autoFocus required dir="ltr" value={payoutCode} onChange={(event) => setPayoutCode(event.target.value.trimStart())} placeholder={u("uniqueReference")} /></label>
+          {payoutCode.trim().length >= 4 && !matchingPayout ? <p className="calm-empty" role="status">{language === "en" ? "No ready transfer matches this code." : language === "fa-AF" ? "حواله آماده مطابق این رمز پیدا نشد." : "له دې کوډ سره برابره چمتو حواله ونه موندل شوه."}</p> : null}
+          {matchingPayout ? <>
+            <article className="payout-match"><span><strong>{matchingPayout.beneficiary_name}</strong><small>{matchingPayout.destination_location}</small></span><b dir="ltr">{formatFinancialAmount(matchingPayout.amount)} {matchingPayout.currency_code}</b></article>
+            <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <button className="primary-action full" type="button" disabled={transitionBusy === matchingPayout.id || !moneyAccountId} onClick={() => { setTransitionBusy(matchingPayout.id); void payHawalaBeneficiary({ transfer_id: matchingPayout.id, money_account_id: moneyAccountId, client_command_id: crypto.randomUUID() }).then((result) => { setTransitionBusy(null); if (result.error) onToast(u("couldNotSave")); else { setTransfers((current) => current.map((item) => item.id === matchingPayout.id ? { ...item, status: "paid" } : item)); setPayoutCode(""); onToast(u("savedSuccessfully")); } }); }}>{transitionBusy === matchingPayout.id ? "…" : (language === "en" ? "Confirm payout" : language === "fa-AF" ? "تأیید پرداخت" : "ورکړه تایید کړئ")}</button>
+          </> : null}
+        </section>
+      ) : hawalaMode === "send" || hawalaMode === "incoming" ? (
+        <form className="financial-task-form" onSubmit={submit}>
+          <h2>{hawalaMode === "send" ? (language === "en" ? "Send Hawala" : language === "fa-AF" ? "فرستادن حواله" : "حواله لېږل") : (language === "en" ? "Record incoming instruction" : language === "fa-AF" ? "ثبت حواله رسیده" : "رارسېدلې حواله ثبتول")}</h2>
+          <label>{u("receiver")}<input required value={beneficiary} onChange={(event) => setBeneficiary(event.target.value)} placeholder={u("fullBeneficiaryName")} /></label>
+          {hawalaMode === "incoming" ? <label>{language === "en" ? "Origin location" : language === "fa-AF" ? "محل مبدأ" : "د پیل ځای"}<input required value={origin} onChange={(event) => setOrigin(event.target.value)} placeholder={u("cityCountry")} /></label> : null}
+          <label>{t("destination")}<input required value={destination} onChange={(event) => setDestination(event.target.value)} placeholder={u("cityCountry")} /></label>
+          <div className="form-grid"><label>{t("amount")}<input required min="0.01" step="0.01" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label><label>{t("fee")}<input min="0" step="0.01" inputMode="decimal" value={fee} onChange={(event) => setFee(event.target.value)} /></label></div>
+          <label>{t("currency")}<select value={currency} onChange={(event) => setCurrency(event.target.value)}>{catalog.filter((item) => item.enabled).map((item) => <option key={item.code} value={item.code}>{item.code} · {currencyName(language, item)}</option>)}</select></label>
+          <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+          <label>{t("referenceCode")}<input required dir="ltr" value={reference} onChange={(event) => setReference(event.target.value)} placeholder={u("uniqueReference")} /></label>
+          <button className="primary-action full" type="submit" disabled={busy}>{busy ? u("postingHawala") : u("saveHawala")} <span>→</span></button>
+        </form>
+      ) : null}
+      {hawalaMode === "overview" ? <div className="balance-list">
         {transfers.length ? (
           transfers.map((transfer) => (
             <div className="balance-row" key={transfer.id}>
@@ -6963,39 +6596,38 @@ function HawalaView({
               </span>
               <strong>{formatFinancialAmount(transfer.amount)}</strong>
               <span className="hawala-status-actions">
-                <small className={`status-pill status-${transfer.status}`}>{transfer.status}</small>
-                {nextStatus(transfer.status) && (
-                  <button className="text-button" type="button" disabled={transitionBusy === transfer.id} onClick={() => void advanceTransfer(transfer)}>
-                    {transitionBusy === transfer.id ? "…" : nextStatus(transfer.status)}
-                  </button>
-                )}
+                <small className={`status-pill status-${transfer.status}`}>● {transfer.status}</small>
               </span>
             </div>
           ))
         ) : (
           <div className="empty-live">{u("noHawala")}</div>
         )}
-      </div>
+      </div> : null}
     </section>
   );
 }
 
-function WorkerConnectionLobby({ language, code, busy, message, onLanguageChange, onCodeChange, onSubmit, onCreateBusiness, onSignOut }: {
+function WorkerConnectionLobby({ language, code, kind, name, busy, message, onLanguageChange, onKindChange, onNameChange, onCodeChange, onSubmit, onCreateBusiness, onSignOut }: {
   language: Language;
   code: string;
+  kind: "invitation" | "request";
+  name: string;
   busy: boolean;
   message: string;
   onLanguageChange: (language: Language) => void;
+  onKindChange: (kind: "invitation" | "request") => void;
+  onNameChange: (value: string) => void;
   onCodeChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   onCreateBusiness: () => void;
   onSignOut: () => void;
 }) {
   const text = language === "en"
-    ? { kicker: "Connect to your workplace", title: "Join your SARAFI team", intro: "Ask the owner for the connection code shown with your invitation. Your role, branch, and cashbox are assigned automatically.", label: "10-character connection code", placeholder: "A1B2C3D4E5", connect: "Connect workplace", connecting: "Connecting…", owner: "I am creating a new business", signOut: "Use another account" }
+    ? { kicker: "Connect to your workplace", title: "Join your SARAFI team", intro: "Use a personal invitation for immediate assigned access, or request access with the workplace code for owner review.", invitation: "I have an invitation", request: "Request access", name: "Your full name", invitationLabel: "10-character invitation code", requestLabel: "12-character workplace code", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "Connect workplace", send: "Send request", connecting: "Connecting…", owner: "I am creating a new business", signOut: "Use another account" }
     : language === "fa-AF"
-      ? { kicker: "وصل‌شدن به محل کار", title: "به تیم سرافی بپیوندید", intro: "رمز اتصال را از مالک بگیرید. وظیفه، شعبه و صندوق شما به‌صورت خودکار تعیین می‌شود.", label: "رمز اتصال ده‌حرفی", placeholder: "A1B2C3D4E5", connect: "وصل‌کردن محل کار", connecting: "در حال اتصال…", owner: "می‌خواهم صرافی جدید بسازم", signOut: "استفاده از حساب دیگر" }
-      : { kicker: "له کاري ځای سره نښلول", title: "د سرافي له ډلې سره یوځای شئ", intro: "د نښلولو کوډ له مالک څخه واخلئ. ستاسو دنده، څانګه او صندوق په خپله ټاکل کېږي.", label: "لس توري د نښلولو کوډ", placeholder: "A1B2C3D4E5", connect: "کاري ځای ونښلوئ", connecting: "نښلول کېږي…", owner: "زه نوې صرافي جوړوم", signOut: "بل حساب وکاروئ" };
+      ? { kicker: "وصل‌شدن به محل کار", title: "به تیم سرافی بپیوندید", intro: "با دعوت شخصی فوراً وارد شوید، یا با رمز محل کار درخواست دسترسی را برای بررسی مالک بفرستید.", invitation: "دعوت‌نامه دارم", request: "درخواست دسترسی", name: "نام کامل شما", invitationLabel: "رمز ده‌حرفی دعوت", requestLabel: "رمز دوازده‌حرفی محل کار", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "وصل‌کردن محل کار", send: "فرستادن درخواست", connecting: "در حال اتصال…", owner: "می‌خواهم صرافی جدید بسازم", signOut: "استفاده از حساب دیگر" }
+      : { kicker: "له کاري ځای سره نښلول", title: "د سرافي له ډلې سره یوځای شئ", intro: "په شخصي بلنه سملاسي ننوځئ، یا د کاري ځای په کوډ د مالک د کتنې لپاره غوښتنه ولېږئ.", invitation: "بلنه لرم", request: "د لاسرسي غوښتنه", name: "ستاسو بشپړ نوم", invitationLabel: "لس توري د بلنې کوډ", requestLabel: "دولس توري د کاري ځای کوډ", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "کاري ځای ونښلوئ", send: "غوښتنه لېږل", connecting: "نښلول کېږي…", owner: "زه نوې صرافي جوړوم", signOut: "بل حساب وکاروئ" };
   return (
     <main className="auth-shell worker-lobby-shell">
       <section className="auth-card worker-lobby-card">
@@ -7004,10 +6636,15 @@ function WorkerConnectionLobby({ language, code, busy, message, onLanguageChange
         <p className="kicker">{text.kicker}</p>
         <h1>{text.title}</h1>
         <p className="auth-subtitle">{text.intro}</p>
+        <div className="segmented-control" aria-label={text.title}>
+          <button type="button" className={kind === "invitation" ? "active" : ""} aria-pressed={kind === "invitation"} onClick={() => onKindChange("invitation")}>{text.invitation}</button>
+          <button type="button" className={kind === "request" ? "active" : ""} aria-pressed={kind === "request"} onClick={() => onKindChange("request")}>{text.request}</button>
+        </div>
         <form onSubmit={onSubmit}>
-          <label>{text.label}<input required dir="ltr" inputMode="text" autoComplete="one-time-code" minLength={10} maxLength={10} value={code} placeholder={text.placeholder} onChange={(event) => onCodeChange(event.target.value)} /></label>
-          {message && <p className="auth-feedback error" role="alert">{message}</p>}
-          <button className="primary-action full" disabled={busy}>{busy ? text.connecting : text.connect}</button>
+          {kind === "request" ? <label>{text.name}<input required minLength={2} autoComplete="name" value={name} onChange={(event) => onNameChange(event.target.value)} /></label> : null}
+          <label>{kind === "invitation" ? text.invitationLabel : text.requestLabel}<input required dir="ltr" inputMode="text" autoComplete="one-time-code" minLength={kind === "invitation" ? 10 : 12} maxLength={kind === "invitation" ? 10 : 12} value={code} placeholder={kind === "invitation" ? text.invitationPlaceholder : text.requestPlaceholder} onChange={(event) => onCodeChange(event.target.value)} /></label>
+          {message && <p className={`auth-feedback ${message.toLowerCase().includes("sent") || message.includes("فرستاده") || message.includes("ولېږل") ? "success" : "error"}`} role="status">{message}</p>}
+          <button className="primary-action full" disabled={busy}>{busy ? text.connecting : kind === "invitation" ? text.connect : text.send}</button>
         </form>
         <div className="worker-lobby-actions"><button type="button" className="secondary-action" onClick={onCreateBusiness}>{text.owner}</button><button type="button" className="text-button" onClick={onSignOut}>{text.signOut}</button></div>
       </section>

@@ -19,6 +19,8 @@ const requiredKeys = [
   'BUSINESS_A_ID',
   'SARAFI_E2E_OWNER_A_EMAIL',
   'SARAFI_E2E_OWNER_A_PASSWORD',
+  'SARAFI_E2E_BUSINESS_ADMIN_A_EMAIL',
+  'SARAFI_E2E_BUSINESS_ADMIN_A_PASSWORD',
   'SARAFI_E2E_CASHIER_A_EMAIL',
   'SARAFI_E2E_CASHIER_A_PASSWORD',
   'SARAFI_E2E_ACCOUNTANT_A_EMAIL',
@@ -47,6 +49,7 @@ const signIn = async (role) => {
 const results = []
 const record = (test, passed, detail = '') => results.push({ test, result: passed ? 'PASS' : 'FAIL', detail })
 const owner = await signIn('owner')
+const businessAdmin = await signIn('business_admin')
 const cashier = await signIn('cashier')
 const accountant = await signIn('accountant')
 const viewer = await signIn('viewer')
@@ -61,7 +64,7 @@ record(
   ownerContext.error?.message ?? ownerWorkspace?.subscription?.plan_code ?? '',
 )
 
-for (const [role, client] of [['cashier', cashier], ['accountant', accountant], ['viewer', viewer]]) {
+for (const [role, client] of [['business_admin', businessAdmin], ['cashier', cashier], ['accountant', accountant], ['viewer', viewer]]) {
   const context = await client.rpc('get_my_workspace_context')
   const workspace = context.data?.find((item) => item.organization_id === env.BUSINESS_A_ID)
   record(
@@ -70,6 +73,17 @@ for (const [role, client] of [['cashier', cashier], ['accountant', accountant], 
     context.error?.message ?? workspace?.role_code ?? '',
   )
 }
+
+const businessAdminContext = await businessAdmin.rpc('get_my_workspace_context')
+const businessAdminWorkspace = businessAdminContext.data?.find((item) => item.organization_id === env.BUSINESS_A_ID)
+const businessAdminCapabilities = businessAdminWorkspace?.capabilities ?? []
+record(
+  'Business Administrator has operational authority without owner-only powers',
+  !businessAdminContext.error &&
+    ['financial.post.fx', 'financial.post.money', 'financial.report', 'team.manage', 'organization.manage'].every((capability) => businessAdminCapabilities.includes(capability)) &&
+    ['owner.capital.post', 'ownership.transfer', 'owner.delete', 'billing.manage'].every((capability) => !businessAdminCapabilities.includes(capability)),
+  businessAdminContext.error?.message ?? businessAdminCapabilities.join(', '),
+)
 
 const billing = await owner.rpc('get_billing_portal', { target_org: env.BUSINESS_A_ID })
 const liveProviders = billing.data?.providers?.map((provider) => provider.code) ?? []
@@ -95,6 +109,37 @@ record(
   'Owner can save validated business settings without changing financial history',
   !currentSettings.error && !settingsUpdate.error,
   currentSettings.error?.message ?? settingsUpdate.error?.message ?? currentSettings.data?.receipt_prefix ?? '',
+)
+
+const businessAdminSettingsUpdate = currentSettings.data ? await businessAdmin.rpc('update_organization_settings', {
+  target_org: env.BUSINESS_A_ID,
+  language_input: currentSettings.data.default_language,
+  timezone_input: currentSettings.data.timezone,
+  receipt_prefix_input: currentSettings.data.receipt_prefix,
+  negative_cash_input: currentSettings.data.negative_cash_allowed,
+}) : { error: currentSettings.error }
+record(
+  'Business Administrator can perform delegated organization administration',
+  !currentSettings.error && !businessAdminSettingsUpdate.error,
+  currentSettings.error?.message ?? businessAdminSettingsUpdate.error?.message ?? '',
+)
+
+const businessAdminOwnerCapitalAttempt = await businessAdmin.rpc('record_operation', {
+  command: {
+    organization_id: env.BUSINESS_A_ID,
+    branch_id: businessAdminWorkspace?.branches?.[0]?.id,
+    cashbox_id: businessAdminWorkspace?.cashboxes?.[0]?.id,
+    operation: 'OWNER_INVESTMENT',
+    currency: 'AFN',
+    amount: '1',
+    base_amount: '1',
+    client_command_id: crypto.randomUUID(),
+  },
+})
+record(
+  'Business Administrator cannot post owner capital',
+  Boolean(businessAdminOwnerCapitalAttempt.error) && /capability|permission|allowed/i.test(businessAdminOwnerCapitalAttempt.error.message),
+  businessAdminOwnerCapitalAttempt.error?.message ?? 'Owner capital was unexpectedly posted',
 )
 
 const cashierSettingsAttempt = currentSettings.data ? await cashier.rpc('update_organization_settings', {
@@ -206,6 +251,13 @@ record(
   cashierBilling.error?.message ?? 'Billing was unexpectedly available',
 )
 
+const businessAdminBilling = await businessAdmin.rpc('get_billing_portal', { target_org: env.BUSINESS_A_ID })
+record(
+  'Business Administrator cannot manage the owner billing portal',
+  Boolean(businessAdminBilling.error),
+  businessAdminBilling.error?.message ?? 'Billing was unexpectedly available',
+)
+
 const adminAttempt = await owner.rpc('get_platform_admin_console')
 record(
   'A business owner is not silently promoted to platform administrator',
@@ -254,7 +306,7 @@ record(
   deviceProbe.error?.message ?? 'Invalid device was unexpectedly registered',
 )
 
-for (const [role, client] of [['owner', owner], ['cashier', cashier], ['accountant', accountant], ['viewer', viewer]]) {
+for (const [role, client] of [['owner', owner], ['business_admin', businessAdmin], ['cashier', cashier], ['accountant', accountant], ['viewer', viewer]]) {
   const history = await client.rpc('get_transaction_history_page', {
     target_org: env.BUSINESS_A_ID,
     page_size: 10,
@@ -278,7 +330,7 @@ record(
   anonymousHistory.error?.message ?? 'Financial history was unexpectedly public',
 )
 
-await Promise.all([owner.auth.signOut(), cashier.auth.signOut(), accountant.auth.signOut(), viewer.auth.signOut()])
+await Promise.all([owner.auth.signOut(), businessAdmin.auth.signOut(), cashier.auth.signOut(), accountant.auth.signOut(), viewer.auth.signOut()])
 
 const failed = results.filter((item) => item.result === 'FAIL')
 console.log(JSON.stringify({ generated_at: new Date().toISOString(), passed: results.length - failed.length, failed: failed.length, results }, null, 2))

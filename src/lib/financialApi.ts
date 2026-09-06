@@ -26,6 +26,7 @@ export type WorkspaceContextRecord = {
   organization_name: string
   role_code: string
   mfa_required: boolean
+  capabilities: string[]
   branches: Array<{ id: string; name: string }>
   cashboxes: Array<{ id: string; name: string; branch_id: string }>
   subscription: { status?: string; period_end?: string | null; plan_code?: string }
@@ -33,6 +34,8 @@ export type WorkspaceContextRecord = {
 export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null }
 export type TeamControlPlane = { members: TeamMemberRecord[]; invitations: TeamInvitationRecord[]; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[]; devices: DeviceRecord[]; approvals: ApprovalRecord[] }
 export type CreatedTeamInvitation = { id: string; invite_token: string; connection_code?: string; email: string; display_name: string; role_code: string; expires_at: string }
+export type WorkerJoinRequestRecord = { id: string; display_name: string; email: string; status: string; requested_at: string; assigned_role: string | null; branch_ids: string[]; cashbox_ids: string[]; capability_overrides: Array<{ capability: string; allowed: boolean }>; limits: Record<string, unknown>; mfa_required: boolean; device_review_required: boolean }
+export type MembershipCapabilityMatrixRecord = { membership_id: string; role_code: string; effective_capabilities: string[]; overrides: Array<{ capability: string; allowed: boolean; branch_ids: string[]; cashbox_ids: string[]; limits: Record<string, unknown> }> }
 export type PrivateDocumentRecord = { id: string; organization_id: string; entity_id: string; entity_type: string; storage_path: string; content_type: string; size_bytes: number; sha256: string; uploaded_by: string; created_at: string }
 export type ReceiptRecord = { id: string; journal_entry_id: string; receipt_number: string; language_code: string; created_at: string }
 export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; date_display?: 'gregorian' | 'solar_hijri' | 'both'; digit_display?: 'western' | 'localized'; default_cost_basis?: 'weighted_average'; approval_threshold_base?: string; offline_limit_base?: string; cashier_profit_hidden?: boolean; receipt_number_pattern?: string; features: Array<{ feature_code: string; enabled: boolean }> }
@@ -759,27 +762,25 @@ export async function getTransactionRateContext(organizationId: string, branchId
   return { data: result.data as { buy_rate?: string; sell_rate?: string; stale?: boolean; effective_from?: string; spread_tolerance?: string } | null, error: result.error?.message ?? null }
 }
 
-export async function createTeamInvitation(input: { organizationId: string; email: string; displayName: string; role: string; branchIds: string[]; cashboxIds: string[] }): Promise<RpcResult<CreatedTeamInvitation>> {
+export async function createTeamInvitation(input: { organizationId: string; email: string; displayName: string; role: string; branchIds: string[]; cashboxIds: string[]; capabilityOverrides?: Array<{ capability: string; allowed: boolean }>; limits?: Record<string, unknown>; requiresMfa?: boolean }): Promise<RpcResult<CreatedTeamInvitation>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   if (input.role === 'business_admin') {
     const adminResult = await client.rpc('create_business_admin_invitation', { target_org: input.organizationId, invited_email: input.email.trim(), invited_name: input.displayName.trim() })
     return { data: adminResult.data as CreatedTeamInvitation | null, error: adminResult.error?.message ?? null }
   }
-  const result = await client.rpc('create_team_invitation', {
-    target_org: input.organizationId,
-    invited_email: input.email.trim(),
-    invited_name: input.displayName.trim(),
-    invited_role: input.role,
-    branch_scope: input.branchIds,
-    cashbox_scope: input.cashboxIds,
-    requires_mfa: false,
-  })
-  if (result.error || !result.data) return { data: null, error: result.error?.message ?? 'Invitation could not be created' }
-  const invitation = result.data as CreatedTeamInvitation
-  const codeResult = await client.rpc('create_worker_connection_code', { target_invitation: invitation.id })
-  const code = codeResult.data as { connection_code?: string } | null
-  return { data: { ...invitation, connection_code: code?.connection_code }, error: codeResult.error?.message ?? null }
+  const result = await client.rpc('create_team_invitation_v4', { command: {
+    organization_id: input.organizationId,
+    email: input.email.trim(),
+    display_name: input.displayName.trim(),
+    role: input.role,
+    branch_ids: input.branchIds,
+    cashbox_ids: input.cashboxIds,
+    capability_overrides: input.capabilityOverrides ?? [],
+    limits: input.limits ?? {},
+    requires_mfa: input.requiresMfa ?? true,
+  } })
+  return { data: result.data as CreatedTeamInvitation | null, error: result.error?.message ?? null }
 }
 
 export async function acceptTeamInvitation(inviteToken: string): Promise<RpcResult<{ organization_id: string; membership_id: string; display_name: string; role_code: string }>> {
@@ -794,6 +795,66 @@ export async function acceptTeamConnectionCode(connectionCode: string): Promise<
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.rpc('accept_team_connection_code', { connection_code: connectionCode.trim() })
   return { data: result.data as { organization_id: string; membership_id: string; display_name: string; role_code: string } | null, error: result.error?.message ?? null }
+}
+
+export async function requestBusinessAccess(connectionCode: string, displayName: string): Promise<RpcResult<{ request_id: string; organization_id: string; status: string }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('request_business_access', { connection_code: connectionCode.trim(), requested_name: displayName.trim() })
+  return { data: result.data as { request_id: string; organization_id: string; status: string } | null, error: result.error?.message ?? null }
+}
+
+export async function listWorkerJoinRequests(organizationId: string): Promise<RpcResult<WorkerJoinRequestRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_worker_join_requests', { target_org: organizationId })
+  return { data: result.data as WorkerJoinRequestRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function createOrganizationJoinCode(organizationId: string): Promise<RpcResult<{ id: string; connection_code: string; label: string; expires_at: string | null }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('create_organization_join_code', { target_org: organizationId, label_input: 'Team access', expires_at_input: null })
+  return { data: result.data as { id: string; connection_code: string; label: string; expires_at: string | null } | null, error: result.error?.message ?? null }
+}
+
+export async function reviewWorkerJoinRequest(input: { requestId: string; decision: 'approved' | 'rejected'; role?: string; branchIds?: string[]; cashboxIds?: string[]; capabilityOverrides?: Array<{ capability: string; allowed: boolean }>; limits?: Record<string, unknown>; requiresMfa?: boolean; reason: string }): Promise<RpcResult<{ request_id: string; status: string; membership_id: string | null }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('review_worker_join_request', {
+    target_request: input.requestId,
+    decision_input: input.decision,
+    role_input: input.role ?? null,
+    branch_scope: input.branchIds ?? [],
+    cashbox_scope: input.cashboxIds ?? [],
+    capability_overrides_input: input.capabilityOverrides ?? [],
+    limits_input: input.limits ?? {},
+    requires_mfa: input.requiresMfa ?? true,
+    reason_input: input.reason,
+  })
+  return { data: result.data as { request_id: string; status: string; membership_id: string | null } | null, error: result.error?.message ?? null }
+}
+
+export async function getMembershipCapabilityMatrix(organizationId: string): Promise<RpcResult<MembershipCapabilityMatrixRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_membership_capability_matrix', { target_org: organizationId })
+  return { data: result.data as MembershipCapabilityMatrixRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function setMembershipCapability(input: { membershipId: string; capability: string; allowed: boolean; branchIds?: string[]; cashboxIds?: string[]; limits?: Record<string, unknown>; reason: string }): Promise<RpcResult<{ membership_id: string; capability: string; allowed: boolean }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_membership_capability', {
+    target_membership: input.membershipId,
+    capability: input.capability,
+    allowed_input: input.allowed,
+    branch_scope: input.branchIds ?? [],
+    cashbox_scope: input.cashboxIds ?? [],
+    limits_input: input.limits ?? {},
+    reason_input: input.reason.trim(),
+  })
+  return { data: result.data as { membership_id: string; capability: string; allowed: boolean } | null, error: result.error?.message ?? null }
 }
 
 export async function cancelTeamInvitation(invitationId: string, reason: string): Promise<RpcResult<{ id: string; status: string }>> {
@@ -818,6 +879,22 @@ export async function updateTeamMembership(input: { membershipId: string; role: 
     active_input: input.active,
     reason_input: input.reason.trim(),
   })
+  return { data: result.data as { id: string; role_code: string; active: boolean } | null, error: result.error?.message ?? null }
+}
+
+export async function updateTeamAssignment(input: { membershipId: string; role: string; branchIds: string[]; cashboxIds: string[]; active: boolean; reason: string; capabilityOverrides: Array<{ capability: string; allowed: boolean }>; limits?: Record<string, unknown> }): Promise<RpcResult<{ id: string; role_code: string; active: boolean }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('update_team_assignment_v4', { command: {
+    membership_id: input.membershipId,
+    role: input.role,
+    branch_ids: input.branchIds,
+    cashbox_ids: input.cashboxIds,
+    active: input.active,
+    reason: input.reason.trim(),
+    capability_overrides: input.capabilityOverrides,
+    limits: input.limits ?? {},
+  } })
   return { data: result.data as { id: string; role_code: string; active: boolean } | null, error: result.error?.message ?? null }
 }
 

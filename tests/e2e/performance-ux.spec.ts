@@ -63,14 +63,13 @@ test("core web journeys remain usable on a constrained connection", async ({
     await timed("owner home", async () => {
       await page.goto("/");
       await expect(
-        page.getByRole("heading", { name: "Good morning." }),
+        page.getByRole("heading", { name: "Your exchange at a glance" }),
       ).toBeVisible();
     }),
   );
   journeys.push(
     await timed("Buy", async () => {
-      await page.locator(".trade-launch").click();
-      await page.getByRole("button", { name: "Buy currency", exact: true }).click();
+      await page.goto("/app/inspection/transactions/new/fx/buy");
       await expect(
         page.locator(".transaction-page-form"),
       ).toBeVisible();
@@ -79,7 +78,7 @@ test("core web journeys remain usable on a constrained connection", async ({
   );
   journeys.push(
     await timed("My money", async () => {
-      await page.getByRole("button", { name: /My Money/ }).click();
+      await page.goto("/app/inspection/money");
       await expect(
         page.getByRole("heading", { name: "Where is my money?" }),
       ).toBeVisible();

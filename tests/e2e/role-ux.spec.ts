@@ -6,29 +6,21 @@ test.describe("role-aware workspace presentation", () => {
   }) => {
     await page.goto("/?role=cashier");
     await expect(page.locator(".sidebar-footer")).toContainText("Cashier");
-    for (const action of [
-      /New transaction/,
-      /Receive money/,
-      /Pay money/,
-      /Transfer cash/,
-      /Expense/,
-    ]) {
-      await expect(
-        page.getByRole("button", { name: action }).first(),
-      ).toBeEnabled();
-    }
+    await expect(page.getByRole("button", { name: "New transaction" })).toBeEnabled();
     await expect(page.locator(".sidebar nav").getByRole("button", { name: /^Customers/ })).toBeVisible();
     await expect(
       page.getByRole("button", { name: /^Reports/ }),
     ).not.toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Team & Devices/ }),
+      page.getByRole("button", { name: /Manage Sarafi/ }),
     ).not.toBeVisible();
     await expect(
       page.getByRole("button", { name: /Import data/ }),
     ).not.toBeVisible();
     await page.locator(".sidebar nav").getByRole("button", { name: /^Customers/ }).click();
     await expect(page.getByRole("heading", { name: "Customers & Sarafs" })).toBeVisible();
+    await page.locator(".sidebar nav").getByRole("button", { name: /^Make a Transaction/ }).click();
+    await expect(page.locator(".transaction-family-grid > button")).toHaveCount(6);
   });
 
   test("viewer is visibly read-only and cannot open financial entry controls", async ({
@@ -36,27 +28,22 @@ test.describe("role-aware workspace presentation", () => {
   }) => {
     await page.goto("/?role=viewer");
     await expect(page.locator(".sidebar-footer")).toContainText("Viewer");
-    for (const action of [
-      /New transaction .*Buy currency/,
-      /Receive money/,
-      /Pay money/,
-    ]) {
-      await expect(page.getByRole("button", { name: action }).first()).toBeDisabled();
-    }
     await expect(
-      page.locator(".sidebar nav").getByRole("button", { name: /New transaction/ }),
+      page.locator(".sidebar nav").getByRole("button", { name: /Make a Transaction/ }),
     ).toHaveCount(0);
-    await expect(page.locator(".sidebar nav").getByRole("button", { name: /^Money/ })).toBeVisible();
+    await page.goto("/app/inspection/transactions/new/fx/buy?role=viewer");
+    await expect(page.getByRole("heading", { name: "Access not allowed" })).toBeVisible();
+    await expect(page.locator(".financial-task-form")).toHaveCount(0);
   });
 
   for (const [role, heading] of [
-    ["owner", "Owner control center"],
-    ["business_admin", "Business operations"],
-    ["manager", "Daily operations"],
-    ["accountant", "Accounts and reports"],
-    ["cashier", "My counter today"],
-    ["compliance_officer", "Compliance review"],
-    ["viewer", "Read-only review"],
+    ["owner", "Your exchange at a glance"],
+    ["business_admin", "Operations are under control"],
+    ["manager", "Today’s branch work"],
+    ["accountant", "Review today’s books"],
+    ["cashier", "Ready for the next customer"],
+    ["compliance_officer", "Compliance review queue"],
+    ["viewer", "Business overview"],
   ] as const) {
     test(`${role} receives a clearly named role workspace`, async ({ page }) => {
       await page.goto(`/?role=${role}`);
@@ -65,13 +52,13 @@ test.describe("role-aware workspace presentation", () => {
   }
 
   for (const [role, labels] of [
-    ["owner", ["Home", "Make a Transaction", "My Money", "Activity", "Control Center"]],
-    ["business_admin", ["Home", "Make a Transaction", "Customers", "Activity", "Manage Sarafi"]],
-    ["manager", ["Home", "Make a Transaction", "Cashboxes", "Activity", "Team"]],
-    ["cashier", ["Home", "Make a Transaction", "Customers", "My Activity", "Close Cashbox"]],
-    ["accountant", ["Home", "Transactions", "Reports", "Debts", "Reconcile"]],
-    ["compliance_officer", ["Home", "Hawala", "Reviews", "Cases", "Search"]],
-    ["viewer", ["Home", "Money", "Transactions", "Reports", "Search"]],
+    ["owner", ["Home", "Make a Transaction", "Activity", "Reports", "Manage Sarafi"]],
+    ["business_admin", ["Home", "Make a Transaction", "Activity", "Reports", "Manage Sarafi"]],
+    ["manager", ["Home", "Make a Transaction", "Activity", "Customers", "My Money"]],
+    ["cashier", ["Home", "Make a Transaction", "My Activity", "Customers", "Reconcile"]],
+    ["accountant", ["Home", "Activity", "Customers", "My Money", "Reports"]],
+    ["compliance_officer", ["Home", "Activity", "Customers", "My Money", "Reviews"]],
+    ["viewer", ["Home", "Activity", "Customers", "My Money", "Reports"]],
   ] as const) {
     test(`${role} receives the required five-item navigation`, async ({ page }) => {
       await page.goto(`/?role=${role}`);
@@ -85,8 +72,10 @@ test.describe("role-aware workspace presentation", () => {
 
   test("accountant can review reports but cannot post transactions", async ({ page }) => {
     await page.goto("/?role=accountant");
-    await expect(page.getByRole("button", { name: /New transaction .*Buy currency/ })).toBeDisabled();
+    await expect(page.locator(".sidebar nav").getByRole("button", { name: /Make a Transaction/ })).toHaveCount(0);
     await expect(page.locator(".sidebar nav").getByRole("button", { name: /^Reports/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Team & Devices/ })).toHaveCount(0);
+    await page.goto("/app/inspection/transactions/new/money-in/customer?role=accountant");
+    await expect(page.getByRole("heading", { name: "Access not allowed" })).toBeVisible();
+    await expect(page.locator(".financial-task-form")).toHaveCount(0);
   });
 });

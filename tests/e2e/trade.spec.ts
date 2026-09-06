@@ -4,7 +4,7 @@ test("visitors can open the public workspace", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveTitle("SARAFI · Digital daftar for Sarafi shops");
   await expect(
-    page.getByRole("heading", { name: "Good morning." }),
+    page.getByRole("heading", { name: "Your exchange at a glance" }),
   ).toBeVisible();
   await expect(page.getByText("Read-only inspection")).toBeVisible();
 });

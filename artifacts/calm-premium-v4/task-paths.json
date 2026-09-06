@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "generated_for": "SARAFI Calm Premium v4",
+  "measurement_policy": {
+    "start": "role home primary action",
+    "finish": "financial form ready for review or operational destination loaded",
+    "timing_environment": "inspection fixture on local production build",
+    "targets_are_not_observed_results": true
+  },
+  "paths": [
+    { "persona": "cashier", "task": "buy_currency", "route": "/transactions/new/fx/buy", "max_clicks": 3, "required_fields": ["currency", "amount", "money_account"], "target_seconds": 35 },
+    { "persona": "cashier", "task": "sell_currency", "route": "/transactions/new/fx/sell", "max_clicks": 3, "required_fields": ["currency", "amount", "money_account"], "target_seconds": 35 },
+    { "persona": "cashier", "task": "receive_customer_money", "route": "/transactions/new/money-in/customer", "max_clicks": 3, "required_fields": ["amount", "currency", "destination_account"], "target_seconds": 30 },
+    { "persona": "cashier", "task": "pay_customer", "route": "/transactions/new/money-out/customer", "max_clicks": 3, "required_fields": ["amount", "currency", "source_account"], "target_seconds": 30 },
+    { "persona": "manager", "task": "move_between_cashboxes", "route": "/transactions/new/move/cashbox", "max_clicks": 3, "required_fields": ["amount", "currency", "source_account", "destination_account"], "target_seconds": 40 },
+    { "persona": "manager", "task": "record_receivable", "route": "/transactions/new/debt/receivable", "max_clicks": 3, "required_fields": ["counterparty", "amount", "currency"], "target_seconds": 40 },
+    { "persona": "manager", "task": "settle_debt", "route": "/debts/settle", "max_clicks": 3, "required_fields": ["debt", "amount", "money_account"], "target_seconds": 45 },
+    { "persona": "cashier", "task": "pay_hawala_beneficiary", "route": "/transactions/new/hawala/payout", "max_clicks": 3, "required_fields": ["reference_code", "destination_account"], "target_seconds": 30 },
+    { "persona": "business_admin", "task": "settle_hawala_partner", "route": "/transactions/new/hawala/settlement", "max_clicks": 3, "required_fields": ["partner", "money_account", "amount"], "target_seconds": 50 },
+    { "persona": "accountant", "task": "open_daily_summary", "route": "/reports", "max_clicks": 1, "required_fields": [], "target_seconds": 8 }
+  ],
+  "automated_evidence": "tests/e2e/calm-premium-v4.spec.ts",
+  "human_80_percent_threshold": 0.8,
+  "human_results": null
+}

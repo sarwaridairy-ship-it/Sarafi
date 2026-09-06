@@ -78,7 +78,6 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
 
     for (const role of roles) {
       await page.goto(`/?role=${role}`);
-      await page.locator("select.lang-button").selectOption(locale.code);
       await page.screenshot({
         path: path.join(
           outputDirectory,
@@ -89,12 +88,11 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
     }
 
     await page.goto("/");
-    await page.locator("select.lang-button").selectOption(locale.code);
 
-    for (const [kind, button, inputLabel] of [
+    for (const [kind, route, inputLabel] of [
       [
         "buy",
-        locale.buy,
+        "/app/inspection/transactions/new/fx/buy",
         locale.code === "en"
           ? /We receive/
           : locale.code === "fa-AF"
@@ -103,7 +101,7 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
       ],
       [
         "sell",
-        locale.sell,
+        "/app/inspection/transactions/new/fx/sell",
         locale.code === "en"
           ? /We give/
           : locale.code === "fa-AF"
@@ -111,16 +109,13 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
             : /موږ ورکوو/,
       ],
     ] as const) {
-      await page.goto("/");
-      await page.locator(".trade-launch").click();
-      await page.getByRole("button", { name: button, exact: true }).click();
-      await page.getByRole("tab", { name: button, exact: true }).click();
+      await page.goto(route);
       await page
-        .locator(".trade-modal")
+        .locator(".financial-task-form")
         .getByRole("textbox", { name: inputLabel })
         .fill("1000");
       await page
-        .locator(".trade-modal")
+        .locator(".financial-task-form")
         .getByRole("button", {
           name:
             locale.code === "en"
@@ -163,7 +158,6 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
     await page.setViewportSize({ width: 390, height: 844 });
     for (const role of roles) {
       await page.goto(`/?role=${role}`);
-      await page.locator("select.lang-button").selectOption(locale.code);
       await page.screenshot({
         path: path.join(
           outputDirectory,

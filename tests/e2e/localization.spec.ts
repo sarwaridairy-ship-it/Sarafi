@@ -18,6 +18,7 @@ const allowedLatinWords = new Set([
   "CSV",
   "PDF",
   "WhatsApp",
+  "AI",
 ]);
 
 async function visibleLatinWords(page: Page) {
@@ -49,7 +50,7 @@ const locales = [
     transactionsNav: "معاملات",
     transactionsHeading: "تاریخچه معاملات",
     reports: "گزارش‌ها",
-    reportsHeading: "گزارش‌ها",
+    reportsHeading: "خلاصه روزانه",
     rates: "نرخ‌ها",
     ratesHeading: "نرخ‌های صرافی",
     cashbox: "بررسی صندوق",
@@ -60,6 +61,7 @@ const locales = [
     importData: "انتقال معلومات",
     importHeading: "مرکز انتقال معلومات",
     hawala: "حواله",
+    manageHeading: "مدیریت سرافی",
     buy: "خرید ارز",
     buyHeading: /خرید ارز/,
     give: /ما می‌دهیم/,
@@ -76,7 +78,7 @@ const locales = [
     transactionsNav: "معاملې",
     transactionsHeading: "د معاملو تاریخچه",
     reports: "راپورونه",
-    reportsHeading: "راپورونه",
+    reportsHeading: "ورځنۍ لنډیز",
     rates: "نرخونه",
     ratesHeading: "د صرافۍ نرخونه",
     cashbox: "د صندوق کتنه",
@@ -87,6 +89,7 @@ const locales = [
     importData: "معلومات لېږدول",
     importHeading: "د معلوماتو د لېږد مرکز",
     hawala: "حواله",
+    manageHeading: "سرافي اداره کړئ",
     buy: "د اسعارو پېرود",
     buyHeading: /د اسعارو پېرود/,
     give: /موږ ورکوو/,
@@ -100,6 +103,7 @@ for (const locale of locales) {
   }) => {
     test.setTimeout(60_000);
     await page.goto("/");
+    await page.getByRole("button", { name: "Profile and preferences" }).click();
     await page
       .getByRole("combobox", { name: locale.languageLabel })
       .selectOption(locale.code);
@@ -107,9 +111,7 @@ for (const locale of locales) {
     await expect(page.getByRole("button", { name: locale.home })).toBeVisible();
     await expectNoEnglishLeak(page, `${locale.code} home`);
 
-    await page.locator(".trade-launch").click();
-    await page.getByRole("button", { name: locale.buy, exact: true }).click();
-    await page.getByRole("tab", { name: locale.buy, exact: true }).click();
+    await page.goto("/app/inspection/transactions/new/fx/buy");
     await expect(
       page.getByRole("heading", { name: locale.buyHeading }),
     ).toBeVisible();
@@ -124,7 +126,7 @@ for (const locale of locales) {
 
     for (const [path, heading] of [
       ["/app/inspection/money", locale.moneyHeading],
-      ["/app/inspection/people", locale.peopleHeading],
+      ["/app/inspection/customers", locale.peopleHeading],
       ["/app/inspection/transactions", locale.transactionsHeading],
     ] as const) {
       await page.goto(path);
@@ -135,11 +137,11 @@ for (const locale of locales) {
     }
 
     for (const [path, heading] of [
-      ["/app/inspection/control/reports", locale.reportsHeading],
+      ["/app/inspection/reports", locale.reportsHeading],
       ["/app/inspection/control/rates", locale.ratesHeading],
       ["/app/inspection/control/reconciliation", locale.cashboxHeading],
       ["/app/inspection/control/team", locale.team],
-      ["/app/inspection/control", locale.code === "fa-AF" ? "مرکز کنترول" : "د کنټرول مرکز"],
+      ["/app/inspection/control", locale.manageHeading],
       ["/app/inspection/hawala", locale.hawala],
     ] as const) {
       await page.goto(path);
@@ -155,19 +157,20 @@ test("switching from Dari to Pashto replaces, rather than mixes, translated copy
   page,
 }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "Profile and preferences" }).click();
   const selector = page.getByRole("combobox", { name: "Change language" });
   await selector.selectOption("fa-AF");
   await expect(
-    page.getByRole("heading", { name: "فعالیت اخیر" }),
+    page.getByRole("heading", { name: "خلاصه صرافی شما" }),
   ).toBeVisible();
   await page
     .getByRole("combobox", { name: "تغییر زبان" })
     .selectOption("ps-AF");
   await expect(
-    page.getByRole("heading", { name: "وروستی فعالیت" }),
+    page.getByRole("heading", { name: "ستاسو د صرافۍ لنډیز" }),
   ).toBeVisible();
   await expect(
-    page.getByText("فعالیت اخیر", { exact: true }),
+    page.getByText("خلاصه صرافی شما", { exact: true }),
   ).not.toBeVisible();
 });
 
@@ -193,10 +196,11 @@ for (const locale of [
 ] as const) {
   test(`${locale.code} money controls use local wording`, async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Profile and preferences" }).click();
     await page
       .getByRole("combobox", { name: "Change language" })
       .selectOption(locale.code);
-    await page.getByRole("button", { name: new RegExp(locale.money) }).click();
+    await page.goto("/app/inspection/money");
     await page.locator(".money-place-manager > summary").click();
     await expect(page.getByRole("heading", { name: locale.accounts })).toBeVisible();
     await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();

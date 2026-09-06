@@ -17,15 +17,15 @@ test.describe("Stage 9 browser matrix", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: "Good morning." }),
+      page.getByRole("heading", { name: "Your exchange at a glance" }),
     ).toBeVisible();
     await expect(
-      page.locator(".trade-launch"),
+      page.locator(".calm-primary"),
     ).toBeVisible();
     await expect(
       page.getByRole("navigation", { name: "Workspace" }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /My Money/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Make a Transaction/ })).toBeVisible();
   });
 
   for (const viewport of [
@@ -74,10 +74,10 @@ test.describe("Stage 9 browser matrix", () => {
     test.setTimeout(120_000);
     for (const language of ["en", "fa-AF", "ps-AF"] as const) {
       await page.goto("/");
-      await page.locator("select.lang-button").selectOption(language);
+      await page.evaluate((value) => window.localStorage.setItem("sarafi-language", value), language);
       for (const width of [360, 390, 430, 768, 1024, 1366, 1440]) {
         await page.setViewportSize({ width, height: width < 600 ? 900 : 1000 });
-        await page.goto("/app/inspection/transactions/new/fx?side=BUY_FX");
+        await page.goto("/app/inspection/transactions/new/fx/buy");
         await expect(page.locator(".transaction-page-form")).toBeVisible();
         await expect(page.locator(".modal-backdrop form")).toHaveCount(0);
         const layout = await page.evaluate(() => ({
@@ -113,7 +113,7 @@ test.describe("Stage 9 browser matrix", () => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto("/");
     await expect(page.locator(".sidebar nav button")).toHaveCount(5);
-    await expect(page.getByRole("button", { name: /Control/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Manage Sarafi/ })).toBeVisible();
   });
 
   for (const viewport of [
