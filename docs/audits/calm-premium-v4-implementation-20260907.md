@@ -78,7 +78,7 @@ The migration is not applied to production because the release sequence requires
 | Full Chromium E2E | PASS: 100 tests; 4 credential/environment-dependent tests skipped |
 | Legacy controls regression | PASS: 44 tests; 1 retired offline-draft test skipped |
 | Firefox + WebKit core acceptance | PASS: 82 tests; 4 credential/environment-dependent tests skipped |
-| Objective Calm Premium v4 E2E | PASS: 16 active tests |
+| Objective Calm Premium v4 E2E | PASS before proxy: 16 active tests; post-fix objective file reported all 17 cases green, with the new regression also passing in a clean standalone run |
 | Accessibility, localization, role UX, responsive matrix, and screenshot capture | PASS |
 | Migration parse | PASS: 213 statements |
 | Supabase remote migration status | PASS preflight; new migration correctly reported as pending |
@@ -86,10 +86,19 @@ The migration is not applied to production because the release sequence requires
 
 The credential-dependent live acceptance runner now requires an actual Business Administrator fixture and asserts both its delegated operations and owner-only denials. Fresh Step 15 fixture provisioning now creates that role. Existing disposable fixtures can run `npm run security:provision-business-admin`; the targeted provisioner verifies the project and organization, refuses accounts not marked as security fixtures, keeps the Supabase secret in the trusted process environment, and writes only the generated disposable credentials to the ignored fixture file. The current environment has no `SUPABASE_SECRET_KEY`, so its fail-closed preflight was verified but no user or membership was created and the live suite was not misrepresented as executed.
 
+## AI-assisted proxy UAT
+
+An additional local-browser proxy pass exercised all seven role Homes, direct Buy, Debt settlement and Hawala payout paths, Team access review, Manage, Reports, and fail-closed Accountant, Business Administrator owner-capital, and Viewer posting attempts. The slowest cold role Home loaded in 17.804 seconds; the sampled direct task paths remained under 10 seconds. No browser warnings, errors, or Vite overlay appeared.
+
+The proxy pass found one cross-intent state defect: a reviewed Buy could seed a newly selected Sell with the previous amount and review state. Commit `be39853eff2ad9e9d5f35e6a16fa744041889da0` resets the FX draft and review state for each new intent and routes Buy/Sell/Exchange tab changes through their exact paths. Its focused browser regression passed cleanly, the full objective file reported all 17 cases green before a Windows web-server teardown hang, and a manual browser retest confirmed a fresh editable Sell form.
+
+This proxy work is not counted as human or native-language acceptance. Its detailed evidence and limitations are retained in [`docs/uat/calm-premium-v4-ai-proxy-uat-20260907.md`](../uat/calm-premium-v4-ai-proxy-uat-20260907.md).
+
 ## Retained evidence
 
 - Task-path targets: [`artifacts/calm-premium-v4/task-paths.json`](../../artifacts/calm-premium-v4/task-paths.json)
 - Human UAT protocol: [`docs/uat/calm-premium-v4-human-uat-protocol.md`](../uat/calm-premium-v4-human-uat-protocol.md)
+- AI-assisted proxy UAT: [`docs/uat/calm-premium-v4-ai-proxy-uat-20260907.md`](../uat/calm-premium-v4-ai-proxy-uat-20260907.md)
 - Formula-driven UAT workbook: [`outputs/01a06de4-7b78-7e23-b83f-0dc21d6bb900/SARAFI_Calm_Premium_v4_UAT.xlsx`](../../outputs/01a06de4-7b78-7e23-b83f-0dc21d6bb900/SARAFI_Calm_Premium_v4_UAT.xlsx)
 - English desktop owner Home and 390 px transaction entry
 - Afghan Dari desktop owner Home and 390 px transaction entry
