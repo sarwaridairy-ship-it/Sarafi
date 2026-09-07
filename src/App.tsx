@@ -1262,7 +1262,19 @@ function App() {
     side?: typeof tradeSide,
   ) => {
     if (side) setTradeSide(side);
+    setAmount("");
+    setTradeFee("");
+    setTradeExchangeRate("");
+    setTradeNote("");
+    setTradeCounterparty("");
+    setTradeCommandId(crypto.randomUUID());
+    setRateOverrideEnabled(false);
+    setRateOverride("");
+    setRateOverrideReason("");
+    setPublishRate(false);
+    setAllowStaleRate(false);
     setTradeReviewing(false);
+    setTradeBusy(false);
     const nextSide = side ?? tradeSide;
     navigate(financialRoute(organizationId, nextSide === "BUY_FX" ? "/fx/buy" : nextSide === "SELL_FX" ? "/fx/sell" : "/fx/exchange"));
   };
@@ -2012,7 +2024,12 @@ function App() {
                 language={language}
                 capabilities={workspaceCapabilities}
                 hawalaEnabled={hawalaEnabled}
-                onOpen={(route) => navigate(financialRoute(organizationId, route))}
+                onOpen={(route) => {
+                  if (route === "/fx/buy") openTrade("BUY_FX");
+                  else if (route === "/fx/sell") openTrade("SELL_FX");
+                  else if (route === "/fx/exchange") openTrade("EXCHANGE_FX");
+                  else navigate(financialRoute(organizationId, route));
+                }}
               />
             ) : !transactionCenterActive ? (
               <Suspense fallback={<section className="panel" role="status">{t("working")}</section>}>
@@ -2114,8 +2131,8 @@ function App() {
                   className={tradeSide === side ? "active" : ""}
                   disabled={tradeBusy}
                   onClick={() => {
-                    setTradeSide(side);
-                    setTradeReviewing(false);
+                    if (tradeSide === side) setTradeReviewing(false);
+                    else openTrade(side);
                   }}
                 >
                   {label}

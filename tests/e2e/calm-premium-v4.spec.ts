@@ -60,6 +60,23 @@ test.describe("calm premium v4 objective acceptance", () => {
     await expect(form.getByRole("textbox", { name: /reason/i })).toBeVisible();
   });
 
+  test("a new FX intent never inherits a reviewed transaction", async ({ page }) => {
+    await page.goto(`${workspace}/transactions/new/fx/buy?role=cashier`);
+    const buyForm = page.locator(".financial-task-form");
+    await buyForm.locator(".trade-fields input").first().fill("100");
+    await buyForm.getByRole("button", { name: /Review transaction/ }).click();
+    await expect(buyForm.getByRole("heading", { name: "Check before saving" })).toBeVisible();
+
+    await page.locator(".sidebar nav").getByRole("button", { name: "Make a Transaction", exact: true }).click();
+    await page.getByRole("button", { name: "Sell currency", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/transactions\/new\/fx\/sell$/);
+    const sellForm = page.locator(".financial-task-form");
+    await expect(sellForm.locator(".trade-fields input").first()).toBeEnabled();
+    await expect(sellForm.locator(".trade-fields input").first()).toHaveValue("");
+    await expect(sellForm.getByRole("heading", { name: "Check before saving" })).toHaveCount(0);
+  });
+
   test("Debt and Hawala direct journeys remove ambiguous and raw-id controls", async ({ page }) => {
     await page.goto(`${workspace}/transactions/new/debt/receivable?role=owner`);
     await expect(page.getByText("They owe us", { exact: true })).toBeVisible();
