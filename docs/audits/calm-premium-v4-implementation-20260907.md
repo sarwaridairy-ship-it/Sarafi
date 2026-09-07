@@ -89,12 +89,16 @@ The credential-dependent live acceptance runner now requires an actual Business 
 ## Retained evidence
 
 - Task-path targets: [`artifacts/calm-premium-v4/task-paths.json`](../../artifacts/calm-premium-v4/task-paths.json)
+- Human UAT protocol: [`docs/uat/calm-premium-v4-human-uat-protocol.md`](../uat/calm-premium-v4-human-uat-protocol.md)
+- Formula-driven UAT workbook: [`outputs/01a06de4-7b78-7e23-b83f-0dc21d6bb900/SARAFI_Calm_Premium_v4_UAT.xlsx`](../../outputs/01a06de4-7b78-7e23-b83f-0dc21d6bb900/SARAFI_Calm_Premium_v4_UAT.xlsx)
 - English desktop owner Home and 390 px transaction entry
 - Afghan Dari desktop owner Home and 390 px transaction entry
 - Pashto desktop owner Home, 360 px owner Home, and 390 px transaction entry
 - Screenshot generator and cognitive assertions: `tests/e2e/screenshots.spec.ts` and `tests/e2e/calm-premium-v4.spec.ts`
 
 The task-path file records targets, not observed human results. `human_results` remains `null` by design.
+
+The companion workbook preserves that boundary: all blank human metrics show `No data`, missing persona and language evidence fails closed, and the calculated release decision remains `No ship` until every threshold and release control passes. The workbook imports cleanly with five sheets, 249 formulas, 24 validation rules and five conditional-format blocks; its formula-error scan is empty. An unsaved synthetic acceptance case moved every human metric to `Pass`, reduced open gates to zero, and changed the calculated decision to `Ship gate passed`, proving the release logic without recording fabricated UAT. The bundled spreadsheet renderer crashes even on a two-cell smoke workbook in this environment, so visual verification used exported-workbook range and computed-style inspection for every sheet; the renderer limitation is not presented as visual proof.
 
 ## Changed architecture
 
