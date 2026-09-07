@@ -86,3 +86,27 @@ describe("calm premium migration contract", () => {
     expect(migration).toContain("team_invitation_apply_capabilities");
   });
 });
+
+describe("calm premium live fixture contract", () => {
+  const fullProvisioner = readFileSync(
+    new URL("../scripts/security/provision-step15.mjs", import.meta.url),
+    "utf8",
+  );
+  const businessAdminProvisioner = readFileSync(
+    new URL("../scripts/security/provision-premium-business-admin.mjs", import.meta.url),
+    "utf8",
+  );
+
+  it("includes Business Administrator in every fresh security fixture", () => {
+    expect(fullProvisioner).toContain("['BUSINESS_ADMIN_A', 'business_admin']");
+    expect(fullProvisioner).toContain("['BUSINESS_ADMIN_A', 'business_admin', businessA.id]");
+  });
+
+  it("keeps targeted provisioning disposable, tenant-bound, and server-only", () => {
+    expect(businessAdminProvisioner).toContain("const secretKey = process.env.SUPABASE_SECRET_KEY");
+    expect(businessAdminProvisioner).toContain("security_fixture !== true");
+    expect(businessAdminProvisioner).toContain(".eq('id', env.BUSINESS_A_ID)");
+    expect(businessAdminProvisioner).toContain("role_code: 'business_admin'");
+    expect(businessAdminProvisioner).not.toContain("SUPABASE_SECRET_KEY=");
+  });
+});

@@ -16,7 +16,7 @@ const password = () => `${randomBytes(32).toString('base64url')}!S15`
 const suffix = `${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomBytes(4).toString('hex')}`
 const localFile = '.env.security.local'
 const users = [
-  ['OWNER_A', 'owner'], ['MANAGER_A', 'manager'], ['ACCOUNTANT_A', 'accountant'], ['CASHIER_A', 'cashier'], ['VIEWER_A', 'viewer'], ['COMPLIANCE_A', 'compliance'],
+  ['OWNER_A', 'owner'], ['BUSINESS_ADMIN_A', 'business_admin'], ['MANAGER_A', 'manager'], ['ACCOUNTANT_A', 'accountant'], ['CASHIER_A', 'cashier'], ['VIEWER_A', 'viewer'], ['COMPLIANCE_A', 'compliance'],
   ['OWNER_B', 'owner'], ['CASHIER_B', 'cashier'],
 ]
 const credentials = {}
@@ -58,7 +58,7 @@ async function provision() {
   ids.BUSINESS_B_ID = businessB.id
 
   const memberships = [
-    ['MANAGER_A', 'manager', businessA.id], ['ACCOUNTANT_A', 'accountant', businessA.id], ['CASHIER_A', 'cashier', businessA.id], ['VIEWER_A', 'viewer', businessA.id], ['COMPLIANCE_A', 'compliance_officer', businessA.id], ['CASHIER_B', 'cashier', businessB.id],
+    ['BUSINESS_ADMIN_A', 'business_admin', businessA.id], ['MANAGER_A', 'manager', businessA.id], ['ACCOUNTANT_A', 'accountant', businessA.id], ['CASHIER_A', 'cashier', businessA.id], ['VIEWER_A', 'viewer', businessA.id], ['COMPLIANCE_A', 'compliance_officer', businessA.id], ['CASHIER_B', 'cashier', businessB.id],
   ]
   for (const [label, role, organizationId] of memberships) {
     const membership = await insertRow('organization_memberships', { organization_id: organizationId, user_id: ids[`${label}_USER_ID`], role_code: role, active: true }, `membership ${label}`)

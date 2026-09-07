@@ -74,7 +74,7 @@ The migration is not applied to production because the release sequence requires
 |---|---|
 | Lint | PASS, zero warnings |
 | TypeScript project check | PASS |
-| Unit/static capability suite | PASS: 24 files, 82 tests; 1 file and 2 environment-dependent tests skipped |
+| Unit/static capability suite | PASS: 24 files, 84 tests; 1 file and 2 environment-dependent tests skipped |
 | Full Chromium E2E | PASS: 100 tests; 4 credential/environment-dependent tests skipped |
 | Legacy controls regression | PASS: 44 tests; 1 retired offline-draft test skipped |
 | Firefox + WebKit core acceptance | PASS: 82 tests; 4 credential/environment-dependent tests skipped |
@@ -84,7 +84,7 @@ The migration is not applied to production because the release sequence requires
 | Supabase remote migration status | PASS preflight; new migration correctly reported as pending |
 | Production build | PASS: 405 modules transformed; Vite production bundle completed |
 
-The credential-dependent live acceptance runner now requires an actual Business Administrator fixture and asserts both its delegated operations and owner-only denials. The current protected environment lacks only `SARAFI_E2E_BUSINESS_ADMIN_A_EMAIL` and `SARAFI_E2E_BUSINESS_ADMIN_A_PASSWORD`, so this suite was not misrepresented as executed.
+The credential-dependent live acceptance runner now requires an actual Business Administrator fixture and asserts both its delegated operations and owner-only denials. Fresh Step 15 fixture provisioning now creates that role. Existing disposable fixtures can run `npm run security:provision-business-admin`; the targeted provisioner verifies the project and organization, refuses accounts not marked as security fixtures, keeps the Supabase secret in the trusted process environment, and writes only the generated disposable credentials to the ignored fixture file. The current environment has no `SUPABASE_SECRET_KEY`, so its fail-closed preflight was verified but no user or membership was created and the live suite was not misrepresented as executed.
 
 ## Retained evidence
 
@@ -106,6 +106,7 @@ The companion workbook preserves that boundary: all blank human metrics show `No
 - New: `src/features/home/RoleHome.tsx`, `src/features/transactions/TransactionCenter.tsx`, `src/features/manage/ManageSarafi.tsx`
 - New: `src/styles/calm-premium.css`
 - Updated: `src/App.tsx`, `src/lib/financialApi.ts`, acceptance/security script, and E2E suites
+- Updated: full security fixture provisioning; added a targeted Business Administrator fixture provisioner and package command
 - New: capability migration, unit contract tests, objective cognitive-load E2E tests, task-path metrics, and retained screenshots
 
 The old primary-flow transaction chooser and duplicated role-home structures were removed from `App.tsx`. Existing base styles remain for secondary and legacy operational surfaces; Calm Premium classes own the rebuilt primary Home, transaction, reports, management, and responsive surfaces.
@@ -113,7 +114,7 @@ The old primary-flow transaction chooser and duplicated role-home structures wer
 ## Human and external release gates
 
 1. Provision real owner, Business Administrator, manager, accountant, cashier, compliance, viewer, and first-time-user participants in a safe preview environment.
-2. Add the protected Business Administrator live fixture and run the authenticated capability/security suite after applying the migration to that preview database.
+2. In a trusted terminal with `SUPABASE_SECRET_KEY`, run `npm run security:provision-business-admin`, then run the authenticated capability/security suite after applying the migration to the preview database.
 3. Record task success, time, errors, and confusion against the task-path targets.
 4. Obtain Afghan Dari and Pashto terminology sign-off from native reviewers.
 5. Verify physical receipt/print behavior where used.
