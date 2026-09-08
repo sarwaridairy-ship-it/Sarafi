@@ -107,12 +107,13 @@ Rollback strategy:
 - TypeScript: PASS.
 - Source lint: PASS.
 - Unit/integration: 99 passed, 2 skipped.
-- Production build: PASS; 520.87 kB main-chunk warning remains.
+- Production build: PASS; route-level lazy loading reduced the initial application chunk to 484.81 kB (473.5 KiB), with no Vite `>500 kB` warning.
+- Step 18 performance/import gate: PASS; initial application chunk is 484,817 bytes, below the 500 KiB budget.
 - Linked Supabase lint: PASS for currently deployed schema.
 - Migration dry run: PASS/no write; exactly two pending migrations.
 - Chromium Exchange behavior: all three focused cases reached PASS; runner teardown still hangs and was stopped after results.
 - Local in-app browser Exchange check: PASS with both rate legs missing; Review remained blocked until both inline rates were supplied, the implied cross and receive amount were derived correctly, and no console warnings/errors were logged.
-- Playwright is pinned to 1.63.0 and CI emits GitHub-native annotations; the local Windows host still cannot launch a Firefox tab subprocess, so cross-browser certification must come from the remote matrix.
+- Playwright is pinned to 1.63.0 and CI emits GitHub-native annotations. The public Linux matrix completed with 300 passed and 24 skipped across Chromium, Firefox and WebKit; the local Windows host still cannot launch a Firefox tab subprocess.
 
 ## Required evidence before production
 

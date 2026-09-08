@@ -22,7 +22,7 @@ Scope: independent re-audit and forward correction requested by `SARAFI_Whole_Pr
 | Remote migration parity | FAIL by design while frozen | Remote ends at `20260906014500`; pending local migrations are `20260906190754` and `20260907121336` |
 | Backup/PITR/restore status | NOT PROVEN | Not exposed by the available CLI evidence; production migration remains frozen |
 | Branch protection / required checks | NOT PROVEN | GitHub CLI is unavailable in this environment and no authenticated branch-protection evidence is attached |
-| Latest protected CI | NOT PROVEN | Workflow files exist, but no authenticated remote run record is attached |
+| Latest protected CI | PARTIAL | Public branch run `34200072410`/job `101976597282` completed the Linux Chromium/Firefox/WebKit matrix with 300 passed and 24 skipped; that pre-split run failed only at the 500 KiB performance gate. Branch protection and required-check enforcement are still not proven |
 
 ## Reproducible commands
 
@@ -31,7 +31,8 @@ Scope: independent re-audit and forward correction requested by `SARAFI_Whole_Pr
 | `node --max-old-space-size=4096 node_modules\typescript\bin\tsc -b --pretty false` | PASS |
 | `node_modules\.bin\oxlint.cmd --max-warnings=0 src` | PASS |
 | `npm test` | PASS: 25 files passed, 1 skipped; 99 tests passed, 2 skipped |
-| `npm run build` | PASS with warning: main application chunk 520.87 kB |
+| `npm run build` | PASS: route-level lazy loading reduced the initial application chunk to 484.81 kB (473.5 KiB); no Vite `>500 kB` warning |
+| `npm run performance:step18` | PASS: initial application chunk 484,817 bytes, below the 500 KiB budget |
 | `npm audit --audit-level=high` | PASS: 0 vulnerabilities |
 | `python -c "... pglast.parse_sql(...)"` | PASS for `20260907121336_whole_project_integrity_v5.sql` |
 | `npx supabase db lint --linked --level warning` | PASS: no schema errors in the currently deployed remote schema |
@@ -68,7 +69,7 @@ These are release blockers, not implementation claims:
 - Confirm the linked Supabase project is the intended production business scope and attach auth, backup/PITR and restore-drill evidence.
 - Attach a protected GitHub CI run, branch protection, signed release/tag, exact deployment SHA and protected production environment approval.
 - Complete human Dari/Pashto review, A4 plus 58/80 mm physical print review, and timed 390 px cognitive-load tests.
-- Resolve the Playwright web-server teardown hang and make the entire E2E command exit cleanly.
-- Refactor the remaining application monolith and remove the 500 kB main-chunk warning.
+- Resolve or formally accept the local Windows Playwright subprocess/teardown limitation; the remote Linux browser matrix exits cleanly.
+- Continue modularizing the remaining application shell as a maintainability improvement. The enforced startup-bundle gate and Vite warning are resolved.
 
 Until those gates have external evidence, the correct release status is **implementation complete for the addressed code paths, production certification withheld**.

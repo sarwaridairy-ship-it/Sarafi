@@ -137,8 +137,6 @@ import {
 } from "./lib/integrations";
 import { OfflineDraftBook } from "./lib/offline";
 import { indexedDbOfflineStore } from "./lib/offlineStore";
-import { ImportWorkspace } from "./ImportWorkspace";
-import { OpeningExperience } from "./OpeningExperience";
 import { AppIcon, type AppIconName } from "./AppIcon";
 import type { CompletedTrade } from "./ProfessionalWorkspace";
 import { getPublicPlatformStatus, type PublicPlatformStatus } from "./lib/platformApi";
@@ -153,12 +151,15 @@ import {
   type WorkspaceRole,
 } from "./app/capabilities";
 import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot } from "./app/routes";
-import { TransactionCenter } from "./features/transactions/TransactionCenter";
-import { RoleHome } from "./features/home/RoleHome";
-import { ManageSarafi } from "./features/manage/ManageSarafi";
-import { InlineRateResolver } from "./features/rates/InlineRateResolver";
+import type { InlineRateResolverProps } from "./features/rates/InlineRateResolver";
 
 const loadExports = () => import("./lib/exports");
+const ImportWorkspace = lazy(() => import("./ImportWorkspace").then((module) => ({ default: module.ImportWorkspace })));
+const OpeningExperience = lazy(() => import("./OpeningExperience").then((module) => ({ default: module.OpeningExperience })));
+const TransactionCenter = lazy(() => import("./features/transactions/TransactionCenter").then((module) => ({ default: module.TransactionCenter })));
+const ManageSarafi = lazy(() => import("./features/manage/ManageSarafi").then((module) => ({ default: module.ManageSarafi })));
+const RoleHome = lazy(() => import("./features/home/RoleHome").then((module) => ({ default: module.RoleHome })));
+const LazyInlineRateResolver = lazy(() => import("./features/rates/InlineRateResolver").then((module) => ({ default: module.InlineRateResolver })));
 const SettingsView = lazy(() => import("./ProfessionalWorkspace").then((module) => ({ default: module.SettingsView })));
 const ComplianceView = lazy(() => import("./ProfessionalWorkspace").then((module) => ({ default: module.ComplianceView })));
 const ReceiptSuccessDialog = lazy(() => import("./ProfessionalWorkspace").then((module) => ({ default: module.ReceiptSuccessDialog })));
@@ -166,6 +167,19 @@ const BillingView = lazy(() => import("./PlatformWorkspace").then((module) => ({
 const PlatformAdminConsole = lazy(() => import("./PlatformWorkspace").then((module) => ({ default: module.PlatformAdminConsole })));
 
 const openingSessionKey = "sarafi-opening-seen";
+
+function InlineRateResolver(props: InlineRateResolverProps) {
+  const loading = props.language === "en"
+    ? "Checking the approved shop rate…"
+    : props.language === "fa-AF"
+      ? "بررسی نرخ تأییدشده صرافی…"
+      : "د صرافۍ تایید شوی نرخ کتل کېږي…";
+  return (
+    <Suspense fallback={<section className="rate-context-card" role="status">{loading}</section>}>
+      <LazyInlineRateResolver {...props} />
+    </Suspense>
+  );
+}
 
 const helpGuides = {
   en: [
@@ -1931,9 +1945,11 @@ function App() {
 
   if (showOpening)
     return (
-      <OpeningExperience language={language} onComplete={completeOpening}>
-        {openingAuth}
-      </OpeningExperience>
+      <Suspense fallback={<main className="auth-shell" role="status">{t("working")}</main>}>
+        <OpeningExperience language={language} onComplete={completeOpening}>
+          {openingAuth}
+        </OpeningExperience>
+      </Suspense>
     );
   if (!user && !inspectionMode)
     return (
@@ -2228,17 +2244,19 @@ function App() {
           )}
           {routeAuthorized && !dashboardView && (
             transactionCenterActive && !transactionFormActive ? (
-              <TransactionCenter
-                language={language}
-                capabilities={workspaceCapabilities}
-                hawalaEnabled={hawalaEnabled}
-                onOpen={(route) => {
-                  if (route === "/fx/buy") openTrade("BUY_FX");
-                  else if (route === "/fx/sell") openTrade("SELL_FX");
-                  else if (route === "/fx/exchange") openTrade("EXCHANGE_FX");
-                  else navigate(financialRoute(organizationId, route));
-                }}
-              />
+              <Suspense fallback={<section className="panel" role="status">{t("working")}</section>}>
+                <TransactionCenter
+                  language={language}
+                  capabilities={workspaceCapabilities}
+                  hawalaEnabled={hawalaEnabled}
+                  onOpen={(route) => {
+                    if (route === "/fx/buy") openTrade("BUY_FX");
+                    else if (route === "/fx/sell") openTrade("SELL_FX");
+                    else if (route === "/fx/exchange") openTrade("EXCHANGE_FX");
+                    else navigate(financialRoute(organizationId, route));
+                  }}
+                />
+              </Suspense>
             ) : !transactionCenterActive ? (
               <Suspense fallback={<section className="panel" role="status">{t("working")}</section>}>
                 <WorkspaceView
@@ -2281,17 +2299,19 @@ function App() {
             ) : null
           )}
           {routeAuthorized && dashboardView && (
-            <RoleHome
-              language={language}
-              role={workspaceRole}
-              roleLabel={roleLabel}
-              dashboard={dashboard}
-              businessDate={dashboardDate}
-              online={online}
-              privacy={privacy}
-              onTogglePrivacy={() => setPrivacy((value) => !value)}
-              onNavigate={openSection}
-            />
+            <Suspense fallback={<section className="panel" role="status">{t("working")}</section>}>
+              <RoleHome
+                language={language}
+                role={workspaceRole}
+                roleLabel={roleLabel}
+                dashboard={dashboard}
+                businessDate={dashboardDate}
+                online={online}
+                privacy={privacy}
+                onTogglePrivacy={() => setPrivacy((value) => !value)}
+                onNavigate={openSection}
+              />
+            </Suspense>
           )}
         </div>
       </main>

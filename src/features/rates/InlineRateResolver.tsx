@@ -54,6 +54,17 @@ const copy = {
   },
 } as const;
 
+export type InlineRateResolverProps = {
+  organizationId: string | null;
+  branchId: string | null;
+  currency: string;
+  language: Language;
+  canPublish: boolean;
+  value?: InlineRatePublication;
+  onChange: (value: InlineRatePublication | undefined) => void;
+  onReadyChange: (ready: boolean) => void;
+};
+
 export function InlineRateResolver({
   organizationId,
   branchId,
@@ -63,16 +74,7 @@ export function InlineRateResolver({
   value,
   onChange,
   onReadyChange,
-}: {
-  organizationId: string | null;
-  branchId: string | null;
-  currency: string;
-  language: Language;
-  canPublish: boolean;
-  value?: InlineRatePublication;
-  onChange: (value: InlineRatePublication | undefined) => void;
-  onReadyChange: (ready: boolean) => void;
-}) {
+}: InlineRateResolverProps) {
   const text = copy[language];
   const normalizedCurrency = currency.toUpperCase();
   const key = `${organizationId ?? ""}:${branchId ?? ""}:${normalizedCurrency}:AFN`;
