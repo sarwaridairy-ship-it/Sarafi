@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useMatch, useMatches, useNavigate, useParams } from "react-router-dom";
+import type { WorkspaceOutletContext, WorkspaceRouteHandle } from "./app/router";
 import Decimal from "decimal.js";
 import "./App.css";
 import "./professional.css";
@@ -16,7 +17,7 @@ import {
   getMyResumableApprovalDraft,
   getTransactionDetail,
   getOrganizationControlPlane,
-  getNamedFinancialReport,
+  createFinancialReportSnapshot,
   getReconciliationWorkspace,
   listCurrencyCatalog,
   listMoneyAccounts,
@@ -111,6 +112,7 @@ import {
   type OrganizationControlPlane,
   type ReconciliationCloseRecord,
   type ReportExportRecord,
+  type FinancialReportSnapshot,
   listNotifications,
   markNotificationState,
 } from "./lib/financialApi";
@@ -142,7 +144,6 @@ import type { CompletedTrade } from "./ProfessionalWorkspace";
 import { getPublicPlatformStatus, type PublicPlatformStatus } from "./lib/platformApi";
 import {
   canOpenSection,
-  financialPostCapabilities,
   hasAnyCapability,
   hasCapability,
   inspectionCapabilities,
@@ -150,8 +151,9 @@ import {
   type Capability,
   type WorkspaceRole,
 } from "./app/capabilities";
-import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot } from "./app/routes";
+import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot, workspaceSectionPath } from "./app/routes";
 import type { InlineRateResolverProps } from "./features/rates/InlineRateResolver";
+import { ReferenceScanner } from "./features/hawala/ReferenceScanner";
 
 const loadExports = () => import("./lib/exports");
 const ImportWorkspace = lazy(() => import("./ImportWorkspace").then((module) => ({ default: module.ImportWorkspace })));
@@ -458,6 +460,7 @@ function inspectionDashboard(language: Language): DashboardSnapshot {
 function App() {
   validateClientEnvironment();
   const location = useLocation();
+  const matches = useMatches();
   const navigate = useNavigate();
   const platformAdminRoute = location.pathname === "/platform-admin";
   const inspectionMode =
@@ -490,44 +493,12 @@ function App() {
     navigate(`${url.pathname}${url.search}${url.hash}`, { replace: true });
     setShowOpening(false);
   }, [navigate]);
-  const sectionFromPath = (pathname: string, search = "") => {
-    if (pathname.includes("/transactions/new/debt/") || pathname.includes("/transactions/new/debts/") || pathname.includes("/transactions/new/money-in/debt-payment") || pathname.includes("/transactions/new/money-out/debt-payment")) return "Debts";
-    if (pathname.includes("/transactions/new/hawala/")) return "Hawala";
-    if (pathname.endsWith("/transactions/new/debt")) return "Debts";
-    if (pathname.endsWith("/transactions/new/hawala")) return "Hawala";
-    if (pathname.endsWith("/transactions/new/correction")) return "Transactions";
-    if (pathname.includes("/transactions/new")) return "Trade";
-    if (pathname.includes("/transactions/")) return "Transactions";
-    if (pathname.endsWith("/transactions")) return "Transactions";
-    if (pathname.endsWith("/activity")) return "Transactions";
-    if (pathname.endsWith("/money")) return "Cash & Accounts";
-    if (pathname.endsWith("/debts") || pathname.includes("/debts/")) return "Debts";
-    if (pathname.endsWith("/people") || pathname.includes("/customers")) return "People";
-    if (pathname.endsWith("/hawala")) return "Hawala";
-    if (pathname.endsWith("/cashbox-close")) return "Cashbox Close";
-    if (pathname.endsWith("/reconciliation")) return "Reconciliation";
-    if (pathname.endsWith("/reports")) return "Reports";
-    if (pathname.endsWith("/compliance/cases") || pathname.includes("/compliance/cases/") || (pathname.endsWith("/compliance") && new URLSearchParams(search).get("view") === "cases")) return "Compliance Cases";
-    if (pathname.endsWith("/compliance")) return "Compliance Reviews";
-    if (pathname.endsWith("/control/team")) return "Team & Devices";
-    if (pathname.endsWith("/control/security")) return "Security";
-    if (pathname.endsWith("/control/reconciliation")) return "Reconciliation";
-    if (pathname.endsWith("/control/rates")) return "Rates";
-    if (pathname.endsWith("/control/reports")) return "Reports";
-    if (pathname.endsWith("/control/compliance")) return "Compliance";
-    if (pathname.endsWith("/control/billing")) return "Billing";
-    if (pathname.endsWith("/control/import")) return "Import";
-    if (pathname.endsWith("/control/settings") || pathname.endsWith("/control/business")) {
-      const legacyPanel = new URLSearchParams(search).get("panel");
-      if (legacyPanel === "billing") return "Billing";
-      if (legacyPanel === "import") return "Import";
-      return "Business Settings";
-    }
-    if (pathname.endsWith("/control")) return "Control";
-    if (pathname.endsWith("/offline")) return "Offline";
-    return "Dashboard";
-  };
-  const activeSection = sectionFromPath(location.pathname, location.search);
+  const matchedSection = [...matches].reverse().find((match) =>
+    typeof (match.handle as WorkspaceRouteHandle | undefined)?.section === "string"
+  )?.handle as WorkspaceRouteHandle | undefined;
+  const activeSection = matchedSection?.section === "Compliance Reviews" && new URLSearchParams(location.search).get("view") === "cases"
+    ? "Compliance Cases"
+    : matchedSection?.section ?? "Dashboard";
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -557,12 +528,15 @@ function App() {
   const [operationMemo, setOperationMemo] = useState("");
   const [privacy, setPrivacy] = useState(false);
   const [language, setLanguage] = useState<Language>(() => {
+    const requested = new URLSearchParams(window.location.search).get("lang");
+    if (requested === "en" || requested === "fa-AF" || requested === "ps-AF") return requested;
     const saved = window.localStorage.getItem("sarafi-language");
     return saved === "fa-AF" || saved === "ps-AF" ? saved : "en";
   });
   const [online, setOnline] = useState(
     inspectionMode ? true : navigator.onLine,
   );
+  const [clientUpdateAvailable, setClientUpdateAvailable] = useState(false);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null);
   const [, setDashboardError] = useState("");
@@ -695,6 +669,7 @@ function App() {
     [inspectionMode, language, loadedMoneyAccounts, organizationId],
   );
   const [moneyContextRefresh, setMoneyContextRefresh] = useState(0);
+  const [workspaceActivityRefresh, setWorkspaceActivityRefresh] = useState(0);
   const [organizationLoading, setOrganizationLoading] =
     useState(!inspectionMode);
   const [businessName, setBusinessName] = useState("");
@@ -793,6 +768,10 @@ function App() {
   useEffect(() => {
     document.documentElement.dir = isRtl(language) ? "rtl" : "ltr";
     document.documentElement.lang = language;
+    document.getElementById("sarafi-manifest")?.setAttribute(
+      "href",
+      language === "en" ? "/manifest.webmanifest" : `/manifest.${language}.webmanifest`,
+    );
     window.localStorage.setItem("sarafi-language", language);
   }, [language]);
 
@@ -805,6 +784,12 @@ function App() {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
+  }, []);
+
+  useEffect(() => {
+    const showClientUpdate = () => setClientUpdateAvailable(true);
+    window.addEventListener("sarafi:update-available", showClientUpdate);
+    return () => window.removeEventListener("sarafi:update-available", showClientUpdate);
   }, []);
 
   useEffect(() => {
@@ -821,9 +806,32 @@ function App() {
 
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
-    return subscribeToOrganizationActivity(organizationId, () => {
+    return subscribeToOrganizationActivity(organizationId, (table, payload) => {
       setDashboardRefresh((value) => value + 1);
       setMoneyContextRefresh((value) => value + 1);
+      setWorkspaceActivityRefresh((value) => value + 1);
+      if (table === "organization_memberships" || table === "security_audit_events") {
+        void getMyWorkspaceContext().then((result) => {
+          if (result.data) setWorkspaceContexts(result.data);
+        });
+      }
+      if (table === "devices") {
+        const updatedDevice = payload.new;
+        setLinkedDevice((current) => {
+          if (!current || updatedDevice?.id !== current.id) return current;
+          const status = updatedDevice.status;
+          if (status !== "trusted" && status !== "untrusted" && status !== "revoked") return current;
+          return {
+            ...current,
+            status,
+            friendly_name: typeof updatedDevice.friendly_name === "string" ? updatedDevice.friendly_name : current.friendly_name,
+            last_seen_at: typeof updatedDevice.last_seen_at === "string" ? updatedDevice.last_seen_at : current.last_seen_at,
+            revoked_at: typeof updatedDevice.revoked_at === "string" || updatedDevice.revoked_at === null
+              ? updatedDevice.revoked_at
+              : current.revoked_at,
+          };
+        });
+      }
       void refreshNotifications();
     }) ?? undefined;
   }, [organizationId, refreshNotifications]);
@@ -1417,7 +1425,7 @@ function App() {
         businessName: organizationName || u("yourBusiness"),
         reference:
           completedTrade.receiptNumber || completedTrade.journalEntryId,
-        type: t("recordTrade"),
+        type: completedTrade.typeLabel ?? t("recordTrade"),
         amount: completedTrade.receivedAmount,
         currency: completedTrade.receivedCurrency,
         rate: completedTrade.rate,
@@ -1514,46 +1522,41 @@ function App() {
       setToast(localizedFinancialError(language, result.error, u("couldNotSave")));
       return;
     }
+    const completedKind = operationKind;
+    const completedAmount = operationAmount;
+    const completedCurrency = operationCurrency;
+    const journalEntryId = String(result.data?.id ?? "");
+    const receiptResult = journalEntryId
+      ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+      : { data: null, error: "Missing journal entry reference" };
+    const sourceName = moneyAccounts.find((account) => account.id === operationSourceAccount)?.name;
+    const destinationName = moneyAccounts.find((account) => account.id === operationDestinationAccount)?.name;
+    setCompletedTrade({
+      receiptNumber: receiptResult.data?.receipt_number ?? null,
+      journalEntryId,
+      givenAmount: completedAmount,
+      givenCurrency: completedCurrency,
+      receivedAmount: completedAmount,
+      receivedCurrency: completedCurrency,
+      rate: "—",
+      occurredAt: new Date().toISOString(),
+      typeLabel: operationLabel(completedKind),
+      repeatPath: location.pathname,
+      repeatOperation: completedKind,
+      flowRows: [
+        ...(sourceName ? [{ label: language === "en" ? "From" : language === "fa-AF" ? "از" : "له", value: sourceName }] : []),
+        ...(destinationName ? [{ label: language === "en" ? "To" : language === "fa-AF" ? "به" : "ته", value: destinationName }] : []),
+        { label: language === "en" ? "Amount" : language === "fa-AF" ? "مبلغ" : "مبلغ", value: `${formatFinancialAmount(completedAmount)} ${completedCurrency}` },
+      ],
+    });
     setOperationKind(null);
     setOperationRatePublication(undefined);
-    openSection("Trade", true);
     setDashboardRefresh((value) => value + 1);
-    setToast(u("savedSuccessfully"));
+    setMoneyContextRefresh((value) => value + 1);
   };
 
   const sectionPath = (section: string) => {
-    const root = organizationId && organizationId !== "inspection" ? `/app/${organizationId}` : "/app/inspection";
-    return ({
-      Dashboard: `${root}/home`,
-      Trade: `${root}/transactions/new`,
-      "Transaction FX": `${root}/transactions/new/fx/buy`,
-      "Transaction Money In": `${root}/transactions/new/money-in/customer`,
-      "Transaction Money Out": `${root}/transactions/new/money-out/customer`,
-      "Transaction Move Money": `${root}/transactions/new/move/cashbox`,
-      "Transaction Debt": `${root}/transactions/new/debt/receivable`,
-      "Transaction Hawala": `${root}/transactions/new/hawala/send`,
-      "Transaction Correction": `${root}/transactions/new/correction`,
-      "Transaction Opening": `${root}/transactions/new/opening-money`,
-      Transactions: `${root}/transactions`,
-      "Cash & Accounts": `${root}/money`,
-      People: `${root}/customers`,
-      Debts: `${root}/debts`,
-      Hawala: `${root}/hawala`,
-      "Team & Devices": `${root}/control/team`,
-      Reconciliation: `${root}/reconciliation`,
-      Rates: `${root}/control/rates`,
-      Reports: `${root}/reports`,
-      Compliance: `${root}/compliance`,
-      "Compliance Reviews": `${root}/compliance`,
-      "Compliance Cases": `${root}/compliance?view=cases`,
-      "Cashbox Close": `${root}/cashbox-close`,
-      Control: `${root}/control`,
-      "Business Settings": `${root}/control/business`,
-      Security: `${root}/control/security`,
-      Import: `${root}/control/import`,
-      Billing: `${root}/control/billing`,
-      Offline: `${root}/offline`,
-    } as Record<string, string>)[section] ?? `${root}/home`;
+    return workspaceSectionPath(organizationId, section, cashboxId);
   };
   const openSection = (section: string, replace = false) => {
     setShowBranchMenu(false);
@@ -1564,8 +1567,20 @@ function App() {
     if (organizationId !== "inspection") await markNotificationState(notice.id, dismiss ? "dismissed" : "read");
     setNotifications((current) => dismiss ? current.filter((item) => item.id !== notice.id) : current.map((item) => item.id === notice.id ? { ...item, status: "read" } : item));
     if (!dismiss) {
-      const destination = notice.notification_type === "compliance_alert" ? "Compliance" : notice.notification_type === "cashbox_variance" ? "Reconciliation" : "Team & Devices";
-      openSection(destination);
+      const root = workspaceRoot(organizationId);
+      const subject = encodeURIComponent(notice.subject_id);
+      const destination = notice.notification_type === "compliance_alert"
+        ? `${root}/compliance/cases/${subject}`
+        : notice.notification_type === "cashbox_variance"
+          ? `${root}/cashboxes/${subject}/close`
+          : notice.notification_type.includes("approval")
+            ? `${root}/control/team/approvals/${subject}`
+            : notice.notification_type.includes("device")
+              ? `${root}/control/team/devices/${subject}`
+              : notice.notification_type.includes("hawala")
+                ? `${root}/hawala/${subject}`
+                : `${root}/transactions/${subject}`;
+      navigate(destination);
       setShowNotifications(false);
     }
   };
@@ -1629,12 +1644,30 @@ function App() {
       setToast(localizedFinancialError(language, result.error, u("couldNotSave")));
       return;
     }
+    const journalEntryId = String(result.data?.id ?? "");
+    const receiptResult = journalEntryId
+      ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+      : { data: null, error: "Missing journal entry reference" };
+    setCompletedTrade({
+      receiptNumber: receiptResult.data?.receipt_number ?? null,
+      journalEntryId,
+      givenAmount: "—",
+      givenCurrency: "",
+      receivedAmount: openingAmount,
+      receivedCurrency: openingCurrency,
+      rate: "—",
+      occurredAt: new Date().toISOString(),
+      typeLabel: u("openingBalance"),
+      repeatPath: location.pathname,
+      flowRows: [
+        { label: language === "en" ? "To" : language === "fa-AF" ? "به" : "ته", value: activeMoneyAccountName },
+        { label: language === "en" ? "Amount" : language === "fa-AF" ? "مبلغ" : "مبلغ", value: `${formatFinancialAmount(openingAmount)} ${openingCurrency}` },
+      ],
+    });
     setOpeningAmount("");
     setOpeningRatePublication(undefined);
-    openSection("Trade", true);
     setDashboardRefresh((value) => value + 1);
     setMoneyContextRefresh((value) => value + 1);
-    setToast(u("savedSuccessfully"));
   };
 
   const dashboardView = activeSection === "Dashboard";
@@ -1664,14 +1697,20 @@ function App() {
       return;
     }
     const action = params.get("action") ?? ({
+      "/money-in/receive": "RECEIVE_MONEY",
       "/money-in/customer": "RECEIVE_MONEY",
       "/money-in/income": "RECORD_INCOME",
+      "/money-in/owner-investment": "OWNER_INVESTMENT",
       "/money-in/owner-capital": "OWNER_INVESTMENT",
+      "/money-out/pay": "PAY_MONEY",
       "/money-out/customer": "PAY_MONEY",
       "/money-out/expense": "RECORD_EXPENSE",
       "/money-out/owner-withdrawal": "OWNER_WITHDRAWAL",
+      "/move/transfer": "TRANSFER_CASH",
       "/move/cashbox": "TRANSFER_CASH",
       "/move/branch": "TRANSFER_CASH",
+      "/move/bank-deposit": "BANK_DEPOSIT",
+      "/move/bank-withdrawal": "BANK_WITHDRAWAL",
       "/move/bank": "BANK_DEPOSIT",
     } as Partial<Record<NonNullable<typeof activeFinancialRoute>, OperationKind>>)[activeFinancialRoute ?? "/fx/buy"]
       ?? (location.pathname.endsWith("/transactions/new/money-in") ? "RECEIVE_MONEY"
@@ -1716,18 +1755,21 @@ function App() {
   /* oxlint-enable react/set-state-in-effect */
   const hawalaEnabled = enabledFeatureCodes.includes("hawala");
   const activeWorkspaceContext = workspaceContexts.find((context) => context.membership_id === activeMembershipId) ?? workspaceContexts.find((context) => context.organization_id === organizationId);
+  const capabilityContractTtlSeconds = activeWorkspaceContext?.capability_contract?.expires_in_seconds;
+  useEffect(() => {
+    if (capabilityContractTtlSeconds === undefined || inspectionMode) return;
+    const delay = Math.max(1_000, Math.min(capabilityContractTtlSeconds * 1_000, 300_000));
+    const timeout = window.setTimeout(() => {
+      void getMyWorkspaceContext().then((result) => {
+        if (result.data) setWorkspaceContexts(result.data);
+      });
+    }, delay);
+    return () => window.clearTimeout(timeout);
+  }, [capabilityContractTtlSeconds, inspectionMode]);
   const workspaceCapabilities = inspectionMode
     ? inspectionCapabilities(workspaceRole)
     : activeWorkspaceContext?.capabilities ?? [];
   const capability = (required: Capability) => hasCapability(workspaceCapabilities, required);
-  const canPostFinancial =
-    hasAnyCapability(workspaceCapabilities, financialPostCapabilities) &&
-    (workspaceRole !== "cashier" || linkedDevice?.status === "trusted");
-  const cashierDeviceWaiting =
-    workspaceRole === "cashier" && linkedDevice?.status !== "trusted";
-  const postingAccessNotice = cashierDeviceWaiting
-    ? u("deviceAwaitingOwner")
-    : u("readOnlyRoleNotice");
   const activityLabel = language === "en" ? "Activity" : language === "fa-AF" ? "فعالیت" : "فعالیت";
   const myActivityLabel = language === "en" ? "My Activity" : language === "fa-AF" ? "فعالیت من" : "زما فعالیت";
   const makeTransactionLabel = language === "en" ? "Make a Transaction" : t("newTransaction");
@@ -1736,6 +1778,12 @@ function App() {
   const reconcileLabel = language === "en" ? "Reconcile" : t("reconciliation");
   const manageSarafiLabel = language === "en" ? "Manage Sarafi" : language === "fa-AF" ? "مدیریت سرافی" : "سرافي اداره کړئ";
   const reviewsLabel = language === "en" ? "Reviews" : language === "fa-AF" ? "بررسی‌ها" : "څېړنې";
+  const casesLabel = language === "en" ? "Cases" : language === "fa-AF" ? "پرونده‌ها" : "قضیې";
+  const searchLabel = language === "en" ? "Search" : language === "fa-AF" ? "جستجو" : "لټون";
+  const cashboxesLabel = language === "en" ? "Cashboxes" : language === "fa-AF" ? "صندوق‌ها" : "صندوقونه";
+  const closeCashboxLabel = language === "en" ? "Close Cashbox" : language === "fa-AF" ? "بستن صندوق" : "صندوق تړل";
+  const teamLabel = language === "en" ? "Team" : language === "fa-AF" ? "کارمندان" : "کارکوونکي";
+  const hawalaReviewLabel = language === "en" ? "Hawala Review" : language === "fa-AF" ? "بررسی حواله" : "د حوالې څېړنه";
   const navigationLabel: Record<string, [string, AppIconName]> = {
     Dashboard: [t("home"), "home"],
     Trade: [makeTransactionLabel, "trade"],
@@ -1743,10 +1791,17 @@ function App() {
     "Cash & Accounts": [myMoneyLabel, "wallet"],
     People: [customersLabel, "people"],
     Reports: [t("reports"), "report"],
+    Debts: [t("debts"), "debt"],
+    Hawala: [hawalaReviewLabel, "hawala"],
     Reconciliation: [reconcileLabel, "cashbox"],
+    "Cashbox Close": [closeCashboxLabel, "cashbox"],
+    "Team & Devices": [teamLabel, "people"],
     "Compliance Reviews": [reviewsLabel, "shield"],
+    "Compliance Cases": [casesLabel, "shield"],
+    Search: [searchLabel, "search"],
     Control: [manageSarafiLabel, "settings"],
   };
+  if (workspaceCapabilities.includes("dashboard.manager")) navigationLabel["Cash & Accounts"] = [cashboxesLabel, "wallet"];
   const primaryNavigation: Array<[string, string, AppIconName]> = navigationSections(workspaceCapabilities)
     .map((section) => [section, navigationLabel[section][0], navigationLabel[section][1]]);
   const roleName = (role: string) =>
@@ -1769,9 +1824,9 @@ function App() {
   const normalizedSearch = globalSearch.trim().toLocaleLowerCase(language);
   const globalSearchResults = normalizedSearch
     ? [
-        ...tradeCounterparties.map((person) => ({ id: `person-${person.id}`, section: "People", kind: searchUi[language].people, label: person.display_name, detail: person.phone ?? "" })),
-        ...moneyAccounts.map((account) => ({ id: `account-${account.id}`, section: "Cash & Accounts", kind: searchUi[language].account, label: account.name, detail: account.reference_label ?? account.account_type.replaceAll("_", " ") })),
-        ...trades.map((trade) => ({ id: `transaction-${trade.id}`, section: "Transactions", kind: searchUi[language].transaction, label: trade.customer, detail: `${trade.direction} · ${trade.status}` })),
+        ...tradeCounterparties.map((person) => ({ id: `person-${person.id}`, path: `${workspaceRoot(organizationId)}/customers/${person.id}`, kind: searchUi[language].people, label: person.display_name, detail: person.phone ?? "" })),
+        ...moneyAccounts.map((account) => ({ id: `account-${account.id}`, path: `${workspaceRoot(organizationId)}/money/${account.id}`, kind: searchUi[language].account, label: account.name, detail: account.reference_label ?? account.account_type.replaceAll("_", " ") })),
+        ...trades.map((trade) => ({ id: `transaction-${trade.id}`, path: `${workspaceRoot(organizationId)}/transactions/${trade.id}`, kind: searchUi[language].transaction, label: trade.customer, detail: `${trade.direction} · ${trade.status}` })),
       ].filter((item) => `${item.label} ${item.detail} ${item.kind}`.toLocaleLowerCase(language).includes(normalizedSearch)).slice(0, 10)
     : [];
   const operationLabel = (kind: OperationKind) =>
@@ -1877,6 +1932,9 @@ function App() {
     moneyAccounts.find((account) => account.cashbox_id === cashboxId)?.name ??
     moneyAccounts.find((account) => account.account_type === "cashbox")?.name ??
     u("activeCashboxAccount");
+  const preparedBy = inspectionMode
+    ? roleLabel
+    : String(user?.user_metadata?.display_name ?? user?.email ?? roleLabel);
 
   const openingAuth = !user && !inspectionMode ? (
     <AuthScreen
@@ -2117,9 +2175,6 @@ function App() {
           {primaryNavigation.map(([item, label, icon]) => (
             <button
               className={activeSection === item || (item === "Trade" && location.pathname.includes("/transactions/new/")) ? "nav-item active" : "nav-item"}
-              disabled={item === "Trade" && !canPostFinancial}
-              aria-describedby={item === "Trade" && !canPostFinancial ? "posting-access-note" : undefined}
-              title={item === "Trade" && !canPostFinancial ? postingAccessNotice : undefined}
               key={item}
               onClick={() => {
                 if (item === "Search") {
@@ -2158,9 +2213,6 @@ function App() {
         {primaryNavigation.map(([item, label, icon]) => (
           <button
             className={activeSection === item || (item === "Trade" && location.pathname.includes("/transactions/new/")) ? "active" : ""}
-            disabled={item === "Trade" && !canPostFinancial}
-            aria-describedby={item === "Trade" && !canPostFinancial ? "posting-access-note" : undefined}
-            title={item === "Trade" && !canPostFinancial ? postingAccessNotice : undefined}
             key={item}
             onClick={() => {
               if (item === "Search") {
@@ -2188,7 +2240,7 @@ function App() {
               <button className="icon-button" onClick={() => { setShowSearch((value) => !value); setShowNotifications(false); }} aria-label={searchUi[language].open} aria-expanded={showSearch}><AppIcon name="search" /></button>
               {showSearch && <section className="global-search-popover" aria-label={searchUi[language].open}>
                 <label><AppIcon name="search" size={18} /><input autoFocus value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} placeholder={searchUi[language].placeholder} /></label>
-                {normalizedSearch ? <div className="global-search-results">{globalSearchResults.length ? globalSearchResults.map((result) => <button key={result.id} onClick={() => { openSection(result.section); setShowSearch(false); setGlobalSearch(""); }}><span><b>{result.label}</b><small>{result.detail}</small></span><em>{result.kind}</em></button>) : <p>{searchUi[language].empty}</p>}</div> : null}
+                {normalizedSearch ? <div className="global-search-results">{globalSearchResults.length ? globalSearchResults.map((result) => <button key={result.id} onClick={() => { navigate(result.path); setShowSearch(false); setGlobalSearch(""); }}><span><b>{result.label}</b><small>{result.detail}</small></span><em>{result.kind}</em></button>) : <p>{searchUi[language].empty}</p>}</div> : null}
               </section>}
             </div>
             <div className="notification-control">
@@ -2232,6 +2284,8 @@ function App() {
           </div>
         </header>
         <div className="content-wrap">
+          <Outlet context={{ content: <>
+          {clientUpdateAvailable && <div className="system-announcement service-update" role="status"><span><b>{language === "en" ? "A verified app update is ready." : language === "fa-AF" ? "به‌روزرسانی تأییدشده برنامه آماده است." : "د اپ تایید شوی تازه‌والی چمتو دی."}</b><small>{language === "en" ? "Finish your current task, then update safely." : language === "fa-AF" ? "کار فعلی را تمام کرده، سپس با اطمینان به‌روزرسانی کنید." : "اوسنی کار پای ته ورسوئ، بیا په خوندي ډول اپ تازه کړئ."}</small></span><button onClick={() => { void navigator.serviceWorker.getRegistration().then((registration) => registration?.waiting?.postMessage({ type: "SKIP_WAITING" })); }}>{language === "en" ? "Update app" : language === "fa-AF" ? "به‌روزرسانی برنامه" : "اپ تازه کړئ"}</button></div>}
           {platformStatus?.web_version?.force_update && <div className="system-announcement security" role="alert"><span><b>{language === "en" ? "A new SARAFI web version is ready." : language === "fa-AF" ? "نسخه تازه ویب صرافی آماده است." : "د صرافۍ نوې وېب نسخه چمتو ده."}</b><small>{language === "en" ? platformStatus.web_version.release_notes_en : language === "fa-AF" ? platformStatus.web_version.release_notes_dari : platformStatus.web_version.release_notes_pashto}</small></span><button onClick={() => window.location.reload()}>{language === "en" ? "Refresh now" : language === "fa-AF" ? "تازه کردن" : "اوس تازه کول"}</button></div>}
           {platformStatus?.announcements.map((notice) => <div className={`system-announcement ${notice.type}`} role="status" key={notice.id}><span>{language === "en" ? notice.message_en : language === "fa-AF" ? notice.message_dari : notice.message_pashto}</span></div>)}
           {!routeAuthorized && (
@@ -2253,6 +2307,7 @@ function App() {
                     if (route === "/fx/buy") openTrade("BUY_FX");
                     else if (route === "/fx/sell") openTrade("SELL_FX");
                     else if (route === "/fx/exchange") openTrade("EXCHANGE_FX");
+                    else if (route === "/debts" || route === "/hawala/partners") navigate(`${workspaceRoot(organizationId)}${route}`);
                     else navigate(financialRoute(organizationId, route));
                   }}
                 />
@@ -2263,13 +2318,15 @@ function App() {
                   language={language}
                   section={activeSection}
                   pathname={location.pathname}
-                  dashboard={dashboard}
+                  activityRefresh={workspaceActivityRefresh}
                   businessDate={dashboardDate}
                   organizationId={organizationId}
                   organizationName={organizationName || u("yourBusiness")}
                   branchName={
                     inspectionMode ? t("mainBranch") : branchName || t("mainBranch")
                   }
+                  cashboxName={activeMoneyAccountName}
+                  preparedBy={preparedBy}
                   roleLabel={roleLabel}
                   canManageTeam={capability("team.manage")}
                   canManageCapabilities={capability("team.capabilities.manage")}
@@ -2290,6 +2347,7 @@ function App() {
                   onMoneyContextChanged={() =>
                     setMoneyContextRefresh((value) => value + 1)
                   }
+                  onFinancialCompleted={setCompletedTrade}
                   onCounterpartyChanged={(person) => {
                     if (person) setTradeCounterparties((current) => current.some((item) => item.id === person.id) ? current : [...current, person]);
                     setCounterpartyRefresh((value) => value + 1);
@@ -2313,8 +2371,6 @@ function App() {
               />
             </Suspense>
           )}
-        </div>
-      </main>
       {routeAuthorized && fxFormActive && transactionFormActive && (
         <div className="transaction-inline-form">
           {fxApprovalBusy && !fxApprovalDraft ? <div className="empty-live" role="status">{language === "en" ? "Loading approval draft…" : language === "fa-AF" ? "بارگیری پیش‌نویس تأیید…" : "د تایید مسوده پورته کېږي…"}</div> : null}
@@ -2993,6 +3049,9 @@ function App() {
           </form>
         </div>
       )}
+          </> } satisfies WorkspaceOutletContext} />
+        </div>
+      </main>
       {completedTrade && (
         <Suspense fallback={null}>
           <ReceiptSuccessDialog
@@ -3001,13 +3060,18 @@ function App() {
             trade={completedTrade}
             onPrint={(width) => void printCompletedTrade(width)}
             onNewSimilar={() => {
+              const repeatPath = completedTrade.repeatPath;
+              const repeatOperation = completedTrade.repeatOperation;
               setCompletedTrade(null);
-              openTrade(tradeSide);
+              if (repeatOperation) setOperationKind(repeatOperation as OperationKind);
+              if (repeatPath) navigate(repeatPath);
+              else openTrade(tradeSide);
             }}
             onViewTransaction={() => {
               const entryId = completedTrade.journalEntryId;
+              const detailPath = completedTrade.detailPath;
               setCompletedTrade(null);
-              navigate(`${sectionPath("Transactions")}/${entryId}`);
+              navigate(detailPath ?? `${sectionPath("Transactions")}/${entryId}`);
             }}
             onDone={() => {
               setCompletedTrade(null);
@@ -3072,11 +3136,13 @@ function WorkspaceView({
   language,
   section,
   pathname,
-  dashboard,
+  activityRefresh,
   businessDate,
   organizationId,
   organizationName,
   branchName,
+  cashboxName,
+  preparedBy,
   roleLabel,
   canManageTeam,
   canManageCapabilities,
@@ -3095,16 +3161,19 @@ function WorkspaceView({
   onRoute,
   onToast,
   onMoneyContextChanged,
+  onFinancialCompleted,
   onCounterpartyChanged,
 }: {
   language: Language;
   section: string;
   pathname: string;
-  dashboard: DashboardSnapshot | null;
+  activityRefresh: number;
   businessDate: string;
   organizationId: string | null;
   organizationName: string;
   branchName: string;
+  cashboxName: string;
+  preparedBy: string;
   roleLabel: string;
   canManageTeam: boolean;
   canManageCapabilities: boolean;
@@ -3123,6 +3192,7 @@ function WorkspaceView({
   onRoute: (path: string) => void;
   onToast: (message: string) => void;
   onMoneyContextChanged: () => void;
+  onFinancialCompleted: (transaction: CompletedTrade) => void;
   onCounterpartyChanged: (person?: CounterpartyRecord) => void;
 }) {
   if (section === "Billing" && organizationId)
@@ -3163,6 +3233,8 @@ function WorkspaceView({
       <ComplianceView
         language={language}
         organizationId={organizationId}
+        pathname={pathname}
+        activityRefresh={activityRefresh}
         onDashboard={onDashboard}
       />
     );
@@ -3182,6 +3254,7 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         branchId={branchId}
+        activityRefresh={activityRefresh}
         canManage={canManageMoney}
         onDashboard={onDashboard}
         onToast={onToast}
@@ -3193,6 +3266,7 @@ function WorkspaceView({
       <PeopleView
         language={language}
         organizationId={organizationId}
+        branchId={branchId}
         canListDocuments={hasCapability(capabilities, "documents.list")}
         canUploadDocuments={hasCapability(capabilities, "documents.upload")}
         canViewDocuments={hasCapability(capabilities, "documents.view")}
@@ -3216,12 +3290,16 @@ function WorkspaceView({
   if (section === "Reports")
     return (
       <ReportsView
+        key={`${organizationId}:${branchId}:${cashboxId}`}
         language={language}
-        dashboard={dashboard}
         businessDate={businessDate}
         organizationId={organizationId}
         organizationName={organizationName}
         branchName={branchName}
+        cashboxName={cashboxName}
+        preparedBy={preparedBy}
+        branchId={branchId}
+        cashboxId={cashboxId}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3231,6 +3309,7 @@ function WorkspaceView({
       <TeamDevicesView
         language={language}
         organizationId={organizationId}
+        activityRefresh={activityRefresh}
         canManage={canManageTeam}
         canManageCapabilities={canManageCapabilities}
         canInviteBusinessAdmin={canInviteBusinessAdmin}
@@ -3245,11 +3324,13 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         branchId={branchId}
+        deviceId={deviceId}
         pathname={pathname}
         capabilities={capabilities}
         onRoute={onRoute}
         onDashboard={onDashboard}
         onToast={onToast}
+        onFinancialCompleted={onFinancialCompleted}
       />
     );
   if (section === "Reconciliation" || section === "Cashbox Close")
@@ -3276,6 +3357,7 @@ function WorkspaceView({
         onRoute={onRoute}
         onDashboard={onDashboard}
         onToast={onToast}
+        onFinancialCompleted={onFinancialCompleted}
       />
     );
   if (section === "Offline")
@@ -3493,6 +3575,7 @@ function OfflineView({
 function TeamDevicesView({
   language,
   organizationId,
+  activityRefresh,
   canManage,
   canManageCapabilities,
   canInviteBusinessAdmin,
@@ -3502,6 +3585,7 @@ function TeamDevicesView({
 }: {
   language: Language;
   organizationId: string | null;
+  activityRefresh: number;
   canManage: boolean;
   canManageCapabilities: boolean;
   canInviteBusinessAdmin: boolean;
@@ -3630,6 +3714,10 @@ function TeamDevicesView({
   const [deviceBusy, setDeviceBusy] = useState("");
   const [approvalReason, setApprovalReason] = useState("");
   const [approvalBusy, setApprovalBusy] = useState("");
+  const { deviceId: routeDeviceId = null, approvalId: routeApprovalId = null } = useParams<{
+    deviceId: string;
+    approvalId: string;
+  }>();
 
   const roleOptions = [
     ...(canInviteBusinessAdmin ? ["business_admin"] : []),
@@ -3664,7 +3752,23 @@ function TeamDevicesView({
         if (result.error || requestResult.error || capabilityResult.error) onToast(ux(language, "teamLoadFailed"));
         setLoading(false);
       });
-  }, [inspection, language, onToast, organizationId, refresh]);
+  }, [activityRefresh, inspection, language, onToast, organizationId, refresh]);
+
+  useEffect(() => {
+    if (routeDeviceId) {
+      // oxlint-disable-next-line react/set-state-in-effect -- The URL selects the exact team sub-workspace for a deep link.
+      setTeamSection("devices");
+    } else if (routeApprovalId) {
+      // oxlint-disable-next-line react/set-state-in-effect -- The URL selects the exact approval sub-workspace for a deep link.
+      setTeamSection("roles");
+    }
+    const targetId = routeDeviceId ? `device-${routeDeviceId}` : routeApprovalId ? `approval-${routeApprovalId}` : "";
+    if (!targetId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [devices, approvals, routeApprovalId, routeDeviceId]);
 
   useEffect(() => {
     if (!canManage || inspection) return;
@@ -4470,7 +4574,7 @@ function TeamDevicesView({
           <div className="balance-list">
             {devices.length ? (
               devices.map((device) => (
-                <div className="balance-row" key={device.id}>
+                <div className={`balance-row ${routeDeviceId === device.id ? "deep-link-focus" : ""}`} id={`device-${device.id}`} key={device.id}>
                   <span className="currency-badge usd">D</span>
                   <span className="balance-name">
                     <b>
@@ -4510,7 +4614,7 @@ function TeamDevicesView({
         <div className="balance-list">
           {approvals.length ? (
             approvals.map((approval) => (
-              <div className="balance-row" key={approval.id}>
+              <div className={`balance-row ${routeApprovalId === approval.id ? "deep-link-focus" : ""}`} id={`approval-${approval.id}`} key={approval.id}>
                 <span className="currency-badge usd">
                   {approval.status === "pending" ? "!" : "✓"}
                 </span>
@@ -4547,6 +4651,7 @@ function MoneyLocationView({
   language,
   organizationId,
   branchId,
+  activityRefresh,
   canManage,
   onDashboard,
   onToast,
@@ -4555,6 +4660,7 @@ function MoneyLocationView({
   language: Language;
   organizationId: string | null;
   branchId: string | null;
+  activityRefresh: number;
   canManage: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
@@ -4567,6 +4673,7 @@ function MoneyLocationView({
   const [view, setView] = useState<"currency" | "location">("currency");
   const [currency, setCurrency] = useState("ALL");
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+  const { accountId: routeAccountId = null } = useParams<{ accountId: string }>();
   const [loadedAccounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
   const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
   const accounts = organizationId === "inspection"
@@ -4666,6 +4773,13 @@ function MoneyLocationView({
   const visibleSnapshot = inspection ? previewSnapshot : snapshot;
   const visibleEvidence = inspection ? previewEvidence : evidence;
   useEffect(() => {
+    if (!routeAccountId) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- The route is the source of truth for an exact money-account deep link.
+    setView("location");
+    // oxlint-disable-next-line react/set-state-in-effect -- The route is the source of truth for an exact money-account deep link.
+    setSelectedLocation(routeAccountId);
+  }, [routeAccountId]);
+  useEffect(() => {
     if (!organizationId) return;
     if (organizationId === "inspection") return;
     void Promise.all([
@@ -4682,7 +4796,7 @@ function MoneyLocationView({
         onToast(ux(language, "couldNotLoad"));
       setLoading(false);
     });
-  }, [language, onToast, organizationId]);
+  }, [activityRefresh, language, onToast, organizationId]);
 
   const refreshControls = async () => {
     if (!organizationId || organizationId === "inspection") return;
@@ -4959,7 +5073,8 @@ function MoneyLocationView({
             {rows.length ? (
               rows.map((row) => (
                 <button
-                  className="balance-row"
+                  className={`balance-row ${routeAccountId === row.selectionKey ? "deep-link-focus" : ""}`}
+                  id={row.selectionKey ? `money-account-${row.selectionKey}` : undefined}
                   key={row.key}
                   onClick={() =>
                     setSelectedLocation(
@@ -5100,6 +5215,7 @@ function MoneyLocationView({
 function PeopleView({
   language,
   organizationId,
+  branchId,
   canListDocuments,
   canUploadDocuments,
   canViewDocuments,
@@ -5110,6 +5226,7 @@ function PeopleView({
 }: {
   language: Language;
   organizationId: string | null;
+  branchId: string | null;
   canListDocuments: boolean;
   canUploadDocuments: boolean;
   canViewDocuments: boolean;
@@ -5145,7 +5262,7 @@ function PeopleView({
   const [newPersonType, setNewPersonType] = useState<"customer" | "saraf" | "hawala_partner" | "supplier" | "employee" | "other">("customer");
   const [personBusy, setPersonBusy] = useState(false);
   const [selectedResult, setSelectedResult] = useState<CounterpartyRecord | null>(null);
-  const routeCounterpartyId = location.pathname.match(/\/customers\/([^/]+)$/)?.[1] ?? null;
+  const { customerId: routeCounterpartyId = null } = useParams<{ customerId: string }>();
   const selected = routeCounterpartyId
     ? organizationId === "inspection"
       ? people.find((person) => person.id === routeCounterpartyId) ?? null
@@ -5241,7 +5358,7 @@ function PeopleView({
   };
   const submitPerson = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!organizationId) return;
+    if (!organizationId || !branchId) return;
     if (organizationId === "inspection") {
       const created: CounterpartyRecord = {
         id: crypto.randomUUID(),
@@ -5259,6 +5376,7 @@ function PeopleView({
     setPersonBusy(true);
     const result = await createCounterparty({
       organizationId,
+      branchId,
       displayName: newPersonName,
       counterpartyType: newPersonType,
       phone: newPersonPhone,
@@ -5530,7 +5648,7 @@ function TransactionsView({
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [entries, setEntries] = useState<JournalRecord[]>([]);
   const [selectedResult, setSelectedResult] = useState<JournalRecord | null>(null);
-  const routeEntryId = location.pathname.match(/\/transactions\/([^/]+)$/)?.[1] ?? null;
+  const { transactionId: routeEntryId = null } = useParams<{ transactionId: string }>();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const visibleEntries: JournalRecord[] = useMemo(() => organizationId === "inspection"
@@ -6019,20 +6137,26 @@ function RatesView({
 
 function ReportsView({
   language,
-  dashboard,
   businessDate,
   organizationId,
   organizationName,
   branchName,
+  cashboxName,
+  preparedBy,
+  branchId,
+  cashboxId,
   onDashboard,
   onToast,
 }: {
   language: Language;
-  dashboard: DashboardSnapshot | null;
   businessDate: string;
   organizationId: string | null;
   organizationName: string;
   branchName: string;
+  cashboxName: string;
+  preparedBy: string;
+  branchId: string | null;
+  cashboxId: string | null;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -6068,14 +6192,21 @@ function ReportsView({
     "fa-AF": { buy_fx: "خرید ارز", sell_fx: "فروش ارز", exchange_fx: "تبدیل دو ارز", opening_balance: "پول آغاز کار", record_expense: "مصرف", record_income: "عاید", owner_investment: "افزایش سرمایه مالک", owner_withdrawal: "برداشت مالک", bank_deposit: "واریز به بانک", bank_withdrawal: "برداشت از بانک", transfer_cash: "انتقال پول", receive_money: "دریافت پول", pay_money: "پرداخت پول", reversal: "معامله برگشتی", cash_variance_adjustment: "اصلاح تفاوت صندوق", asset: "دارایی", liability: "بدهی", equity: "سرمایه مالک", income: "عاید", expense: "مصرف", branch_balance: "موجودی شعبه", carrying_value: "ارزش ثبت‌شده به افغانی", financial_actions: "کارهای مالی", overdue: "وقت‌گذشته", receivable: "به ما بدهکار است", payable: "ما بدهکار استیم", no_due_date: "بدون تاریخ پرداخت", organization_controls_updated: "تنظیمات صرافی تغییر کرد", cashbox_close_approved: "بستن صندوق تأیید شد" },
     "ps-AF": { buy_fx: "د اسعارو پېرل", sell_fx: "د اسعارو پلورل", exchange_fx: "د دوو اسعارو بدلول", opening_balance: "پیل پیسې", record_expense: "لګښت", record_income: "عاید", owner_investment: "د مالک پانګه زیاتول", owner_withdrawal: "د مالک ایستل", bank_deposit: "بانک ته جمع", bank_withdrawal: "له بانک څخه ایستل", transfer_cash: "د پیسو لېږد", receive_money: "پیسې اخیستل", pay_money: "پیسې ورکول", reversal: "بېرته ګرځول شوې معامله", cash_variance_adjustment: "د صندوق د توپیر سمون", asset: "شتمني", liability: "پور", equity: "د مالک پانګه", income: "عاید", expense: "لګښت", branch_balance: "د څانګې پیسې", carrying_value: "په افغانۍ ثبت شوی ارزښت", financial_actions: "مالي کارونه", overdue: "وخت تېر", receivable: "موږ ته پوروړی دی", payable: "موږ پوروړي یو", no_due_date: "د ورکړې نېټه نه لري", organization_controls_updated: "د صرافۍ امستنې بدلې شوې", cashbox_close_approved: "د صندوق تړل تایید شول" },
   }[language]) as Record<string, string>;
-  const localReportTerm = (value: string) => reportTerms[value] ?? value.replaceAll("_", " ");
+  const hawalaReportTerms = ({
+    en: { hawala_outgoing_funded: "Outgoing Hawala funded", hawala_incoming_recorded: "Incoming Hawala recorded", hawala_beneficiary_paid: "Hawala beneficiary paid", hawala_partner_paid: "Hawala partner paid", hawala_partner_collected: "Hawala partner collection" },
+    "fa-AF": { hawala_outgoing_funded: "وجه حواله ارسالی دریافت شد", hawala_incoming_recorded: "حواله ورودی ثبت شد", hawala_beneficiary_paid: "حواله به مستفید پرداخت شد", hawala_partner_paid: "به همکار حواله پرداخت شد", hawala_partner_collected: "از همکار حواله دریافت شد" },
+    "ps-AF": { hawala_outgoing_funded: "د وتونکې حوالې پیسې واخیستل شوې", hawala_incoming_recorded: "راتلونکې حواله ثبت شوه", hawala_beneficiary_paid: "د حوالې ګټه اخیستونکي ته ورکړه وشوه", hawala_partner_paid: "د حوالې همکار ته ورکړه وشوه", hawala_partner_collected: "له حوالې همکار څخه پیسې واخیستل شوې" },
+  }[language]) as Record<string, string>;
+  const localReportTerm = (value: string) => hawalaReportTerms[value] ?? reportTerms[value] ?? value.replaceAll("_", " ");
   const [currency, setCurrency] = useState("All");
   const [status, setStatus] = useState("All");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(businessDate);
+  const [to, setTo] = useState(businessDate);
   const [namedReportCode, setNamedReportCode] = useState("daily_transactions");
   const [namedRows, setNamedRows] = useState<NamedReportRow[]>([]);
-  const [namedLoading, setNamedLoading] = useState(organizationId !== "inspection");
+  const [namedLoading, setNamedLoading] = useState(false);
+  const [reportSnapshot, setReportSnapshot] = useState<FinancialReportSnapshot | null>(null);
+  const [inspectionReportGenerated, setInspectionReportGenerated] = useState(false);
   const [reportPage, setReportPage] = useState(0);
   const [exportHistory, setExportHistory] = useState<ReportExportRecord[]>(() => organizationId === "inspection" ? [{ id: "inspection-export", report_name: reportHistoryUi[language].title, format: "pdf", filters: {}, generated_at: new Date().toISOString(), expires_at: null }] : []);
   const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
@@ -6089,21 +6220,44 @@ function ReportsView({
       if (exportResult.data) setExportHistory(exportResult.data);
     });
   }, [organizationId]);
-  useEffect(() => {
-    if (!organizationId || organizationId === "inspection") return;
-    // oxlint-disable-next-line react/set-state-in-effect -- This flag tracks the external report request started by this effect.
+  const generateReport = async (overrides?: { reportCode?: string; fromDate?: string; toDate?: string; currency?: string; status?: string }) => {
+    if (!organizationId) return;
+    if (organizationId === "inspection") {
+      setInspectionReportGenerated(true);
+      setReportPage(0);
+      return;
+    }
+    const effectiveReportCode = overrides?.reportCode ?? namedReportCode;
+    const branchScopedReport = effectiveReportCode !== "security_activity";
+    const cashboxScopedReport = !["receivables", "payables", "aging", "counterparty_statement", "rate_history", "security_activity"].includes(effectiveReportCode);
     setNamedLoading(true);
-    void getNamedFinancialReport({ organizationId, reportCode: namedReportCode, fromDate: from || undefined, toDate: to || undefined }).then((result) => {
-      setNamedRows(result.data ?? []);
-      if (result.error) onToast(ux(language, "couldNotLoad"));
-      setNamedLoading(false);
+    const result = await createFinancialReportSnapshot({
+      organizationId,
+      reportCode: effectiveReportCode,
+      fromDate: (overrides?.fromDate ?? from) || undefined,
+      toDate: (overrides?.toDate ?? to) || undefined,
+      currency: overrides?.currency ?? currency,
+      status: overrides?.status ?? status,
+      branchId: branchScopedReport ? branchId ?? undefined : undefined,
+      cashboxId: cashboxScopedReport ? cashboxId ?? undefined : undefined,
     });
-  }, [from, language, namedReportCode, onToast, organizationId, to]);
+    setReportSnapshot(result.data);
+    setNamedRows(result.data?.rows ?? []);
+    if (result.error) onToast(ux(language, "couldNotLoad"));
+    setNamedLoading(false);
+  };
+  const invalidateReport = () => {
+    setReportSnapshot(null);
+    setInspectionReportGenerated(false);
+    setNamedRows([]);
+  };
   const reportSourceRows = organizationId === "inspection" ? [
     { reference: "000002", date: new Date().toISOString(), label: reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode, detail: branchName, amount: "1000", secondary_amount: "0", currency: namedReportCode === "employee_activity" ? "COUNT" : "AFN", status: "posted" },
     { reference: "000001", date: new Date().toISOString(), label: reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode, detail: branchName, amount: "2500", currency: "AFN", status: "posted" },
   ] satisfies NamedReportRow[] : namedRows;
-  const namedFilteredRows = reportSourceRows.filter((row) => (currency === "All" || row.currency === currency || row.currency === "MIXED" || row.currency === "COUNT") && (status === "All" || row.status === status));
+  const namedFilteredRows = organizationId === "inspection"
+    ? reportSourceRows.filter((row) => (currency === "All" || row.currency === currency || row.currency === "MIXED" || row.currency === "COUNT") && (status === "All" || row.status === status))
+    : reportSourceRows;
   const reportRows = namedFilteredRows.map((row) => ({
     entryId: row.reference,
     occurredAt: row.date,
@@ -6116,17 +6270,47 @@ function ReportsView({
   const pageRows = namedFilteredRows.slice(reportPage * pageSize, (reportPage + 1) * pageSize);
   const pageCount = Math.max(1, Math.ceil(namedFilteredRows.length / pageSize));
   const reportName = reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode;
-  const authorizeExport = async (format: "csv" | "pdf" | "xlsx" | "print") => {
+  const reportUsesCashbox = !["receivables", "payables", "aging", "counterparty_statement", "rate_history", "security_activity"].includes(namedReportCode);
+  const reportPeriod = from && to && from !== to ? `${from} – ${to}` : to || from || businessDate;
+  const reportFilterSummary = [
+    currency !== "All" ? `${t("currency")}: ${currency}` : null,
+    status !== "All" ? `${u("status")}: ${reportStatuses[status] ?? localReportTerm(status)}` : null,
+  ].filter((value): value is string => Boolean(value)).join(" · ") || u("all");
+  const reportCashboxName = reportUsesCashbox ? cashboxName : u("all");
+  const reportReady = Boolean(reportSnapshot) || (organizationId === "inspection" && inspectionReportGenerated);
+  const inspectionFingerprint = language === "en" ? "inspection" : language === "fa-AF" ? "آزمایشی" : "ازمایښتي";
+  const reportSummary = reportSnapshot?.summary ?? {
+    row_count: namedFilteredRows.length,
+    total_amount: namedFilteredRows.reduce((total, row) => total.plus(String(row.amount ?? "0")), new Decimal(0)).toString(),
+    total_secondary_amount: namedFilteredRows.reduce((total, row) => total.plus(String(row.secondary_amount ?? "0")), new Decimal(0)).toString(),
+    currency_totals: {},
+  };
+  const pdfSnapshot = {
+    transaction_count: Number(reportSummary.row_count),
+    volume_base: String(reportSummary.total_amount),
+    realized_profit: String(reportSummary.total_amount),
+    expenses: "0",
+    net_position_base: String(reportSummary.total_secondary_amount),
+    reconciliation_differences: "0",
+    locations: [],
+    receivables: [],
+    payables: [],
+  };
+  const recordSuccessfulExport = async (format: "csv" | "pdf" | "xlsx" | "print") => {
     if (!organizationId) {
       onToast(u("exportUnavailable"));
       return false;
     }
     if (organizationId === "inspection") return true;
+    if (!reportSnapshot) {
+      onToast(u("exportUnavailable"));
+      return false;
+    }
     const result = await recordReportExport({
       organization_id: organizationId,
       report_name: reportName,
       format,
-      filters: { named_report_code: namedReportCode, from, to, currency, status },
+      report_snapshot_id: reportSnapshot.id,
     });
     if (result.error) {
       onToast(u("exportUnavailable"));
@@ -6135,84 +6319,65 @@ function ReportsView({
     if (result.data) setExportHistory((current) => [result.data!, ...current.filter((item) => item.id !== result.data!.id)].slice(0, 20));
     return true;
   };
-  const share = async () => {
-    const allowed = await authorizeExport("print");
-    if (allowed) {
-      const { shareReportViaWhatsApp } = await loadExports();
-      shareReportViaWhatsApp({
-        reportName,
-        reference: reportRows[0]?.entryId ?? "snapshot",
-        businessName: organizationName,
-      });
-      onToast(u("shareOpened"));
-    }
-  };
   const downloadPdf = (rows: typeof reportRows) => {
-    void authorizeExport("pdf").then(async (allowed) => {
-      if (allowed) {
-        try {
-          const { downloadPdf: createPdf } = await loadExports();
-          await createPdf({
-            rows,
-            businessName: organizationName,
-            branchName,
-            reportName,
-            language,
-            businessDate: to || from || businessDate,
-            snapshot: dashboard,
-          });
-          onToast(u("exportReady"));
-        } catch {
-          onToast(u("exportUnavailable"));
-        }
+    void (async () => {
+      try {
+        const { downloadPdf: createPdf } = await loadExports();
+        await createPdf({
+          rows,
+          businessName: organizationName,
+          branchName,
+          reportName,
+          language,
+          businessDate: to || from || businessDate,
+          snapshot: pdfSnapshot,
+          cashboxName: reportCashboxName,
+          period: reportPeriod,
+          filters: reportFilterSummary,
+          preparedBy,
+          generatedAt: reportSnapshot?.generated_at,
+          snapshotHash: reportSnapshot?.snapshot_sha256,
+        });
+        if (await recordSuccessfulExport("pdf")) onToast(u("exportReady"));
+      } catch {
+        onToast(u("exportUnavailable"));
       }
-    });
+    })();
   };
   const downloadCsv = () => {
-    void authorizeExport("csv").then(async (allowed) => {
-      if (!allowed) return;
-      const { downloadCsv: saveCsv } = await loadExports();
-      const csv = buildCsvReport(reportRows, organizationName, reportName, new Date().toISOString());
-      saveCsv(csv, `sarafi-${namedReportCode}-${to || from || businessDate}.csv`);
-      onToast(u("exportReady"));
-    });
+    void (async () => {
+      try {
+        const { downloadCsv: saveCsv } = await loadExports();
+        const csv = buildCsvReport(reportRows, organizationName, reportName, reportSnapshot?.generated_at ?? new Date().toISOString(), {
+          branchName,
+          cashboxName: reportCashboxName,
+          period: reportPeriod,
+          filters: reportFilterSummary,
+          preparedBy,
+          snapshotHash: reportSnapshot?.snapshot_sha256,
+        });
+        saveCsv(csv, `sarafi-${namedReportCode}-${to || from || businessDate}.csv`);
+        if (await recordSuccessfulExport("csv")) onToast(u("exportReady"));
+      } catch { onToast(u("exportUnavailable")); }
+    })();
   };
   const downloadXlsx = () => {
-    void authorizeExport("xlsx").then(async (allowed) => {
-      if (!allowed) return;
-      const { downloadXlsx: saveXlsx } = await loadExports();
-      saveXlsx({ rows: reportRows, businessName: organizationName, reportName, generatedAt: new Date().toISOString(), language }, `sarafi-${namedReportCode}-${to || from || businessDate}.xlsx`);
-      onToast(u("exportReady"));
-    });
+    void (async () => {
+      try {
+        const { downloadXlsx: saveXlsx } = await loadExports();
+        saveXlsx({ rows: reportRows, businessName: organizationName, reportName, generatedAt: reportSnapshot?.generated_at ?? new Date().toISOString(), language, branchName, cashboxName: reportCashboxName, period: reportPeriod, filters: reportFilterSummary, preparedBy, snapshotHash: reportSnapshot?.snapshot_sha256 }, `sarafi-${namedReportCode}-${to || from || businessDate}.xlsx`);
+        if (await recordSuccessfulExport("xlsx")) onToast(u("exportReady"));
+      } catch { onToast(u("exportUnavailable")); }
+    })();
   };
   const printReport = () => {
-    void authorizeExport("print").then(async (allowed) => {
-      if (allowed) {
+    void (async () => {
+      try {
         const { printReport: print } = await loadExports();
         print();
-      }
-    });
-  };
-  const printThermalReceipt = (
-    input: {
-      businessName: string;
-      reference: string;
-      type: string;
-      amount: string;
-      currency: string;
-      rate?: string;
-      direction: "ltr" | "rtl";
-      locale: string;
-      labels: { amount: string; rate: string; date: string };
-    },
-    width: "58mm" | "80mm",
-  ) => {
-    void authorizeExport("print").then(async (allowed) => {
-      if (allowed) {
-        const { printThermalReceipt: print } = await loadExports();
-        print(input, width);
-      }
-    });
+        if (await recordSuccessfulExport("print")) onToast(u("exportReady"));
+      } catch { onToast(u("exportUnavailable")); }
+    })();
   };
   const reportGroups = [
     { title: language === "en" ? "Daily operations" : language === "fa-AF" ? "عملیات روزانه" : "ورځني کارونه", codes: ["daily_transactions", "transaction_journal", "cash_movement", "branch_balance", "currency_position"] },
@@ -6220,7 +6385,6 @@ function ReportsView({
     { title: language === "en" ? "Customers, debt & Hawala" : language === "fa-AF" ? "مشتریان، قرض و حواله" : "پېرودونکي، پور او حواله", codes: ["receivables", "payables", "aging", "counterparty_statement", "hawala"] },
     { title: language === "en" ? "Control & audit" : language === "fa-AF" ? "کنترول و بررسی" : "کنټرول او پلټنه", codes: ["employee_activity", "reversals", "reconciliation", "rate_history", "security_activity"] },
   ];
-  const favoriteCodes = ["daily_transactions", "cash_movement", "profit_loss", "receivables"];
   const showCurrencyFilter = !["employee_activity", "security_activity", "rate_history"].includes(namedReportCode);
   const showStatusFilter = !["balance_sheet", "trial_balance", "currency_position", "branch_balance", "rate_history"].includes(namedReportCode);
   return (
@@ -6236,21 +6400,37 @@ function ReportsView({
         </button>
       </div>
       <section className="daily-summary" aria-labelledby="daily-summary-title">
-        <h2 id="daily-summary-title">{language === "en" ? "Daily Summary" : language === "fa-AF" ? "خلاصه روزانه" : "ورځنۍ لنډیز"}</h2>
+        <h2 id="daily-summary-title">{language === "en" ? "Exact report snapshot" : language === "fa-AF" ? "نسخه دقیق گزارش" : "د راپور کره نسخه"}</h2>
         <div className="report-snapshot">
-        <article><span>{t("transactions")}</span><b>{dashboard?.transaction_count ?? reportRows.length}</b></article>
-        <article><span>{t("todayVolume")}</span><b><bdi>{formatFinancialAmount(dashboard?.volume_base ?? "0")} AFN</bdi></b></article>
-        <article><span>{t("realizedProfit")}</span><b><bdi>{formatFinancialAmount(dashboard?.realized_profit ?? "0")} AFN</bdi></b></article>
-        <article><span>{t("operatingExpenses")}</span><b><bdi>{formatFinancialAmount(dashboard?.expenses ?? "0")} AFN</bdi></b></article>
+        <article><span>{reportCopy.rows}</span><b>{reportSummary.row_count}</b></article>
+        <article><span>{language === "en" ? "Total amount" : language === "fa-AF" ? "مجموع مبلغ" : "ټول مبلغ"}</span><b><bdi>{formatFinancialAmount(String(reportSummary.total_amount))}</bdi></b></article>
+        <article><span>{language === "en" ? "Secondary total" : language === "fa-AF" ? "مجموع دوم" : "دوهم ټولیز"}</span><b><bdi>{formatFinancialAmount(String(reportSummary.total_secondary_amount))}</bdi></b></article>
+        <article><span>{language === "en" ? "Snapshot fingerprint" : language === "fa-AF" ? "نشان نسخه" : "د نسخې نښه"}</span><b><bdi>{reportSnapshot?.snapshot_sha256.slice(0, 12) ?? (reportReady ? inspectionFingerprint : "—")}</bdi></b></article>
         </div>
+        {reportReady ? <div className="report-evidence" role="note">
+          <span>{branchName}</span><span>{reportCashboxName}</span><span><bdi>{reportPeriod}</bdi></span><span>{reportFilterSummary}</span><span>{preparedBy}</span>
+        </div> : null}
       </section>
-      <div className="report-favorites" aria-label={language === "en" ? "Favorite reports" : undefined}>
-        {favoriteCodes.map((code) => <button key={code} type="button" className={namedReportCode === code ? "active" : ""} onClick={() => { setNamedReportCode(code); setReportPage(0); }}>{reportCopy.reports.find(([candidate]) => candidate === code)?.[1]}</button>)}
+      <div className="report-primary-action">
+        <button className="primary-action" type="button" disabled={namedLoading} onClick={() => {
+          setNamedReportCode("daily_transactions");
+          setFrom(businessDate);
+          setTo(businessDate);
+          setCurrency("All");
+          setStatus("All");
+          setReportPage(0);
+          void generateReport({ reportCode: "daily_transactions", fromDate: businessDate, toDate: businessDate, currency: "All", status: "All" });
+        }}>
+          {namedLoading ? t("working") : language === "en" ? "Generate today’s report" : language === "fa-AF" ? "ساخت گزارش امروز" : "د نن راپور جوړ کړئ"}
+        </button>
+        {reportSnapshot ? <small><bdi>{new Date(reportSnapshot.generated_at).toLocaleString(language)}</bdi></small> : null}
       </div>
-      <div className="rate-strip">
+      <details className="report-advanced-filters">
+        <summary>{language === "en" ? "Advanced filters" : language === "fa-AF" ? "فیلترهای پیشرفته" : "پرمختللي چاڼونه"}</summary>
+        <div className="rate-strip">
         <label>
           {reportCopy.choose}
-          <select value={namedReportCode} onChange={(event) => { setNamedReportCode(event.target.value); setReportPage(0); }}>
+          <select value={namedReportCode} onChange={(event) => { setNamedReportCode(event.target.value); setReportPage(0); invalidateReport(); }}>
             {reportGroups.map((group) => <optgroup key={group.title} label={group.title}>{group.codes.map((code) => { const report = reportCopy.reports.find(([candidate]) => candidate === code); return report ? <option key={code} value={code}>{report[1]}</option> : null; })}</optgroup>)}
           </select>
         </label>
@@ -6259,7 +6439,7 @@ function ReportsView({
           <input
             type="date"
             value={from}
-            onChange={(event) => { setFrom(event.target.value); setReportPage(0); }}
+            onChange={(event) => { setFrom(event.target.value); setReportPage(0); invalidateReport(); }}
           />
         </label>
         <label>
@@ -6267,14 +6447,14 @@ function ReportsView({
           <input
             type="date"
             value={to}
-            onChange={(event) => { setTo(event.target.value); setReportPage(0); }}
+            onChange={(event) => { setTo(event.target.value); setReportPage(0); invalidateReport(); }}
           />
         </label>
         {showCurrencyFilter ? <label>
           {t("currency")}
           <select
             value={currency}
-            onChange={(event) => { setCurrency(event.target.value); setReportPage(0); }}
+            onChange={(event) => { setCurrency(event.target.value); setReportPage(0); invalidateReport(); }}
           >
             <option value="All">{u("all")}</option>
             {catalog.filter((item) => item.enabled).map((item) => (
@@ -6288,7 +6468,7 @@ function ReportsView({
           {u("status")}
           <select
             value={status}
-            onChange={(event) => { setStatus(event.target.value); setReportPage(0); }}
+            onChange={(event) => { setStatus(event.target.value); setReportPage(0); invalidateReport(); }}
           >
             <option value="All">{u("all")}</option>
             <option value="posted">{t("posted")}</option>
@@ -6296,74 +6476,27 @@ function ReportsView({
             <option value="reversed">{u("reversed")}</option>
           </select>
         </label> : null}
-      </div>
-      <details className="export-menu">
-        <summary className="export-button">{language === "en" ? "Export" : language === "fa-AF" ? "گرفتن خروجی" : "راپور اخیستل"}</summary>
+        </div>
+        <button className="primary-action" type="button" disabled={namedLoading} onClick={() => void generateReport()}>
+          {namedLoading ? t("working") : language === "en" ? "Generate filtered report" : language === "fa-AF" ? "ساخت گزارش فیلترشده" : "چاڼ شوی راپور جوړ کړئ"}
+        </button>
+      </details>
+      {reportReady ? <details className="export-menu">
+        <summary className="export-button">{language === "en" ? "Export formats" : language === "fa-AF" ? "قالب‌های خروجی" : "د راپور بڼې"}</summary>
         <div className="activity-actions">
-        <button className="export-button" onClick={downloadCsv}>{t("exportCsv")}</button>
-        <button className="export-button" onClick={downloadXlsx}>{language === "en" ? "Export Excel" : language === "fa-AF" ? "گرفتن فایل اکسل" : "د اکسل فایل اخیستل"}</button>
         <button
-          className="export-button"
+          className="primary-action"
           onClick={() => downloadPdf(reportRows)}
         >
           {t("exportPdf")}
         </button>
+        <button className="export-button" onClick={downloadCsv}>{t("exportCsv")}</button>
+        <button className="export-button" onClick={downloadXlsx}>{language === "en" ? "Export Excel" : language === "fa-AF" ? "گرفتن فایل اکسل" : "د اکسل فایل اخیستل"}</button>
         <button className="export-button" onClick={printReport}>
           {u("printA4")}
         </button>
-        <button
-          className="export-button"
-          onClick={() =>
-            printThermalReceipt(
-              {
-                businessName: organizationName,
-                reference: reportRows[0]?.entryId ?? "snapshot",
-                type: reportRows[0]?.type ?? u("statement"),
-                amount: reportRows[0]?.realizedProfit ?? "0",
-                currency: "AFN",
-                direction: isRtl(language) ? "rtl" : "ltr",
-                locale: language,
-                labels: {
-                  amount: t("amount"),
-                  rate: t("exchangeRate"),
-                  date: u("businessDate"),
-                },
-              },
-              "58mm",
-            )
-          }
-        >
-          {u("print58")}
-        </button>
-        <button
-          className="export-button"
-          onClick={() =>
-            printThermalReceipt(
-              {
-                businessName: organizationName,
-                reference: reportRows[0]?.entryId ?? "snapshot",
-                type: reportRows[0]?.type ?? u("statement"),
-                amount: reportRows[0]?.realizedProfit ?? "0",
-                currency: "AFN",
-                direction: isRtl(language) ? "rtl" : "ltr",
-                locale: language,
-                labels: {
-                  amount: t("amount"),
-                  rate: t("exchangeRate"),
-                  date: u("businessDate"),
-                },
-              },
-              "80mm",
-            )
-          }
-        >
-          {u("print80")}
-        </button>
-        <button className="export-button" onClick={() => void share()}>
-          {u("shareWhatsApp")}
-        </button>
         </div>
-      </details>
+      </details> : null}
       <section className="named-report-results" aria-live="polite">
         <div className="panel-header"><div><h2>{reportName}</h2><p>{namedFilteredRows.length} {reportCopy.rows}</p></div>{pageCount > 1 && <div className="report-pagination"><button disabled={reportPage === 0} onClick={() => setReportPage((page) => Math.max(0, page - 1))}>{reportCopy.previous}</button><b><bdi>{reportPage + 1} / {pageCount}</bdi></b><button disabled={reportPage + 1 >= pageCount} onClick={() => setReportPage((page) => Math.min(pageCount - 1, page + 1))}>{reportCopy.next}</button></div>}</div>
         {namedLoading ? <div className="empty-live">{u("reportLoading")}</div> : pageRows.length ? <div className="named-report-table" role="table">{pageRows.map((row, index) => <article role="row" key={`${row.reference}-${index}`}><span><b>{localReportTerm(row.label)}</b><small><bdi>{row.reference}</bdi> · <bdi>{new Date(row.date).toLocaleString(language)}</bdi>{row.detail ? ` · ${localReportTerm(row.detail)}` : ""}</small></span><strong><bdi>{formatFinancialAmount(String(row.amount ?? "0"))} {row.currency}</bdi>{row.secondary_amount !== undefined && <small><bdi>{formatFinancialAmount(String(row.secondary_amount))}</bdi></small>}</strong><em>{reportStatuses[row.status] ?? localReportTerm(row.status)}</em></article>)}</div> : <div className="empty-live">{reportCopy.empty}</div>}
@@ -6385,20 +6518,24 @@ function DebtsView({
   language,
   organizationId,
   branchId,
+  deviceId,
   pathname,
   capabilities,
   onRoute,
   onDashboard,
   onToast,
+  onFinancialCompleted,
 }: {
   language: Language;
   organizationId: string | null;
   branchId: string | null;
+  deviceId: string;
   pathname: string;
   capabilities: readonly string[];
   onRoute: (path: string) => void;
   onDashboard: () => void;
   onToast: (message: string) => void;
+  onFinancialCompleted: (transaction: CompletedTrade) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
@@ -6419,17 +6556,29 @@ function DebtsView({
   const [settlementRateReady, setSettlementRateReady] = useState(false);
   const [settlementAccountId, setSettlementAccountId] = useState(inspection ? "inspection-cashbox" : "");
   const [busy, setBusy] = useState(false);
-  const journey = pathname.includes("/transactions/new/debt/receivable")
+  const { debtId: routeDebtId = null } = useParams<{ debtId: string }>();
+  const receivableCreateRoute = useMatch("/app/:organizationId/transactions/new/debt/receivable");
+  const payableCreateRoute = useMatch("/app/:organizationId/transactions/new/debt/payable");
+  const dedicatedDebtSettlementRoute = useMatch("/app/:organizationId/debts/:debtId/settle");
+  const legacyDebtSettlementRoute = useMatch("/app/:organizationId/debts/settle");
+  const legacyReceivableSettlementRoute = useMatch("/app/:organizationId/transactions/new/money-in/debt-payment");
+  const legacyPayableSettlementRoute = useMatch("/app/:organizationId/transactions/new/money-out/debt-payment");
+  const settlementRoute = dedicatedDebtSettlementRoute
+    ?? legacyDebtSettlementRoute
+    ?? legacyReceivableSettlementRoute
+    ?? legacyPayableSettlementRoute;
+  const debtDetailRoute = useMatch("/app/:organizationId/debts/:debtId");
+  const journey = receivableCreateRoute
     ? "receivable"
-    : pathname.includes("/transactions/new/debt/payable")
+    : payableCreateRoute
       ? "payable"
-      : pathname.includes("/transactions/new/debts/settle") || pathname.includes("/transactions/new/money-in/debt-payment") || pathname.includes("/transactions/new/money-out/debt-payment") || pathname.endsWith("/settle")
+      : settlementRoute
         ? "settle"
-        : /\/debts\/[^/]+$/.test(pathname)
+        : debtDetailRoute
           ? "detail"
-           : "list";
+          : "list";
   const direction: "receivable" | "payable" = journey === "payable" ? "payable" : "receivable";
-  const debtIdFromPath = pathname.includes("/transactions/new/") ? null : pathname.match(/\/debts\/([^/]+)/)?.[1] ?? null;
+  const debtIdFromPath = routeDebtId;
   const [selectedDebtResult, setSelectedDebtResult] = useState<DebtRecord | null>(null);
   const selectedDebt = debtIdFromPath
     ? inspection
@@ -6493,12 +6642,35 @@ function DebtsView({
         direction === "receivable" ? moneyAccountId : undefined,
       destination_money_account_id:
         direction === "payable" ? moneyAccountId : undefined,
+      device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
       publish_rate: createRatePublication,
     });
     setBusy(false);
-    onToast(result.error ? localizedFinancialError(language, result.error, u("couldNotSave")) : u("savedSuccessfully"));
+    if (result.error) onToast(localizedFinancialError(language, result.error, u("couldNotSave")));
     if (!result.error) {
+      const journalEntryId = String(result.data?.id ?? "");
+      const receiptResult = journalEntryId
+        ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+        : { data: null, error: "Missing journal entry reference" };
+      onFinancialCompleted({
+        receiptNumber: receiptResult.data?.receipt_number ?? null,
+        journalEntryId,
+        givenAmount: amount,
+        givenCurrency: currency,
+        receivedAmount: amount,
+        receivedCurrency: currency,
+        rate: "—",
+        occurredAt: new Date().toISOString(),
+        typeLabel: direction === "receivable"
+          ? (language === "en" ? "Receivable debt" : language === "fa-AF" ? "طلب دریافتنی" : "اخیستونکی پور")
+          : (language === "en" ? "Payable debt" : language === "fa-AF" ? "بدهی پرداختنی" : "ورکول کېدونکی پور"),
+        repeatPath: pathname,
+        flowRows: [
+          { label: u("person"), value: people.find((person) => person.id === counterpartyId)?.display_name ?? "—" },
+          { label: t("amount"), value: `${formatFinancialAmount(amount)} ${currency}` },
+        ],
+      });
       setCounterpartyId("");
       setAmount("");
       setCreateRatePublication(undefined);
@@ -6506,7 +6678,7 @@ function DebtsView({
   };
   const settle = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedDebt) return;
+    if (!selectedDebt || !organizationId) return;
     if (!settlementAccountId) {
       onToast(u("chooseMoneyAccount"));
       return;
@@ -6527,12 +6699,33 @@ function DebtsView({
         selectedDebt.direction === "receivable"
           ? settlementAccountId
           : undefined,
+      device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
       publish_rate: settlementRatePublication,
     });
     setBusy(false);
-    onToast(result.error ? localizedFinancialError(language, result.error, u("couldNotSave")) : u("savedSuccessfully"));
+    if (result.error) onToast(localizedFinancialError(language, result.error, u("couldNotSave")));
     if (!result.error) {
+      const journalEntryId = String(result.data?.id ?? "");
+      const receiptResult = journalEntryId
+        ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+        : { data: null, error: "Missing journal entry reference" };
+      onFinancialCompleted({
+        receiptNumber: receiptResult.data?.receipt_number ?? null,
+        journalEntryId,
+        givenAmount: settlementAmount,
+        givenCurrency: selectedDebt.currency_code,
+        receivedAmount: settlementAmount,
+        receivedCurrency: selectedDebt.currency_code,
+        rate: "—",
+        occurredAt: new Date().toISOString(),
+        typeLabel: language === "en" ? "Debt settlement" : language === "fa-AF" ? "تصفیه قرض" : "د پور تصفیه",
+        repeatPath: pathname,
+        flowRows: [
+          { label: u("person"), value: selectedDebt.counterparty_name ?? people.find((person) => person.id === selectedDebt.counterparty_id)?.display_name ?? "—" },
+          { label: t("amount"), value: `${formatFinancialAmount(settlementAmount)} ${selectedDebt.currency_code}` },
+        ],
+      });
       setSelectedDebt(null);
       setSettlementAmount("");
       setSettlementRatePublication(undefined);
@@ -6673,7 +6866,7 @@ function DebtsView({
           <div className="modal-head">
             <div>
               <p className="kicker">{u("settleDebt")}</p>
-              <h2>{u("settleDebt")}</h2>
+              <h2>{language === "en" ? "Settle a debt" : language === "fa-AF" ? "تصفیه قرض" : "پور تصفیه کول"}</h2>
             </div>
             <button
               type="button"
@@ -6902,6 +7095,7 @@ function HawalaView({
   onRoute,
   onDashboard,
   onToast,
+  onFinancialCompleted,
 }: {
   language: Language;
   organizationId: string | null;
@@ -6912,13 +7106,31 @@ function HawalaView({
   onRoute: (path: string) => void;
   onDashboard: () => void;
   onToast: (message: string) => void;
+  onFinancialCompleted: (transaction: CompletedTrade) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [transfers, setTransfers] = useState<HawalaTransferRecord[]>([]);
+  const [senderName, setSenderName] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
-  const routePartnerId = pathname.match(/\/hawala\/partners\/([^/]+)\/settle/)?.[1] ?? null;
-  const hawalaMode = pathname.includes("/hawala/incoming") ? "incoming" : pathname.includes("/hawala/payout") ? "payout" : pathname.includes("/hawala/settlement") || routePartnerId ? "settle" : pathname.includes("/hawala/send") ? "send" : "overview";
+  const { partnerId: routePartnerId = null, transferId: routeTransferId = null } = useParams<{
+    partnerId: string;
+    transferId: string;
+  }>();
+  const incomingRoute = useMatch("/app/:organizationId/transactions/new/hawala/incoming");
+  const canonicalPayoutRoute = useMatch("/app/:organizationId/hawala/payout");
+  const legacyPayoutRoute = useMatch("/app/:organizationId/transactions/new/hawala/payout");
+  const payoutRoute = canonicalPayoutRoute ?? legacyPayoutRoute;
+  const partnerListRoute = useMatch("/app/:organizationId/hawala/partners");
+  const partnerDetailRoute = useMatch("/app/:organizationId/hawala/partners/:partnerId");
+  const partnerSettlementRoute = useMatch("/app/:organizationId/hawala/partners/:partnerId/settle");
+  const legacyPartnerSettlementRoute = useMatch("/app/:organizationId/transactions/new/hawala/settlement");
+  const settlementRoute = partnerListRoute
+    ?? partnerDetailRoute
+    ?? partnerSettlementRoute
+    ?? legacyPartnerSettlementRoute;
+  const sendRoute = useMatch("/app/:organizationId/transactions/new/hawala/send");
+  const hawalaMode = incomingRoute ? "incoming" : payoutRoute ? "payout" : settlementRoute ? "settle" : sendRoute ? "send" : "overview";
   const [origin, setOrigin] = useState("");
   const [selectedSettlementPartnerId, setSelectedSettlementPartnerId] = useState("");
   const settlementPartnerId = routePartnerId ?? selectedSettlementPartnerId;
@@ -6982,6 +7194,13 @@ function HawalaView({
       });
   }, [language, organizationId]);
   useEffect(() => {
+    if (!routeTransferId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`hawala-${routeTransferId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [routeTransferId, transfers]);
+  useEffect(() => {
     if (!organizationId || organizationId === "inspection" || !settlementPartnerId) return;
     void getHawalaPartnerStatement(organizationId, settlementPartnerId).then((result) => {
       if (result.data) {
@@ -6990,6 +7209,36 @@ function HawalaView({
       else if (result.error) onToast(ux(language, "couldNotLoad"));
     });
   }, [language, organizationId, settlementPartnerId, onToast]);
+  const completeHawalaTransfer = async (
+    transfer: HawalaTransferRecord,
+    typeLabel: string,
+    repeatPath: string,
+    journalEntryOverride?: string | null,
+  ) => {
+    if (!organizationId) return;
+    const journalEntryId = journalEntryOverride ?? transfer.payout_journal_entry_id ?? transfer.journal_entry_id ?? transfer.id;
+    const receiptResult = journalEntryOverride || transfer.payout_journal_entry_id || transfer.journal_entry_id
+      ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+      : { data: null, error: null };
+    onFinancialCompleted({
+      receiptNumber: receiptResult.data?.receipt_number ?? transfer.reference_code,
+      journalEntryId,
+      givenAmount: transfer.amount,
+      givenCurrency: transfer.currency_code,
+      receivedAmount: transfer.amount,
+      receivedCurrency: transfer.currency_code,
+      rate: "—",
+      occurredAt: transfer.created_at || new Date().toISOString(),
+      typeLabel,
+      repeatPath,
+      detailPath: `${workspaceRoot(organizationId)}/hawala/${transfer.id}`,
+      flowRows: [
+        { label: t("referenceCode"), value: transfer.reference_code },
+        { label: language === "en" ? "Beneficiary" : language === "fa-AF" ? "مستفید" : "ګټه اخیستونکی", value: transfer.beneficiary_name },
+        { label: t("amount"), value: `${formatFinancialAmount(transfer.amount)} ${transfer.currency_code}` },
+      ],
+    });
+  };
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!organizationId || !branchId || !createPartnerId || (hawalaMode === "send" && !moneyAccountId)) {
@@ -7001,8 +7250,8 @@ function HawalaView({
       return;
     }
     if (organizationId === "inspection") {
-      onToast(u("savedSuccessfully"));
-      setBeneficiary(""); setOrigin(""); setDestination(""); setAmount(""); setFee("0"); setReference("");
+      await completeHawalaTransfer({ id: `inspection-hawala-${Date.now()}`, beneficiary_name: beneficiary, origin_location: origin, destination_location: destination, currency_code: currency, amount, fee, reference_code: hawalaMode === "incoming" ? reference : `SAR-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, status: hawalaMode === "incoming" ? "ready" : "sent", created_at: new Date().toISOString(), direction: hawalaMode === "incoming" ? "incoming" : "outgoing" }, hawalaMode === "incoming" ? (language === "en" ? "Incoming Hawala" : language === "fa-AF" ? "حواله ورودی" : "راتلونکې حواله") : (language === "en" ? "Send Hawala" : language === "fa-AF" ? "فرستادن حواله" : "حواله لېږل"), pathname);
+      setSenderName(""); setBeneficiary(""); setOrigin(""); setDestination(""); setAmount(""); setFee("0"); setReference("");
       return;
     }
     setBusy(true);
@@ -7010,13 +7259,14 @@ function HawalaView({
       organization_id: organizationId,
       branch_id: branchId,
       hawala_partner_id: createPartnerId,
+      sender_name: senderName,
       beneficiary_name: beneficiary,
       destination_location: destination,
       currency,
       amount,
       fee,
       destination_money_account_id: hawalaMode === "send" ? moneyAccountId : undefined,
-      reference_code: reference,
+      reference_code: hawalaMode === "incoming" ? reference : undefined,
       device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
       publish_rate: createRatePublication,
@@ -7025,9 +7275,11 @@ function HawalaView({
       ? await recordHawalaIncoming({ ...command, origin_location: origin })
       : await recordHawalaSend(command);
     setBusy(false);
-    onToast(result.error ? localizedFinancialError(language, result.error, u("couldNotSave")) : u("savedSuccessfully"));
+    if (result.error) onToast(localizedFinancialError(language, result.error, u("couldNotSave")));
     if (!result.error) {
+      if (result.data) await completeHawalaTransfer(result.data, hawalaMode === "incoming" ? (language === "en" ? "Incoming Hawala" : language === "fa-AF" ? "حواله ورودی" : "راتلونکې حواله") : (language === "en" ? "Send Hawala" : language === "fa-AF" ? "فرستادن حواله" : "حواله لېږل"), pathname);
       setBeneficiary("");
+      setSenderName("");
       setOrigin("");
       setDestination("");
       setAmount("");
@@ -7060,8 +7312,9 @@ function HawalaView({
   const confirmPayout = async () => {
     if (!organizationId || !payoutMatch || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2) return;
     if (organizationId === "inspection") {
+      const preview = { id: "inspection-incoming", beneficiary_name: payoutMatch.beneficiary_name, origin_location: "—", destination_location: payoutMatch.destination_location, currency_code: payoutMatch.currency_code, amount: payoutMatch.amount, fee: "0", reference_code: payoutMatch.reference_code, status: "paid", created_at: new Date().toISOString(), direction: "incoming" as const, payout_journal_entry_id: "inspection-payout-entry" };
+      await completeHawalaTransfer(preview, language === "en" ? "Hawala payout" : language === "fa-AF" ? "پرداخت حواله" : "د حوالې ورکړه", pathname, preview.payout_journal_entry_id);
       setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
-      onToast(u("savedSuccessfully"));
       return;
     }
     setTransitionBusy(payoutMatch.reference_code);
@@ -7082,9 +7335,9 @@ function HawalaView({
         const resumed = await resumeApprovedHawalaPayout(approval.data.id);
         setTransitionBusy(null);
         if (resumed.error) { onToast(localizedFinancialError(language, resumed.error, u("couldNotSave"))); return; }
+        if (resumed.data) await completeHawalaTransfer(resumed.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "پرداخت حواله" : "د حوالې ورکړه", pathname);
         setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
         setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
-        onToast(u("savedSuccessfully"));
         return;
       }
       setTransitionBusy(null);
@@ -7093,9 +7346,9 @@ function HawalaView({
     }
     setTransitionBusy(null);
     if (result.error) { onToast(localizedFinancialError(language, result.error, u("couldNotSave"))); return; }
+    if (result.data) await completeHawalaTransfer(result.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "پرداخت حواله" : "د حوالې ورکړه", pathname);
     setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
     setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
-    onToast(u("savedSuccessfully"));
   };
   const settleLine = async (line: HawalaPartnerStatement["lines"][number]) => {
     const settlementAmount = settlementAmounts[line.id] || line.remaining_amount;
@@ -7120,6 +7373,27 @@ function HawalaView({
     });
     setTransitionBusy(null);
     if (result.error) { onToast(localizedFinancialError(language, result.error, u("couldNotSave"))); return; }
+    const journalEntryId = String(result.data?.journal_entry_id ?? "");
+    const receiptResult = journalEntryId
+      ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+      : { data: null, error: null };
+    onFinancialCompleted({
+      receiptNumber: receiptResult.data?.receipt_number ?? line.reference_code,
+      journalEntryId: journalEntryId || line.transfer_id,
+      givenAmount: settlementAmount,
+      givenCurrency: line.currency_code,
+      receivedAmount: settlementAmount,
+      receivedCurrency: line.currency_code,
+      rate: "—",
+      occurredAt: new Date().toISOString(),
+      typeLabel: language === "en" ? "Hawala partner settlement" : language === "fa-AF" ? "تصفیه همکار حواله" : "د حوالې له همکار سره تصفیه",
+      repeatPath: pathname,
+      detailPath: `${workspaceRoot(organizationId)}/hawala/${line.transfer_id}`,
+      flowRows: [
+        { label: t("referenceCode"), value: line.reference_code },
+        { label: t("amount"), value: `${formatFinancialAmount(settlementAmount)} ${line.currency_code}` },
+      ],
+    });
     setSettlementAmounts((current) => ({ ...current, [line.id]: "" }));
     setSettlementRateLineId(null);
     setSettlementRatePublication(undefined);
@@ -7127,12 +7401,22 @@ function HawalaView({
     if (refreshed.data) {
       setStatementResult({ partnerId: settlementPartnerId, data: refreshed.data });
     }
-    onToast(u("savedSuccessfully"));
   };
   const canSettle = hasCapability(capabilities, "hawala.settle");
   const settlementRateLine = settlementRateLineId
     ? statement?.lines.find((line) => line.id === settlementRateLineId) ?? null
     : null;
+  const selectedTransfer = routeTransferId
+    ? transfers.find((transfer) => transfer.id === routeTransferId) ?? null
+    : null;
+  const selectedTimeline = selectedTransfer
+    ? (selectedTransfer.direction === "incoming"
+      ? ["created", "ready", "paid"]
+      : ["created", "funded", "sent", "paid"])
+    : [];
+  const reachedTimelineIndex = selectedTransfer
+    ? Math.max(selectedTimeline.indexOf(selectedTransfer.status), selectedTransfer.status === "cancelled" ? 0 : -1)
+    : -1;
   return (
     <section className="panel">
       <div className="panel-header">
@@ -7175,6 +7459,7 @@ function HawalaView({
           <h2 id="hawala-payout-title">{language === "en" ? "Pay by reference code" : language === "fa-AF" ? "پرداخت با رمز حواله" : "د حوالې په کوډ ورکړه"}</h2>
           <p>{language === "en" ? "Enter the customer’s code. SARAFI shows only the matching ready transfer." : language === "fa-AF" ? "رمز مشتری را وارد کنید. سرافی فقط حواله آماده و مطابق را نشان می‌دهد." : "د پېرېدونکي کوډ ولیکئ. سرافي یوازې برابره چمتو حواله ښيي."}</p>
           <form className="hawala-code-search" onSubmit={searchPayout}><label>{t("referenceCode")}<input autoFocus required dir="ltr" value={payoutCode} onChange={(event) => { setPayoutCode(event.target.value.trimStart()); setPayoutMatch(null); }} placeholder={u("uniqueReference")} /></label><button className="secondary-action" type="submit" disabled={searchBusy || payoutCode.trim().length < 4}>{searchBusy ? "…" : (language === "en" ? "Find transfer" : language === "fa-AF" ? "یافتن حواله" : "حواله ومومئ")}</button></form>
+          <ReferenceScanner language={language} onDetected={(reference) => { setPayoutCode(reference); setPayoutMatch(null); }} />
           {payoutCode.trim().length >= 4 && !payoutMatch && !searchBusy ? <p className="calm-empty" role="status">{language === "en" ? "Enter the exact code and choose Find transfer." : language === "fa-AF" ? "رمز دقیق را وارد کرده و یافتن حواله را بزنید." : "کره کوډ ولیکئ او حواله ومومئ وټاکئ."}</p> : null}
           {payoutMatch ? <>
             <article className="payout-match"><span><strong>{payoutMatch.beneficiary_name}</strong><small>{payoutMatch.destination_location}</small></span><b dir="ltr">{formatFinancialAmount(payoutMatch.amount)} {payoutMatch.currency_code}</b></article>
@@ -7188,6 +7473,7 @@ function HawalaView({
         <form className="financial-task-form" onSubmit={submit}>
           <h2>{hawalaMode === "send" ? (language === "en" ? "Send Hawala" : language === "fa-AF" ? "فرستادن حواله" : "حواله لېږل") : (language === "en" ? "Record incoming instruction" : language === "fa-AF" ? "ثبت حواله رسیده" : "رارسېدلې حواله ثبتول")}</h2>
           <label>{language === "en" ? "Hawala partner" : language === "fa-AF" ? "همکار حواله" : "د حوالې همکار"}<select required value={createPartnerId} onChange={(event) => setCreatePartnerId(event.target.value)}><option value="">{language === "en" ? "Choose the canonical partner" : language === "fa-AF" ? "همکار اصلی را انتخاب کنید" : "اصلي همکار وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}</select></label>
+          <label>{language === "en" ? "Sender" : language === "fa-AF" ? "فرستنده" : "لېږونکی"}<input required value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder={language === "en" ? "Sender’s full name" : language === "fa-AF" ? "نام کامل فرستنده" : "د لېږونکي بشپړ نوم"} /></label>
           <label>{u("receiver")}<input required value={beneficiary} onChange={(event) => setBeneficiary(event.target.value)} placeholder={u("fullBeneficiaryName")} /></label>
           {hawalaMode === "incoming" ? <label>{language === "en" ? "Origin location" : language === "fa-AF" ? "محل مبدأ" : "د پیل ځای"}<input required value={origin} onChange={(event) => setOrigin(event.target.value)} placeholder={u("cityCountry")} /></label> : null}
           <label>{t("destination")}<input required value={destination} onChange={(event) => setDestination(event.target.value)} placeholder={u("cityCountry")} /></label>
@@ -7209,14 +7495,47 @@ function HawalaView({
             onReadyChange={setCreateRateReady}
           />
           {hawalaMode === "send" ? <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label> : null}
-          <label>{t("referenceCode")}<input required dir="ltr" value={reference} onChange={(event) => setReference(event.target.value)} placeholder={u("uniqueReference")} /></label>
+          {hawalaMode === "incoming" ? <label>{t("referenceCode")}<input required dir="ltr" value={reference} onChange={(event) => setReference(event.target.value)} placeholder={u("uniqueReference")} /></label> : <p className="form-hint">{language === "en" ? "A secure reference will be issued when this Hawala is saved." : language === "fa-AF" ? "پس از ثبت حواله، یک رمز امن ساخته می‌شود." : "د حوالې له ثبت وروسته به خوندي کوډ جوړ شي."}</p>}
           <button className="primary-action full" type="submit" disabled={busy || (currency !== "AFN" && !createRateReady)}>{busy ? u("postingHawala") : u("saveHawala")} <span>→</span></button>
         </form>
+      ) : null}
+      {hawalaMode === "overview" && routeTransferId ? selectedTransfer ? (
+        <article className="hawala-detail-card" aria-labelledby="hawala-detail-title">
+          <div className="panel-header compact-header">
+            <div>
+              <p className="kicker">{language === "en" ? "Hawala record" : language === "fa-AF" ? "ثبت حواله" : "د حوالې ثبت"}</p>
+              <h2 id="hawala-detail-title">{selectedTransfer.beneficiary_name}</h2>
+              <p><bdi>{selectedTransfer.reference_code}</bdi></p>
+            </div>
+            <button className="text-button" type="button" onClick={() => onRoute(`${workspaceRoot(organizationId)}/hawala`)}>
+              {language === "en" ? "All Hawalas" : language === "fa-AF" ? "همه حواله‌ها" : "ټولې حوالې"} →
+            </button>
+          </div>
+          <dl className="hawala-detail-grid">
+            <div><dt>{t("amount")}</dt><dd><bdi>{formatFinancialAmount(selectedTransfer.amount)} {selectedTransfer.currency_code}</bdi></dd></div>
+            <div><dt>{t("fee")}</dt><dd><bdi>{formatFinancialAmount(selectedTransfer.fee)} {selectedTransfer.currency_code}</bdi></dd></div>
+            <div><dt>{language === "en" ? "Direction" : language === "fa-AF" ? "جهت" : "لوری"}</dt><dd>{selectedTransfer.direction ?? "legacy"}</dd></div>
+            <div><dt>{u("status")}</dt><dd><span className={`status-pill status-${selectedTransfer.status}`}>● {selectedTransfer.status}</span></dd></div>
+            <div><dt>{language === "en" ? "Origin" : language === "fa-AF" ? "مبدأ" : "پیل"}</dt><dd>{selectedTransfer.origin_location || "—"}</dd></div>
+            <div><dt>{t("destination")}</dt><dd>{selectedTransfer.destination_location}</dd></div>
+            <div><dt>{language === "en" ? "Created" : language === "fa-AF" ? "زمان ثبت" : "د ثبت وخت"}</dt><dd><bdi>{new Date(selectedTransfer.created_at).toLocaleString(language)}</bdi></dd></div>
+            <div><dt>{language === "en" ? "Integrity" : language === "fa-AF" ? "سلامت ثبت" : "د ثبت بشپړتیا"}</dt><dd>{selectedTransfer.integrity_state === "review_required" ? (language === "en" ? "Review required" : language === "fa-AF" ? "نیازمند بررسی" : "کتنې ته اړتیا لري") : (language === "en" ? "Valid" : language === "fa-AF" ? "معتبر" : "سم")}</dd></div>
+          </dl>
+          <section className="hawala-timeline" aria-label={language === "en" ? "Hawala status timeline" : language === "fa-AF" ? "مسیر وضعیت حواله" : "د حوالې د حالت لړۍ"}>
+            <h3>{language === "en" ? "Status timeline" : language === "fa-AF" ? "مسیر وضعیت" : "د حالت لړۍ"}</h3>
+            <ol>
+              {selectedTimeline.map((statusItem, index) => <li className={index <= reachedTimelineIndex ? "complete" : "pending"} key={statusItem}><span aria-hidden="true">{index <= reachedTimelineIndex ? "✓" : index + 1}</span><strong>{statusItem}</strong></li>)}
+              {selectedTransfer.status === "cancelled" ? <li className="cancelled"><span aria-hidden="true">×</span><strong>{language === "en" ? "Cancelled" : language === "fa-AF" ? "لغوشده" : "لغوه شوې"}</strong></li> : null}
+            </ol>
+          </section>
+        </article>
+      ) : (
+        <div className="calm-empty" role="status">{language === "en" ? "This Hawala is unavailable or outside your assigned scope." : language === "fa-AF" ? "این حواله موجود نیست یا بیرون از ساحه تعیین‌شده شما است." : "دا حواله نشته یا ستاسو له ټاکل شوې ساحې بهر ده."}</div>
       ) : null}
       {hawalaMode === "overview" ? <div className="balance-list">
         {transfers.length ? (
           transfers.map((transfer) => (
-            <div className="balance-row" key={transfer.id}>
+            <button type="button" className={`balance-row ${routeTransferId === transfer.id ? "deep-link-focus" : ""}`} id={`hawala-${transfer.id}`} key={transfer.id} onClick={() => onRoute(`${workspaceRoot(organizationId)}/hawala/${transfer.id}`)}>
               <span className="currency-badge usd">
                 {transfer.currency_code}
               </span>
@@ -7230,7 +7549,7 @@ function HawalaView({
               <span className="hawala-status-actions">
                 <small className={`status-pill status-${transfer.status}`}>● {transfer.status}{transfer.integrity_state === "review_required" ? " · review" : ""}</small>
               </span>
-            </div>
+            </button>
           ))
         ) : (
           <div className="empty-live">{u("noHawala")}</div>
@@ -7255,11 +7574,12 @@ function WorkerConnectionLobby({ language, code, kind, name, busy, message, onLa
   onCreateBusiness: () => void;
   onSignOut: () => void;
 }) {
+  const [workerSelected, setWorkerSelected] = useState(Boolean(code.trim()));
   const text = language === "en"
-    ? { kicker: "Connect to your workplace", title: "Join your SARAFI team", intro: "Use a personal invitation for immediate assigned access, or request access with the workplace code for owner review.", invitation: "I have an invitation", request: "Request access", name: "Your full name", invitationLabel: "10-character invitation code", requestLabel: "12-character workplace code", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "Connect workplace", send: "Send request", connecting: "Connecting…", owner: "I am creating a new business", signOut: "Use another account" }
+    ? { kicker: "Choose your next step", title: "How will you use SARAFI?", intro: "Choose the path that matches your authority. A worker stays outside the workplace until an owner approves access.", owner: "I own or manage a Sarafi", ownerCopy: "Create a new business and become its Owner.", worker: "I work for a Sarafi", workerCopy: "Use an invitation or request access for owner review.", workerTitle: "Join your SARAFI team", existing: "Sign in to an existing workplace", existingCopy: "Use another account that already has workplace access.", invitation: "I have an invitation", request: "Request access", name: "Your full name", invitationLabel: "10-character invitation code", requestLabel: "12-character workplace code", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "Connect workplace", send: "Send request", connecting: "Connecting…" }
     : language === "fa-AF"
-      ? { kicker: "وصل‌شدن به محل کار", title: "به تیم سرافی بپیوندید", intro: "با دعوت شخصی فوراً وارد شوید، یا با رمز محل کار درخواست دسترسی را برای بررسی مالک بفرستید.", invitation: "دعوت‌نامه دارم", request: "درخواست دسترسی", name: "نام کامل شما", invitationLabel: "رمز ده‌حرفی دعوت", requestLabel: "رمز دوازده‌حرفی محل کار", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "وصل‌کردن محل کار", send: "فرستادن درخواست", connecting: "در حال اتصال…", owner: "می‌خواهم صرافی جدید بسازم", signOut: "استفاده از حساب دیگر" }
-      : { kicker: "له کاري ځای سره نښلول", title: "د سرافي له ډلې سره یوځای شئ", intro: "په شخصي بلنه سملاسي ننوځئ، یا د کاري ځای په کوډ د مالک د کتنې لپاره غوښتنه ولېږئ.", invitation: "بلنه لرم", request: "د لاسرسي غوښتنه", name: "ستاسو بشپړ نوم", invitationLabel: "لس توري د بلنې کوډ", requestLabel: "دولس توري د کاري ځای کوډ", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "کاري ځای ونښلوئ", send: "غوښتنه لېږل", connecting: "نښلول کېږي…", owner: "زه نوې صرافي جوړوم", signOut: "بل حساب وکاروئ" };
+      ? { kicker: "گام بعدی را انتخاب کنید", title: "چگونه از سرافی استفاده می‌کنید؟", intro: "راهی را انتخاب کنید که با صلاحیت شما برابر است. کارمند تا تأیید مالک بیرون از محل کار می‌ماند.", owner: "مالک یا مدیر صرافی هستم", ownerCopy: "یک صرافی جدید بسازید و مالک آن شوید.", worker: "برای یک صرافی کار می‌کنم", workerCopy: "با دعوت‌نامه وصل شوید یا درخواست تأیید مالک را بفرستید.", workerTitle: "به تیم صرافی خود بپیوندید", existing: "ورود به محل کار موجود", existingCopy: "از حساب دیگری که از قبل دسترسی دارد استفاده کنید.", invitation: "دعوت‌نامه دارم", request: "درخواست دسترسی", name: "نام کامل شما", invitationLabel: "رمز ده‌حرفی دعوت", requestLabel: "رمز دوازده‌حرفی محل کار", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "وصل‌کردن محل کار", send: "فرستادن درخواست", connecting: "در حال اتصال…" }
+      : { kicker: "بل ګام وټاکئ", title: "تاسو سرافي څنګه کاروئ؟", intro: "هغه لاره وټاکئ چې ستاسو له واک سره برابره ده. کارکوونکی د مالک تر تایید پورې له کاري ځای څخه بهر پاتې کېږي.", owner: "زه د صرافۍ مالک یا مدیر یم", ownerCopy: "نوې صرافي جوړه کړئ او مالک یې شئ.", worker: "زه د یوې صرافۍ لپاره کار کوم", workerCopy: "په بلنه ونښلئ یا د مالک د تایید غوښتنه ولېږئ.", workerTitle: "د خپلې صرافۍ له ډلې سره یوځای شئ", existing: "موجود کاري ځای ته ننوتل", existingCopy: "بل حساب وکاروئ چې له مخکې لاسرسی لري.", invitation: "بلنه لرم", request: "د لاسرسي غوښتنه", name: "ستاسو بشپړ نوم", invitationLabel: "لس توري د بلنې کوډ", requestLabel: "دولس توري د کاري ځای کوډ", invitationPlaceholder: "A1B2C3D4E5", requestPlaceholder: "AB12CD34EF56", connect: "کاري ځای ونښلوئ", send: "غوښتنه لېږل", connecting: "نښلول کېږي…" };
   return (
     <main className="auth-shell worker-lobby-shell">
       <section className="auth-card worker-lobby-card">
@@ -7268,7 +7588,14 @@ function WorkerConnectionLobby({ language, code, kind, name, busy, message, onLa
         <p className="kicker">{text.kicker}</p>
         <h1>{text.title}</h1>
         <p className="auth-subtitle">{text.intro}</p>
-        <div className="segmented-control" aria-label={text.title}>
+        <div className="workspace-entry-choices" aria-label={text.title}>
+          <button type="button" onClick={onCreateBusiness}><strong>{text.owner}</strong><small>{text.ownerCopy}</small></button>
+          <button type="button" className={workerSelected ? "active" : ""} aria-current={workerSelected ? "step" : undefined} onClick={() => setWorkerSelected(true)}><strong>{text.worker}</strong><small>{text.workerCopy}</small></button>
+          <button type="button" onClick={onSignOut}><strong>{text.existing}</strong><small>{text.existingCopy}</small></button>
+        </div>
+        {workerSelected ? <section className="worker-connection-step" aria-labelledby="worker-connection-title">
+        <h2 id="worker-connection-title">{text.workerTitle}</h2>
+        <div className="segmented-control" aria-label={text.workerTitle}>
           <button type="button" className={kind === "invitation" ? "active" : ""} aria-pressed={kind === "invitation"} onClick={() => onKindChange("invitation")}>{text.invitation}</button>
           <button type="button" className={kind === "request" ? "active" : ""} aria-pressed={kind === "request"} onClick={() => onKindChange("request")}>{text.request}</button>
         </div>
@@ -7278,7 +7605,7 @@ function WorkerConnectionLobby({ language, code, kind, name, busy, message, onLa
           {message && <p className={`auth-feedback ${message.toLowerCase().includes("sent") || message.includes("فرستاده") || message.includes("ولېږل") ? "success" : "error"}`} role="status">{message}</p>}
           <button className="primary-action full" disabled={busy}>{busy ? text.connecting : kind === "invitation" ? text.connect : text.send}</button>
         </form>
-        <div className="worker-lobby-actions"><button type="button" className="secondary-action" onClick={onCreateBusiness}>{text.owner}</button><button type="button" className="text-button" onClick={onSignOut}>{text.signOut}</button></div>
+        </section> : null}
       </section>
     </main>
   );

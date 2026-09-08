@@ -21,8 +21,15 @@ test.describe("accessibility acceptance", () => {
     page,
   }) => {
     await page.goto("/app/inspection/transactions/new?role=cashier");
-    for (const action of [/Buy currency/, /Sell currency/, /Currency Exchange/, /Money In/, /Money Out/, /Move Our Money/, /^Debt/, /^Hawala/]) {
+    for (const action of [/Currency Exchange/, /Money In/, /Money Out/, /Move Our Money/, /^Debt/, /^Hawala/]) {
       const control = page.getByRole("button", { name: action }).first();
+      await expect(control).toBeVisible();
+      await control.focus();
+      await expect(control).toBeFocused();
+    }
+    await page.getByRole("button", { name: /Currency Exchange/ }).click();
+    for (const action of [/Buy currency/, /Sell currency/]) {
+      const control = page.getByRole("button", { name: action });
       await expect(control).toBeVisible();
       await control.focus();
       await expect(control).toBeFocused();

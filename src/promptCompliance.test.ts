@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+const routerSource = readFileSync(new URL("./app/router.tsx", import.meta.url), "utf8");
 const vercelConfig = JSON.parse(
   readFileSync(new URL("../vercel.json", import.meta.url), "utf8"),
 ) as { rewrites?: Array<{ source?: string; destination?: string }> };
@@ -34,13 +35,14 @@ describe("premium workflow static gates", () => {
     for (const route of [
       "/home",
       "/transactions/new",
-      "/transactions/new/fx",
-      "/transactions/new/money-in",
-      "/transactions/new/money-out",
-      "/transactions/new/move-money",
-      "/transactions/new/debt",
-      "/transactions/new/hawala",
-      "/transactions/new/correction",
+      "/transactions/new/fx/buy",
+      "/transactions/new/fx/sell",
+      "/transactions/new/fx/exchange",
+      "/transactions/new/money-in/receive",
+      "/transactions/new/money-out/pay",
+      "/transactions/new/move/transfer",
+      "/transactions/new/debt/receivable",
+      "/transactions/new/hawala/send",
       "/transactions",
       "/money",
       "/customers",
@@ -57,8 +59,11 @@ describe("premium workflow static gates", () => {
       "/compliance",
       "/compliance/cases",
     ]) {
-      expect(appSource, route).toContain(route);
+      expect(routerSource, route).toContain(route);
     }
+    expect(routerSource).toContain("createBrowserRouter");
+    expect(appSource).toContain("<Outlet");
+    expect(appSource).not.toContain("sectionFromPath");
   });
 
   it("serves nested application routes through the SPA entry point", () => {

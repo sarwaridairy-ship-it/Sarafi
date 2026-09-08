@@ -731,7 +731,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
   );
 }
 
-export function ComplianceView({ language, organizationId, onDashboard }: { language: Language; organizationId: string | null; onDashboard: () => void }) {
+export function ComplianceView({ language, organizationId, pathname, activityRefresh, onDashboard }: { language: Language; organizationId: string | null; pathname: string; activityRefresh: number; onDashboard: () => void }) {
   const c = complianceActionCopy[language];
   const [data, setData] = useState<ComplianceWorkspaceRecord | null>(null);
   const [people, setPeople] = useState<CounterpartyRecord[]>([]);
@@ -745,6 +745,7 @@ export function ComplianceView({ language, organizationId, onDashboard }: { lang
   const [submissionReference, setSubmissionReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const routeCaseId = pathname.match(/\/compliance\/cases\/([^/]+)$/)?.[1] ?? null;
   const reload = async () => {
     if (!organizationId || organizationId === "inspection") return;
     const result = await getComplianceWorkspace(organizationId);
@@ -761,13 +762,25 @@ export function ComplianceView({ language, organizationId, onDashboard }: { lang
       setState(result.error || peopleResult.error || !result.data ? "error" : "ready");
     });
     return () => { active = false; };
-  }, [organizationId]);
+  }, [activityRefresh, organizationId]);
   useEffect(() => {
     const profile = data?.kycProfiles.find((item) => item.counterparty_id === selectedPerson);
     const person = people.find((item) => item.id === selectedPerson);
     // oxlint-disable-next-line react/set-state-in-effect -- The form mirrors the selected external KYC record.
     setKyc(profile ?? { legal_name: person?.display_name ?? "", phone: person?.phone ?? "", risk_level: "medium", review_status: "pending" });
   }, [data, people, selectedPerson]);
+  useEffect(() => {
+    if (!routeCaseId || !data) return;
+    const linkedAlert = data.alerts.find((item) => item.id === routeCaseId);
+    if (linkedAlert) {
+      // oxlint-disable-next-line react/set-state-in-effect -- An exact alert URL opens that alert's review controls.
+      setSelectedAlert(linkedAlert.id);
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`compliance-${routeCaseId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [data, routeCaseId]);
   const saveKyc = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!organizationId || !selectedPerson) return;
@@ -825,8 +838,8 @@ export function ComplianceView({ language, organizationId, onDashboard }: { lang
         <article className="queue-card"><div><p>{p(language, "caseQueue")}</p><strong>{hasVerifiedData ? (data!.caseCounts.draft + data!.caseCounts.ready) : "—"}</strong></div><dl><div><dt>{p(language, "draft")}</dt><dd>{hasVerifiedData ? data!.caseCounts.draft : "—"}</dd></div><div><dt>{p(language, "ready")}</dt><dd>{hasVerifiedData ? data!.caseCounts.ready : "—"}</dd></div><div><dt>{p(language, "submitted")}</dt><dd>{hasVerifiedData ? data!.caseCounts.submitted : "—"}</dd></div></dl></article>
       </div>
       {hasVerifiedData && <div className="compliance-record-grid">
-        <article className="settings-card"><h2>{p(language, "recentAlerts")}</h2><div className="compliance-record-list">{data!.alerts.length ? data!.alerts.map((alert) => <button className="compliance-select-row" key={alert.id} onClick={() => setSelectedAlert(alert.id)}><span><b>{complianceTypeCopy[language][alert.alert_type] ?? alert.alert_type}</b><small>{new Date(alert.created_at).toLocaleString(language)}</small></span><strong>{alert.status === "under_review" ? p(language, "reviewing") : alert.status === "open" ? p(language, "open") : p(language, "closed")}</strong></button>) : <p className="muted-copy">{p(language, "noQueueItems")}</p>}</div></article>
-        <article className="settings-card"><h2>{p(language, "recentCases")}</h2><div className="compliance-record-list">{data!.cases.length ? data!.cases.map((item) => <div key={item.id}><span><b><bdi>{item.submitted_reference ?? item.id.slice(0, 8)}</bdi></b><small>{new Date(item.created_at).toLocaleString(language)}</small></span><strong>{item.report_status === "draft" ? p(language, "draft") : item.report_status === "ready" ? p(language, "ready") : item.report_status === "submitted" ? p(language, "submitted") : p(language, "closed")}</strong></div>) : <p className="muted-copy">{p(language, "noQueueItems")}</p>}</div></article>
+        <article className="settings-card"><h2>{p(language, "recentAlerts")}</h2><div className="compliance-record-list">{data!.alerts.length ? data!.alerts.map((alert) => <button className={`compliance-select-row ${routeCaseId === alert.id ? "deep-link-focus" : ""}`} id={`compliance-${alert.id}`} key={alert.id} onClick={() => setSelectedAlert(alert.id)}><span><b>{complianceTypeCopy[language][alert.alert_type] ?? alert.alert_type}</b><small>{new Date(alert.created_at).toLocaleString(language)}</small></span><strong>{alert.status === "under_review" ? p(language, "reviewing") : alert.status === "open" ? p(language, "open") : p(language, "closed")}</strong></button>) : <p className="muted-copy">{p(language, "noQueueItems")}</p>}</div></article>
+        <article className="settings-card"><h2>{p(language, "recentCases")}</h2><div className="compliance-record-list">{data!.cases.length ? data!.cases.map((item) => <div className={routeCaseId === item.id ? "deep-link-focus" : ""} id={`compliance-${item.id}`} key={item.id}><span><b><bdi>{item.submitted_reference ?? item.id.slice(0, 8)}</bdi></b><small>{new Date(item.created_at).toLocaleString(language)}</small></span><strong>{item.report_status === "draft" ? p(language, "draft") : item.report_status === "ready" ? p(language, "ready") : item.report_status === "submitted" ? p(language, "submitted") : p(language, "closed")}</strong></div>) : <p className="muted-copy">{p(language, "noQueueItems")}</p>}</div></article>
       </div>}
       {hasVerifiedData && <div className="compliance-record-grid compliance-actions-grid">
         <article className="settings-card">
@@ -857,7 +870,21 @@ export function ComplianceView({ language, organizationId, onDashboard }: { lang
   );
 }
 
-export type CompletedTrade = { receiptNumber: string | null; journalEntryId: string; givenAmount: string; givenCurrency: string; receivedAmount: string; receivedCurrency: string; rate: string; occurredAt: string };
+export type CompletedTrade = {
+  receiptNumber: string | null;
+  journalEntryId: string;
+  givenAmount: string;
+  givenCurrency: string;
+  receivedAmount: string;
+  receivedCurrency: string;
+  rate: string;
+  occurredAt: string;
+  typeLabel?: string;
+  repeatPath?: string;
+  repeatOperation?: string;
+  detailPath?: string;
+  flowRows?: Array<{ label: string; value: string }>;
+};
 
 export function ReceiptSuccessDialog({ language, businessName, trade, onPrint, onNewSimilar, onViewTransaction, onDone }: { language: Language; businessName: string; trade: CompletedTrade; onPrint: (width: "58mm" | "80mm") => void; onNewSimilar: () => void; onViewTransaction: () => void; onDone: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
@@ -900,9 +927,14 @@ export function ReceiptSuccessDialog({ language, businessName, trade, onPrint, o
         <div className="receipt-paper">
           <div className="receipt-brand"><b>{businessName}</b><span>{trade.receiptNumber ?? p(language, "receiptPending")}</span></div>
           <DetailRow label={p(language, "transactionReference")} value={trade.journalEntryId} />
-          <DetailRow label={p(language, "shopGives")} value={`${trade.givenAmount} ${trade.givenCurrency}`} />
-          <DetailRow label={p(language, "shopReceives")} value={`${trade.receivedAmount} ${trade.receivedCurrency}`} />
-          <DetailRow label={p(language, "customerRate")} value={trade.rate} />
+          {trade.typeLabel ? <DetailRow label={language === "en" ? "Transaction" : language === "fa-AF" ? "معامله" : "معامله"} value={trade.typeLabel} /> : null}
+          {trade.flowRows?.length
+            ? trade.flowRows.map((row) => <DetailRow key={`${row.label}:${row.value}`} label={row.label} value={row.value} />)
+            : <>
+                <DetailRow label={p(language, "shopGives")} value={`${trade.givenAmount} ${trade.givenCurrency}`} />
+                <DetailRow label={p(language, "shopReceives")} value={`${trade.receivedAmount} ${trade.receivedCurrency}`} />
+              </>}
+          {trade.rate && trade.rate !== "—" ? <DetailRow label={p(language, "customerRate")} value={trade.rate} /> : null}
           <time>{new Date(trade.occurredAt).toLocaleString(language, { hour12: false })}</time>
         </div>
         <div className="receipt-actions">

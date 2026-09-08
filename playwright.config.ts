@@ -3,10 +3,12 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
   workers: 1,
-  reporter: process.env.CI ? [["github"], ["line"]] : [["line"]],
+  reporter: process.env.CI ? [["github"], ["line"], ["html", { outputFolder: "playwright-report", open: "never" }]] : [["line"]],
+  outputDir: "test-results",
   use: {
     baseURL: "http://127.0.0.1:5174",
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     serviceWorkers: "block",
   },
   webServer: {

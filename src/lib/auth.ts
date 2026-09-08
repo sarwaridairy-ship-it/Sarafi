@@ -108,9 +108,48 @@ export async function verifyTotp(factorId: string, code: string): Promise<string
   return result.error?.message ?? null
 }
 
-export function subscribeToOrganizationActivity(organizationId: string, onChange: () => void): (() => void) | null {
+export type OrganizationActivityTable =
+  | 'financial_events'
+  | 'devices'
+  | 'organization_memberships'
+  | 'approval_requests'
+  | 'worker_join_requests'
+  | 'hawala_transfers'
+  | 'compliance_alerts'
+  | 'compliance_cases'
+  | 'security_audit_events'
+
+export type OrganizationActivityPayload = {
+  eventType?: string
+  new?: Record<string, unknown>
+  old?: Record<string, unknown>
+}
+
+export function subscribeToOrganizationActivity(
+  organizationId: string,
+  onChange: (table: OrganizationActivityTable, payload: OrganizationActivityPayload) => void,
+): (() => void) | null {
   const client = getSupabaseClient()
   if (!client) return null
-  const channel: RealtimeChannel = client.channel(`organization:${organizationId}:activity`).on('postgres_changes', { event: '*', schema: 'public', table: 'financial_events', filter: `organization_id=eq.${organizationId}` }, onChange).subscribe()
+  const tables = [
+    'financial_events',
+    'devices',
+    'organization_memberships',
+    'approval_requests',
+    'worker_join_requests',
+    'hawala_transfers',
+    'compliance_alerts',
+    'compliance_cases',
+    'security_audit_events',
+  ] as const
+  let channel: RealtimeChannel = client.channel(`organization:${organizationId}:activity`)
+  for (const table of tables) {
+    channel = channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table, filter: `organization_id=eq.${organizationId}` },
+      (payload) => onChange(table, payload as OrganizationActivityPayload),
+    )
+  }
+  channel.subscribe()
   return () => { void client.removeChannel(channel) }
 }

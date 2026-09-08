@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createTelemetryFetch } from './telemetry'
 
 export type PublicSupabaseConfig = { url: string; anonKey: string }
 
@@ -29,6 +30,7 @@ export function getSupabaseClient(): SupabaseClient | null {
   client ??= createClient(config.url, config.anonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     realtime: { params: { eventsPerSecond: 10 } },
+    global: { fetch: createTelemetryFetch(config.url) },
   })
   return client
 }

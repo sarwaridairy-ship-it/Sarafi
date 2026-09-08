@@ -12,6 +12,22 @@ on:
         description: "Verified backup/PITR or restore-drill reference for this release"
         required: true
         type: string
+      release_tag:
+        description: "Signed release tag that points to this exact commit"
+        required: true
+        type: string
+      local_language_uat_evidence:
+        description: "Dari and Pashto human UAT evidence reference"
+        required: true
+        type: string
+      printer_acceptance_evidence:
+        description: "Physical 58mm, 80mm, and A4 printer acceptance reference"
+        required: true
+        type: string
+      legal_provider_signoff_evidence:
+        description: "Legal/compliance and screening-provider sign-off reference"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,11 +37,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Require an exact signed release tag
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          test -n "$RELEASE_TAG"
+          git verify-tag "$RELEASE_TAG"
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$GITHUB_SHA"
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run smoke
       - name: Require authenticated release fixtures
@@ -35,12 +60,14 @@ jobs:
           SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
           SARAFI_E2E_PASSWORD: ${{ secrets.SARAFI_E2E_PASSWORD }}
           SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
+          SARAFI_E2E_ROLE_FIXTURES: ${{ secrets.SARAFI_E2E_ROLE_FIXTURES }}
         run: |
           test -n "$VITE_SUPABASE_URL"
           test -n "$VITE_SUPABASE_ANON_KEY"
           test -n "$SARAFI_E2E_EMAIL"
           test -n "$SARAFI_E2E_PASSWORD"
           test -n "$SARAFI_E2E_ORGANIZATION_ID"
+          test -n "$SARAFI_E2E_ROLE_FIXTURES"
       - name: Authenticated authorization journeys
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -48,7 +75,9 @@ jobs:
           SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
           SARAFI_E2E_PASSWORD: ${{ secrets.SARAFI_E2E_PASSWORD }}
           SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
-        run: npx playwright test tests/e2e/authenticated-security.spec.ts --project=chromium
+          SARAFI_E2E_ROLE_FIXTURES: ${{ secrets.SARAFI_E2E_ROLE_FIXTURES }}
+          STEP15_CERTIFICATION: "true"
+        run: npx playwright test tests/e2e/authenticated-security.spec.ts tests/e2e/authenticated-roles.spec.ts
       - name: Initialize isolated local database configuration
         run: npx supabase init --yes
       - name: Start isolated local database
@@ -61,6 +90,18 @@ jobs:
         if: always()
         run: npx supabase stop --no-backup
       - run: npm run build
+      - name: Retain protected verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarafi-release-verification-${{ github.sha }}
+          if-no-files-found: ignore
+          retention-days: 90
+          path: |
+            playwright-report/
+            test-results/
+            artifacts/
+            output/pdf/
 
   production-promotion:
     if: ${{ inputs.promote == true }}
@@ -79,6 +120,9 @@ jobs:
       - name: Verify protected release evidence and credentials
         env:
           BACKUP_EVIDENCE: ${{ inputs.backup_evidence }}
+          LOCAL_LANGUAGE_UAT_EVIDENCE: ${{ inputs.local_language_uat_evidence }}
+          PRINTER_ACCEPTANCE_EVIDENCE: ${{ inputs.printer_acceptance_evidence }}
+          LEGAL_PROVIDER_SIGNOFF_EVIDENCE: ${{ inputs.legal_provider_signoff_evidence }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -87,6 +131,9 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
           test -n "$BACKUP_EVIDENCE"
+          test -n "$LOCAL_LANGUAGE_UAT_EVIDENCE"
+          test -n "$PRINTER_ACCEPTANCE_EVIDENCE"
+          test -n "$LEGAL_PROVIDER_SIGNOFF_EVIDENCE"
           test -n "$VERCEL_TOKEN"
           test -n "$VERCEL_ORG_ID"
           test -n "$VERCEL_PROJECT_ID"
@@ -140,8 +187,18 @@ jobs:
       - name: Inspect immutable deployment metadata
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel@54.18.7 inspect "${{ steps.deploy.outputs.url }}" --json --token="$VERCEL_TOKEN"
+        run: |
+          mkdir -p release-evidence
+          npx vercel@54.18.7 inspect "${{ steps.deploy.outputs.url }}" --json --token="$VERCEL_TOKEN" > release-evidence/deployment.json
       - name: Production smoke
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel@54.18.7 curl / --deployment "${{ steps.deploy.outputs.url }}" --token="$VERCEL_TOKEN" -- --fail --silent --show-error
+        run: npx vercel@54.18.7 curl / --deployment "${{ steps.deploy.outputs.url }}" --token="$VERCEL_TOKEN" -- --fail --silent --show-error --dump-header release-evidence/headers.txt --output release-evidence/index.html
+      - name: Retain immutable deployment attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarafi-production-attestation-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 365
+          path: release-evidence/

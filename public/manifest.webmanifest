@@ -8,5 +8,7 @@
   "theme_color": "#20332e",
   "lang": "en",
   "dir": "ltr",
-  "icons": []
+  "icons": [
+    { "src": "/sarafi-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
 }

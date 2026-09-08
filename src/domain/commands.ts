@@ -57,6 +57,7 @@ const hawalaCreateBaseSchema = z.object({
   organization_id: uuid,
   branch_id: uuid,
   hawala_partner_id: uuid,
+  sender_name: z.string().trim().min(2).max(160),
   beneficiary_counterparty_id: uuid.optional(),
   beneficiary_name: z.string().trim().min(2).max(160),
   destination_location: z.string().trim().min(2).max(160),
@@ -70,7 +71,8 @@ const hawalaCreateBaseSchema = z.object({
   publish_rate: inlineRatePublicationSchema.optional(),
 })
 
-export const hawalaSendCommandSchema = hawalaCreateBaseSchema.extend({
+export const hawalaSendCommandSchema = hawalaCreateBaseSchema.omit({ reference_code: true }).extend({
+  reference_code: z.string().trim().min(4).max(80).transform((value) => value.toUpperCase()).optional(),
   destination_money_account_id: uuid,
 })
 

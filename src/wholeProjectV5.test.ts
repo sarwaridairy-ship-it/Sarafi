@@ -36,6 +36,7 @@ describe("whole-project v5 command validation", () => {
       organization_id: ids.organization,
       branch_id: ids.branch,
       hawala_partner_id: ids.partner,
+      sender_name: "Karim Ahmadi",
       beneficiary_name: "Ahmad Rahimi",
       destination_location: "Kabul",
       currency: "afn",
@@ -87,6 +88,7 @@ describe("whole-project v5 command validation", () => {
       organization_id: ids.organization,
       branch_id: ids.branch,
       hawala_partner_id: ids.partner,
+      sender_name: "Karim Ahmadi",
       beneficiary_name: "Ahmad Rahimi",
       destination_location: "Kabul",
       destination_money_account_id: ids.account,
@@ -287,6 +289,6 @@ describe("whole-project v5 accounting and privacy contract", () => {
     expect(migration).toContain("create or replace function public.get_counterparty_detail_v5");
     expect(api).toContain("client.rpc('get_transaction_detail'");
     expect(api).toContain("client.rpc('get_debt_detail_v5'");
-    expect(api).toContain("client.rpc('get_counterparty_detail_v5'");
+    expect(api).toContain("client.rpc('get_counterparty_detail_v6'");
   });
 });

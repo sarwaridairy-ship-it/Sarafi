@@ -1,0 +1,14 @@
+{
+  "name": "د سرافي ډیجیټل دفتر",
+  "short_name": "سرافي",
+  "description": "د افغانستان د صرافیو لپاره ساده او خوندي دفتر",
+  "start_url": "/?lang=ps-AF",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#20332e",
+  "lang": "ps-AF",
+  "dir": "rtl",
+  "icons": [
+    { "src": "/sarafi-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

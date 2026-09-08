@@ -1,0 +1,14 @@
+{
+  "name": "دفتر دیجیتال سرافی",
+  "short_name": "سرافی",
+  "description": "دفتر ساده و امن برای صرافی‌های افغانستان",
+  "start_url": "/?lang=fa-AF",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#20332e",
+  "lang": "fa-AF",
+  "dir": "rtl",
+  "icons": [
+    { "src": "/sarafi-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

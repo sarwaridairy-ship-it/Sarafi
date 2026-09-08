@@ -21,12 +21,12 @@ test.describe("calm premium v4 objective acceptance", () => {
 
     const journeys = [
       ["Currency Exchange", "Buy currency", "/transactions/new/fx/buy"],
-      ["Money In", "From a customer", "/transactions/new/money-in/customer"],
-      ["Money Out", "To a customer", "/transactions/new/money-out/customer"],
-      ["Move Our Money", "Between cashboxes", "/transactions/new/move/cashbox"],
+      ["Money In", "From a customer", "/transactions/new/money-in/receive"],
+      ["Money Out", "To a customer", "/transactions/new/money-out/pay"],
+      ["Move Our Money", "Between cashboxes", "/transactions/new/move/transfer"],
       ["Debt", "They owe us", "/transactions/new/debt/receivable"],
-      ["Debt", "Settle a debt", "/debts/settle"],
-      ["Hawala", "Pay beneficiary", "/transactions/new/hawala/payout"],
+      ["Debt", "Settle a debt", "/debts"],
+      ["Hawala", "Pay beneficiary", "/hawala/payout"],
     ] as const;
     for (const [family, action, route] of journeys) {
       await page.goto(`${workspace}/transactions/new?role=owner`);
@@ -68,6 +68,7 @@ test.describe("calm premium v4 objective acceptance", () => {
     await expect(buyForm.getByRole("heading", { name: "Check before saving" })).toBeVisible();
 
     await page.locator(".sidebar nav").getByRole("button", { name: "Make a Transaction", exact: true }).click();
+    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
     await page.getByRole("button", { name: "Sell currency", exact: true }).click();
 
     await expect(page).toHaveURL(/\/transactions\/new\/fx\/sell$/);
@@ -82,11 +83,12 @@ test.describe("calm premium v4 objective acceptance", () => {
     await expect(page.getByText("They owe us", { exact: true })).toBeVisible();
     await expect(page.getByLabel(/direction/i)).toHaveCount(0);
 
-    await page.goto(`${workspace}/transactions/new/hawala/payout?role=owner`);
+    await page.goto(`${workspace}/hawala/payout?role=owner`);
     const payout = page.locator(".financial-task-form");
     await expect(payout.getByLabel(/Reference code/)).toBeFocused();
+    await expect(payout.getByRole("button", { name: "Scan code" })).toBeVisible();
 
-    await page.goto(`${workspace}/transactions/new/hawala/settlement?role=owner`);
+    await page.goto(`${workspace}/hawala/partners/inspection-partner/settle?role=owner`);
     await expect(page.getByRole("combobox", { name: "Partner", exact: true })).toHaveCount(1);
     await expect(page.getByLabel(/partner.*id|uuid/i)).toHaveCount(0);
   });
@@ -106,7 +108,7 @@ test.describe("calm premium v4 objective acceptance", () => {
     await expect(page.getByRole("button", { name: /^Currency Exchange/ })).toBeVisible();
     await page.getByRole("button", { name: /^Money In/ }).click();
     await expect(page.getByRole("button", { name: /Owner capital/i })).toHaveCount(0);
-    await page.goto(`${workspace}/transactions/new/money-in/owner-capital?role=business_admin`);
+    await page.goto(`${workspace}/transactions/new/money-in/owner-investment?role=business_admin`);
     await expect(page.getByRole("heading", { name: "Access not allowed" })).toBeVisible();
   });
 
@@ -128,10 +130,12 @@ test.describe("calm premium v4 objective acceptance", () => {
     await expect(page.locator(".control-center-card")).toHaveCount(4);
 
     await page.goto(`${workspace}/reports?role=owner`);
-    await expect(page.getByRole("heading", { name: "Daily Summary" })).toBeVisible();
-    await expect(page.locator(".report-favorites button")).toHaveCount(4);
+    await expect(page.getByRole("heading", { name: "Exact report snapshot" })).toBeVisible();
+    await expect(page.locator(".export-menu")).toHaveCount(0);
+    await page.getByRole("button", { name: "Generate today’s report" }).click();
     await expect(page.locator(".export-menu")).toHaveCount(1);
-    await expect(page.locator(".export-menu > summary")).toHaveText("Export");
+    await expect(page.locator(".export-menu > summary")).toHaveText("Export formats");
+    await expect(page.locator(".report-evidence")).toContainText("Main branch");
     expect(await page.locator("select optgroup").count()).toBeGreaterThanOrEqual(4);
   });
 

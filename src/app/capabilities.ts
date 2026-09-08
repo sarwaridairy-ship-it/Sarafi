@@ -76,7 +76,8 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "documents.view", "documents.download", "documents.archive",
   ],
   business_admin: [
-    "workspace.view", "financial.overview", "financial.post.debt", "financial.post.hawala", "financial.report",
+    "workspace.view", "financial.overview", "financial.post.fx", "financial.post.money", "financial.post.debt",
+    "financial.post.hawala", "financial.post.opening", "financial.report",
     "financial.reverse",
     "customers.manage", "reconciliation.submit", "reconciliation.approve", "approval.request",
     "approval.decide", "team.view", "team.invite", "team.manage", "team.capabilities.manage",
@@ -153,35 +154,48 @@ export type NavigationSection =
   | "Transactions"
   | "Cash & Accounts"
   | "People"
+  | "Debts"
+  | "Hawala"
   | "Reports"
   | "Reconciliation"
+  | "Cashbox Close"
+  | "Team & Devices"
   | "Compliance Reviews"
+  | "Compliance Cases"
+  | "Search"
   | "Control";
 
 export function navigationSections(capabilities: readonly string[]): NavigationSection[] {
-  const result: NavigationSection[] = ["Dashboard"];
-  const add = (section: NavigationSection, allowed: boolean) => {
-    if (allowed && result.length < 5 && !result.includes(section)) result.push(section);
-  };
+  // The server capability response is authoritative. Dashboard capabilities
+  // identify the role-shaped read model without trusting a client role name.
+  if (hasCapability(capabilities, "dashboard.compliance"))
+    return ["Dashboard", "Hawala", "Compliance Reviews", "Compliance Cases", "Search"];
+  if (hasCapability(capabilities, "dashboard.accountant"))
+    return ["Dashboard", "Transactions", "Reports", "Debts", "Reconciliation"];
+  if (hasCapability(capabilities, "dashboard.cashier"))
+    return ["Dashboard", "Trade", "People", "Transactions", "Cashbox Close"];
+  if (hasCapability(capabilities, "dashboard.manager"))
+    return ["Dashboard", "Trade", "Cash & Accounts", "Transactions", "Team & Devices"];
+  if (hasCapability(capabilities, "dashboard.viewer"))
+    return ["Dashboard", "Cash & Accounts", "Transactions", "Reports", "Search"];
+  if (hasCapability(capabilities, "dashboard.owner") && hasCapability(capabilities, "owner.delete"))
+    return ["Dashboard", "Trade", "Cash & Accounts", "Transactions", "Control"];
+  if (hasCapability(capabilities, "dashboard.owner"))
+    return ["Dashboard", "Trade", "People", "Transactions", "Control"];
 
-  // Rate managers still need the focused operational five-item navigation.
-  // Organization/team/security administration is what promotes Control into
-  // the primary rail; rate publishing remains available contextually.
-  const hasManagement = hasAnyCapability(capabilities, ["organization.manage", "team.manage", "security.manage", "billing.manage"]);
-  add("Trade", hasAnyCapability(capabilities, financialPostCapabilities));
-  add("Transactions", hasAnyCapability(capabilities, ["transactions.view", "financial.overview", "financial.report", ...financialPostCapabilities]));
-  if (hasManagement) {
-    add("Reports", hasCapability(capabilities, "financial.report"));
-    add("Control", true);
-    return result;
-  }
-  add("People", hasAnyCapability(capabilities, ["customers.manage", "financial.overview"]));
-  add("Cash & Accounts", hasAnyCapability(capabilities, ["financial.overview", "money_accounts.manage"]));
-  add("Reports", hasCapability(capabilities, "financial.report"));
-  add("Reconciliation", hasAnyCapability(capabilities, ["reconciliation.submit", "reconciliation.approve"]));
-  add("Compliance Reviews", hasCapability(capabilities, "compliance.review"));
-  add("Control", hasAnyCapability(capabilities, ["organization.manage", "team.manage", "rates.manage", "security.manage", "billing.manage"]));
-  return result;
+  // Custom capability bundles still receive exactly five meaningful slots.
+  const candidates: NavigationSection[] = [
+    "Dashboard",
+    ...(hasAnyCapability(capabilities, financialPostCapabilities) ? ["Trade" as const] : []),
+    ...(hasCapability(capabilities, "transactions.view") ? ["Transactions" as const] : []),
+    ...(hasCapability(capabilities, "financial.report") ? ["Reports" as const] : []),
+    ...(hasCapability(capabilities, "financial.overview") ? ["Cash & Accounts" as const] : []),
+    ...(hasCapability(capabilities, "customers.manage") ? ["People" as const] : []),
+    ...(hasCapability(capabilities, "debt.view") ? ["Debts" as const] : []),
+    ...(hasCapability(capabilities, "compliance.review") ? ["Compliance Reviews" as const] : []),
+    "Search",
+  ];
+  return candidates.filter((section, index) => candidates.indexOf(section) === index).slice(0, 5);
 }
 
 const sectionCapabilities: Partial<Record<string, Capability[]>> = {
@@ -208,6 +222,8 @@ const sectionCapabilities: Partial<Record<string, Capability[]>> = {
 };
 
 export function canOpenSection(capabilities: readonly string[], section: string): boolean {
+  if (section === "Search") return hasCapability(capabilities, "workspace.view");
+  if (["Public", "Auth", "Pending", "Platform", "Not Found"].includes(section)) return true;
   if (section === "Dashboard") return hasCapability(capabilities, "workspace.view");
   const required = sectionCapabilities[section];
   return required ? hasAnyCapability(capabilities, required) : false;

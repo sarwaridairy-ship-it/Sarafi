@@ -5,6 +5,7 @@ export type CashCount = { currency: string; expected: string; counted: string }
 export type ReconciliationResult = { currency: string; expected: string; counted: string; variance: string; status: 'balanced' | 'variance' }
 export type ReportFilter = { organizationId: string; from?: string; to?: string; branchId?: string; currency?: string; status?: string }
 export type ReportRow = { entryId: string; occurredAt: string; type: string; branchId: string; status: string; realizedProfit: string }
+export type ReportEvidence = { branchName?: string; cashboxName?: string; period?: string; filters?: string; preparedBy?: string; snapshotHash?: string }
 export type Notification = { id: string; organizationId: string; type: string; subjectId: string; message: string; createdAt: string; delivered: boolean }
 
 const decimal = (value: string) => new Decimal(value)
@@ -25,9 +26,20 @@ export function summarizeProfit(entries: JournalEntry[], filter: ReportFilter): 
   return { realizedProfit: rows.reduce((total, row) => total.plus(row.realizedProfit), new Decimal(0)).toFixed(12), transactionCount: rows.length }
 }
 
-export function buildCsvReport(rows: ReportRow[], businessName: string, reportName: string, generatedAt: string): string {
+export function buildCsvReport(rows: ReportRow[], businessName: string, reportName: string, generatedAt: string, evidence: ReportEvidence = {}): string {
   const escape = (value: string) => `"${value.replaceAll('"', '""')}"`
-  const header = [`Business: ${businessName}`, `Report: ${reportName}`, `Generated: ${generatedAt}`, '']
+  const header = [
+    `Business: ${businessName}`,
+    `Report: ${reportName}`,
+    `Generated: ${generatedAt}`,
+    evidence.branchName ? `Branch: ${evidence.branchName}` : '',
+    evidence.cashboxName ? `Cashbox: ${evidence.cashboxName}` : '',
+    evidence.period ? `Period: ${evidence.period}` : '',
+    evidence.filters ? `Filters: ${evidence.filters}` : '',
+    evidence.preparedBy ? `Prepared by: ${evidence.preparedBy}` : '',
+    evidence.snapshotHash ? `Snapshot: ${evidence.snapshotHash}` : '',
+    '',
+  ].filter((line, index, values) => line || index === values.length - 1)
   const columns = ['Entry', 'Occurred at', 'Type', 'Branch', 'Status', 'Realized profit']
   return [...header, columns.join(','), ...rows.map((row) => [row.entryId, row.occurredAt, row.type, row.branchId, row.status, row.realizedProfit].map(escape).join(','))].join('\n')
 }

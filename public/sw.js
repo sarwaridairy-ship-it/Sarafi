@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sarafi-shell-v2'
+const CACHE_NAME = 'sarafi-shell-v3'
 const SHELL = ['/']
 
 self.addEventListener('install', (event) => {
@@ -7,6 +7,10 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))))
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('fetch', (event) => {

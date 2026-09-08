@@ -36,26 +36,48 @@ export function buildXlsxReport(input: {
   reportName: string;
   generatedAt: string;
   language: "en" | "fa-AF" | "ps-AF";
+  branchName?: string;
+  cashboxName?: string;
+  period?: string;
+  filters?: string;
+  preparedBy?: string;
+  snapshotHash?: string;
 }): Uint8Array {
   const labels = input.language === "en"
     ? ["Reference", "Date", "Description", "Branch", "Status", "Amount"]
     : input.language === "fa-AF"
       ? ["شماره", "تاریخ", "شرح", "شعبه", "حالت", "مبلغ"]
       : ["شمېره", "نېټه", "تشریح", "څانګه", "حالت", "اندازه"];
+  const evidenceLabels = input.language === "en"
+    ? { branch: "Branch", cashbox: "Cashbox", period: "Period", filters: "Filters", preparedBy: "Prepared by", snapshot: "Snapshot" }
+    : input.language === "fa-AF"
+      ? { branch: "شعبه", cashbox: "صندوق", period: "دوره", filters: "فیلترها", preparedBy: "تهیه‌کننده", snapshot: "نشان نسخه" }
+      : { branch: "څانګه", cashbox: "صندوق", period: "موده", filters: "چاڼونه", preparedBy: "چمتو کوونکی", snapshot: "د نسخې نښه" };
+  const evidenceRows = [
+    input.branchName ? [`${evidenceLabels.branch}: ${input.branchName}`] : null,
+    input.cashboxName ? [`${evidenceLabels.cashbox}: ${input.cashboxName}`] : null,
+    input.period ? [`${evidenceLabels.period}: ${input.period}`] : null,
+    input.filters ? [`${evidenceLabels.filters}: ${input.filters}`] : null,
+    input.preparedBy ? [`${evidenceLabels.preparedBy}: ${input.preparedBy}`] : null,
+    input.snapshotHash ? [`${evidenceLabels.snapshot}: ${input.snapshotHash}`] : null,
+  ].filter((row): row is string[] => row !== null);
   const metadata = [
     [input.businessName],
     [input.reportName],
     [input.generatedAt],
+    ...evidenceRows,
     [],
     labels,
   ];
   const values = [...metadata, ...input.rows.map((row) => [row.entryId, row.occurredAt, row.type, row.branchId, row.status, row.realizedProfit])];
   const sheetRows = values.map((row, rowIndex) => {
-    const style = rowIndex === 0 ? 2 : rowIndex === 4 ? 1 : 0;
+    const headingRow = metadata.length - 1;
+    const style = rowIndex === 0 ? 2 : rowIndex === headingRow ? 1 : 0;
     const cells = row.map((value, columnIndex) => spreadsheetCell(`${String.fromCharCode(65 + columnIndex)}${rowIndex + 1}`, String(value ?? ""), style)).join("");
     return `<row r="${rowIndex + 1}">${cells}</row>`;
   }).join("");
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" rightToLeft="${input.language === "en" ? 0 : 1}"><pane ySplit="5" topLeftCell="A6" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="23" customWidth="1"/><col min="3" max="3" width="42" customWidth="1"/><col min="4" max="4" width="20" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="18" customWidth="1"/></cols><sheetData>${sheetRows}</sheetData><autoFilter ref="A5:F${Math.max(5, values.length)}"/></worksheet>`;
+  const headingRowNumber = metadata.length;
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" rightToLeft="${input.language === "en" ? 0 : 1}"><pane ySplit="${headingRowNumber}" topLeftCell="A${headingRowNumber + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="23" customWidth="1"/><col min="3" max="3" width="42" customWidth="1"/><col min="4" max="4" width="20" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="18" customWidth="1"/></cols><sheetData>${sheetRows}</sheetData><autoFilter ref="A${headingRowNumber}:F${Math.max(headingRowNumber, values.length)}"/></worksheet>`;
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`),
     "_rels/.rels": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`),
@@ -99,17 +121,23 @@ export type DailyReportInput = {
   language: "en" | "fa-AF" | "ps-AF";
   businessDate: string;
   snapshot: DailyReportSnapshot | null;
+  cashboxName?: string;
+  period?: string;
+  filters?: string;
+  preparedBy?: string;
+  generatedAt?: string;
+  snapshotHash?: string;
 };
 
 const dailyReportCopy = {
   en: {
-    title: "Daily report", summary: "Today at a glance", count: "Transactions", volume: "Turnover", profit: "Profit", expenses: "Expenses", position: "Net position", money: "Money now", debts: "Debts and receivables", receivable: "People owe the shop", payable: "The shop owes", activity: "Recent activity", empty: "No transactions were recorded for this report.", branch: "Branch", date: "Business date", made: "Prepared", cashbox: "Cashbox check", difference: "Difference",
+    title: "Daily report", summary: "Today at a glance", count: "Transactions", volume: "Turnover", profit: "Profit", expenses: "Expenses", position: "Net position", money: "Money now", debts: "Debts and receivables", receivable: "People owe the shop", payable: "The shop owes", activity: "Recent activity", empty: "No transactions were recorded for this report.", branch: "Branch", date: "Business date", made: "Prepared", preparedBy: "Prepared by", cashbox: "Cashbox", cashboxCheck: "Cashbox check", period: "Period", filters: "Filters", snapshot: "Snapshot", page: "Page", difference: "Difference",
   },
   "fa-AF": {
-    title: "گزارش روزانه", summary: "خلاصه امروز", count: "تعداد معاملات", volume: "گردش امروز", profit: "مفاد امروز", expenses: "مصارف", position: "ارزش خالص", money: "پول فعلی صرافی", debts: "طلب و قرض", receivable: "مردم به صرافی بدهکار اند", payable: "صرافی بدهکار است", activity: "معاملات اخیر", empty: "در این گزارش معامله‌ای ثبت نشده است.", branch: "شعبه", date: "تاریخ کاری", made: "ساخته‌شده", cashbox: "بررسی صندوق", difference: "تفاوت",
+    title: "گزارش روزانه", summary: "خلاصه امروز", count: "تعداد معاملات", volume: "گردش امروز", profit: "مفاد امروز", expenses: "مصارف", position: "ارزش خالص", money: "پول فعلی صرافی", debts: "طلب و قرض", receivable: "مردم به صرافی بدهکار اند", payable: "صرافی بدهکار است", activity: "معاملات اخیر", empty: "در این گزارش معامله‌ای ثبت نشده است.", branch: "شعبه", date: "تاریخ کاری", made: "ساخته‌شده", preparedBy: "تهیه‌کننده", cashbox: "صندوق", cashboxCheck: "بررسی صندوق", period: "دوره", filters: "فیلترها", snapshot: "نشان نسخه", page: "صفحه", difference: "تفاوت",
   },
   "ps-AF": {
-    title: "ورځنی راپور", summary: "د نن لنډیز", count: "د معاملو شمېر", volume: "د نن راکړه ورکړه", profit: "د نن ګټه", expenses: "لګښتونه", position: "خالص ارزښت", money: "د صرافۍ اوسني پیسې", debts: "پورونه او طلبونه", receivable: "خلک صرافۍ ته پوروړي دي", payable: "صرافي پوروړې ده", activity: "وروستۍ معاملې", empty: "په دې راپور کې کومه معامله نه ده ثبت شوې.", branch: "څانګه", date: "کاري نېټه", made: "جوړ شوی", cashbox: "د صندوق کتنه", difference: "توپیر",
+    title: "ورځنی راپور", summary: "د نن لنډیز", count: "د معاملو شمېر", volume: "د نن راکړه ورکړه", profit: "د نن ګټه", expenses: "لګښتونه", position: "خالص ارزښت", money: "د صرافۍ اوسني پیسې", debts: "پورونه او طلبونه", receivable: "خلک صرافۍ ته پوروړي دي", payable: "صرافي پوروړې ده", activity: "وروستۍ معاملې", empty: "په دې راپور کې کومه معامله نه ده ثبت شوې.", branch: "څانګه", date: "کاري نېټه", made: "جوړ شوی", preparedBy: "چمتو کوونکی", cashbox: "صندوق", cashboxCheck: "د صندوق کتنه", period: "موده", filters: "چاڼونه", snapshot: "د نسخې نښه", page: "پاڼه", difference: "توپیر",
   },
 } as const;
 
@@ -127,15 +155,15 @@ export function buildDailyReportHtml(input: DailyReportInput): string {
   const activities = input.rows.slice(0, 8).map((row) =>
     `<tr><td><bdi>${escapeHtml(row.entryId)}</bdi></td><td>${escapeHtml(row.type)}</td><td>${escapeHtml(row.status)}</td><td><bdi>${escapeHtml(row.occurredAt)}</bdi></td></tr>`,
   ).join("");
-  const prepared = new Intl.DateTimeFormat(input.language, { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  const prepared = new Intl.DateTimeFormat(input.language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(input.generatedAt ?? Date.now()));
   return `<article class="sarafi-daily-pdf" lang="${input.language}" dir="${direction}">
     <style>
       .sarafi-daily-pdf{position:relative;box-sizing:border-box;width:794px;height:1123px;overflow:hidden;padding:52px 58px;color:#11252e;background:#fff;font-family:Tahoma,"Segoe UI",Arial,sans-serif;font-size:13px;line-height:1.45}
       .sarafi-daily-pdf *{box-sizing:border-box}.pdf-head{display:flex;align-items:flex-start;justify-content:space-between;gap:28px;padding-bottom:20px;border-bottom:3px solid #0d7169}.pdf-brand{display:flex;align-items:center;gap:13px}.pdf-mark{display:grid;width:46px;height:46px;place-items:center;border-radius:13px;color:#f4d58a;background:#102a36;font-size:24px;font-weight:900}.pdf-head h1{margin:0;color:#102a36;font-size:25px}.pdf-head p,.pdf-meta{margin:4px 0 0;color:#607078}.pdf-meta{text-align:${direction === "rtl" ? "left" : "right"};font-size:11px}.pdf-section{margin-top:22px}.pdf-section h2{margin:0 0 11px;color:#173541;font-size:15px}.pdf-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.pdf-stat{min-height:75px;padding:11px;border:1px solid #d9e2df;border-radius:10px;background:#f7f8f5}.pdf-stat span{display:block;min-height:30px;color:#607078;font-size:10px}.pdf-stat strong{display:block;color:#102a36;font-size:15px}.pdf-money{direction:ltr;unicode-bidi:isolate;display:inline-block;font-weight:800}.pdf-columns{display:grid;grid-template-columns:1.35fr .85fr;gap:14px}.pdf-card{padding:15px;border:1px solid #d9e2df;border-radius:11px}.pdf-card ul{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin:0;padding:0;list-style:none}.pdf-card li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #edf0ed}.pdf-debt{display:grid;gap:10px}.pdf-debt div{padding:12px;border-inline-start:4px solid #c49a4b;border-radius:7px;background:#fbf8f0}.pdf-debt span{display:block;margin-bottom:4px;color:#68767b;font-size:10px}.pdf-cashbox{display:flex;justify-content:space-between;gap:12px;margin-top:10px;padding:11px 12px;border-radius:8px;background:#eef6f3}.pdf-table{width:100%;border-collapse:collapse;font-size:10px}.pdf-table th{padding:8px 9px;color:#fff;background:#102a36;text-align:start}.pdf-table td{padding:8px 9px;border-bottom:1px solid #e4e9e6}.pdf-empty{padding:22px;border:1px dashed #ccd7d2;border-radius:10px;color:#68767b;text-align:center}.pdf-foot{position:absolute;right:58px;bottom:40px;left:58px;display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #d9e2df;color:#6d797e;font-size:10px}
     </style>
-    <header class="pdf-head"><div class="pdf-brand"><span class="pdf-mark">S</span><div><h1>${escapeHtml(input.businessName)}</h1><p>${escapeHtml(input.reportName || labels.title)}</p></div></div><div class="pdf-meta">${labels.branch}: ${escapeHtml(input.branchName)}<br>${labels.date}: <bdi>${escapeHtml(input.businessDate)}</bdi></div></header>
+    <header class="pdf-head"><div class="pdf-brand"><span class="pdf-mark">S</span><div><h1>${escapeHtml(input.businessName)}</h1><p>${escapeHtml(input.reportName || labels.title)}</p></div></div><div class="pdf-meta">${labels.branch}: ${escapeHtml(input.branchName)}<br>${labels.cashbox}: ${escapeHtml(input.cashboxName ?? "—")}<br>${labels.period}: <bdi>${escapeHtml(input.period ?? input.businessDate)}</bdi><br>${labels.filters}: ${escapeHtml(input.filters ?? "—")}<br>${labels.preparedBy}: ${escapeHtml(input.preparedBy ?? "—")}<br>${labels.snapshot}: <bdi>${escapeHtml(input.snapshotHash ?? "—")}</bdi></div></header>
     <section class="pdf-section"><h2>${labels.summary}</h2><div class="pdf-summary"><div class="pdf-stat"><span>${labels.count}</span><strong>${snapshot?.transaction_count ?? input.rows.length}</strong></div><div class="pdf-stat"><span>${labels.volume}</span><strong>${money(snapshot?.volume_base ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.profit}</span><strong>${money(snapshot?.realized_profit ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.expenses}</span><strong>${money(snapshot?.expenses ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.position}</span><strong>${money(snapshot?.net_position_base ?? "0")}</strong></div></div></section>
-    <section class="pdf-section pdf-columns"><div class="pdf-card"><h2>${labels.money}</h2>${locations ? `<ul>${locations}</ul>` : `<div class="pdf-empty">—</div>`}</div><div class="pdf-card"><h2>${labels.debts}</h2><div class="pdf-debt"><div><span>${labels.receivable}</span>${debtLine(snapshot?.receivables)}</div><div><span>${labels.payable}</span>${debtLine(snapshot?.payables)}</div></div><div class="pdf-cashbox"><span>${labels.cashbox} · ${labels.difference}</span>${money(snapshot?.reconciliation_differences ?? "0")}</div></div></section>
+    <section class="pdf-section pdf-columns"><div class="pdf-card"><h2>${labels.money}</h2>${locations ? `<ul>${locations}</ul>` : `<div class="pdf-empty">—</div>`}</div><div class="pdf-card"><h2>${labels.debts}</h2><div class="pdf-debt"><div><span>${labels.receivable}</span>${debtLine(snapshot?.receivables)}</div><div><span>${labels.payable}</span>${debtLine(snapshot?.payables)}</div></div><div class="pdf-cashbox"><span>${labels.cashboxCheck} · ${labels.difference}</span>${money(snapshot?.reconciliation_differences ?? "0")}</div></div></section>
     <section class="pdf-section"><h2>${labels.activity}</h2>${activities ? `<table class="pdf-table"><tbody>${activities}</tbody></table>` : `<div class="pdf-empty">${labels.empty}</div>`}</section>
     <footer class="pdf-foot"><span>SARAFI · ${labels.title}</span><span>${labels.made}: <bdi>${escapeHtml(prepared)}</bdi></span></footer>
   </article>`;
@@ -161,9 +189,10 @@ export async function downloadPdf(input: DailyReportInput): Promise<void> {
     pdf.addFileToVFS("NotoSansArabic-Regular.ttf", toBase64(new Uint8Array(await fontResponse.arrayBuffer())));
     pdf.addFont("NotoSansArabic-Regular.ttf", "NotoSansArabic", "normal");
     reportFont = "NotoSansArabic";
-  } catch {
-    // English/system fallback keeps exports available when an offline cache
-    // has not yet received the bundled font asset.
+  } catch (error) {
+    if (input.language !== "en") throw error;
+    // English remains exportable with the built-in font if the local font is
+    // unavailable. Dari/Pashto must never silently lose Arabic shaping.
   }
   const labels = dailyReportCopy[input.language];
   const snapshot = input.snapshot;
@@ -171,7 +200,12 @@ export async function downloadPdf(input: DailyReportInput): Promise<void> {
     input.businessName,
     input.reportName || labels.title,
     `${labels.branch}: ${input.branchName}`,
-    `${labels.date}: ${input.businessDate}`,
+    `${labels.cashbox}: ${input.cashboxName ?? "—"}`,
+    `${labels.period}: ${input.period ?? input.businessDate}`,
+    `${labels.filters}: ${input.filters ?? "—"}`,
+    `${labels.preparedBy}: ${input.preparedBy ?? "—"}`,
+    `${labels.made}: ${new Intl.DateTimeFormat(input.language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(input.generatedAt ?? Date.now()))}`,
+    `${labels.snapshot}: ${input.snapshotHash ?? "—"}`,
     "",
     labels.summary,
     `${labels.count}: ${snapshot?.transaction_count ?? input.rows.length}`,
@@ -201,6 +235,12 @@ export async function downloadPdf(input: DailyReportInput): Promise<void> {
       pdf.text(item, input.language === "en" ? 48 : 547, y, { align: input.language === "en" ? "left" : "right" });
       y += 15;
     }
+  }
+  const pageCount = pdf.getNumberOfPages();
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    pdf.setPage(pageNumber);
+    pdf.setFontSize(8);
+    pdf.text(`${labels.page} ${pageNumber} / ${pageCount}`, input.language === "en" ? 48 : 547, 820, { align: input.language === "en" ? "left" : "right" });
   }
   const asciiName = input.reportName.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "");
   pdf.save(`${asciiName || "sarafi-daily-report"}-${input.businessDate}.pdf`);

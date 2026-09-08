@@ -412,9 +412,6 @@ button:disabled {
 .panel input,
 .panel select,
 .panel textarea,
-.trade-modal input,
-.trade-modal select,
-.trade-modal textarea,
 .auth-card input,
 .auth-card select {
   min-height: 42px;
@@ -428,7 +425,6 @@ button:disabled {
 }
 
 .panel label,
-.trade-modal label,
 .auth-card label {
   color: #40544c;
   font-size: 11px;
@@ -438,10 +434,7 @@ button:disabled {
 
 .panel label > input,
 .panel label > select,
-.panel label > textarea,
-.trade-modal label > input,
-.trade-modal label > select,
-.trade-modal label > textarea {
+.panel label > textarea {
   display: block;
   width: 100%;
   margin-top: 7px;
@@ -450,9 +443,6 @@ button:disabled {
 .panel input:focus,
 .panel select:focus,
 .panel textarea:focus,
-.trade-modal input:focus,
-.trade-modal select:focus,
-.trade-modal textarea:focus,
 .auth-card input:focus,
 .auth-card select:focus {
   border-color: #5d9f8f;
@@ -673,15 +663,6 @@ td {
   padding: 24px;
   background: rgba(7, 24, 20, 0.62);
   backdrop-filter: blur(5px);
-}
-
-.trade-modal {
-  max-height: calc(100dvh - 48px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  border-radius: 15px;
-  box-shadow: 0 30px 90px rgba(5, 26, 21, 0.32);
 }
 
 .modal-head {
@@ -1839,7 +1820,6 @@ td {
   .receipt-actions { grid-template-columns: 1fr; }
   .receipt-actions .primary-action { grid-column: auto; }
   .modal-backdrop { padding: 12px; }
-  .trade-modal { max-height: calc(100dvh - 24px); }
   .toast { right: 12px; bottom: 86px; left: 12px; max-width: none; }
 }
 
@@ -2579,7 +2559,6 @@ td {
 .balances .currency-badge.usd { color:#245f4d; background:#def1e7; }
 .activity { padding-top:16px; }
 
-.trade-modal { width:min(560px,100%); max-height:calc(100dvh - 28px); overflow:auto; padding:22px; border:1px solid #d8e1dd; border-radius:16px; box-shadow:0 28px 90px rgba(5,27,37,.25); }
 .transaction-inline-form { display:grid; justify-content:center; width:100%; padding:0 0 28px; background:transparent; }
 .transaction-page-form { width:min(720px,100%); max-height:none; margin:0 auto; border:0; border-radius:0; box-shadow:none; }
 .transaction-inline-form .close { display:none; }
@@ -2633,8 +2612,6 @@ td {
 .trade-mode-switch { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin:0 0 16px; padding:4px; border:1px solid #d8e1dd; border-radius:11px; background:#f3f5f2; }
 .trade-mode-switch button { min-height:39px; padding:7px; border:0; border-radius:8px; color:#586b70; background:transparent; font:750 11px var(--font-sans); cursor:pointer; }
 .trade-mode-switch button.active { color:#fff; background:#0d756c; box-shadow:0 4px 12px rgba(13,117,108,.16); }
-.trade-modal input,.trade-modal select { min-height:43px; border:1px solid #ced9d4; border-radius:9px; background:#fff; font:inherit; }
-.trade-modal input:focus,.trade-modal select:focus { border-color:#0d756c; outline:3px solid rgba(13,117,108,.12); }
 .trade-optional-fields { margin:-2px 0 4px; border:1px solid #dde5e1; border-radius:10px; background:#fafbf9; }
 .trade-optional-fields > summary { padding:10px 12px; color:#50656a; font-size:10px; font-weight:750; cursor:pointer; }
 .trade-optional-fields[open] > summary { border-bottom:1px solid #e1e7e4; }
@@ -2723,10 +2700,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .balances .balance-row { gap:6px; padding:7px; }
 .balances .currency-badge { width:26px; height:26px; font-size:9px; }
   .balances .balance-row strong { font-size:9px; }
-  .trade-modal { padding:16px; border-radius:14px; }
   .modal-head h2 { font-size:18px; }
   .form-grid { grid-template-columns:1fr 1fr; gap:8px; }
-  .trade-modal label { margin-bottom:11px; }
   .trade-mode-switch button { min-height:38px; padding-inline:4px; font-size:9px; }
   .auth-shell { padding:15px; place-items:start center; overflow:auto; }
   .auth-layout { display:block; width:min(430px,100%); }

@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { AppIcon, type AppIconName } from "../../AppIcon";
 import type { Language } from "../../lib/i18n";
 import { type Capability, hasCapability } from "../../app/capabilities";
-import type { FinancialRoute } from "../../app/routes";
+import type { FinancialDestination } from "../../app/routes";
 
 type FamilyId = "fx" | "money-in" | "money-out" | "move" | "debt" | "hawala";
 type Localized = { en: string; "fa-AF": string; "ps-AF": string };
-type Action = { label: Localized; route: FinancialRoute; capability: Capability };
+type Action = { label: Localized; route: FinancialDestination; capability: Capability };
 type Family = { id: FamilyId; label: Localized; intro: Localized; icon: AppIconName; actions: Action[] };
 
 const families: Family[] = [
@@ -27,10 +27,10 @@ const families: Family[] = [
     intro: { en: "Why is money coming in?", "fa-AF": "پول چرا وارد می‌شود؟", "ps-AF": "پیسې ولې راځي؟" },
     icon: "receive",
     actions: [
-      { label: { en: "From a customer", "fa-AF": "از مشتری", "ps-AF": "له پېرېدونکي" }, route: "/money-in/customer", capability: "financial.post.money" },
-      { label: { en: "Debt payment", "fa-AF": "پرداخت طلب", "ps-AF": "د طلب ورکړه" }, route: "/money-in/debt-payment", capability: "financial.post.debt" },
+      { label: { en: "From a customer", "fa-AF": "از مشتری", "ps-AF": "له پېرېدونکي" }, route: "/money-in/receive", capability: "financial.post.money" },
+      { label: { en: "Debt payment", "fa-AF": "پرداخت طلب", "ps-AF": "د طلب ورکړه" }, route: "/debts", capability: "debt.settle.receivable" },
       { label: { en: "Business income", "fa-AF": "عاید صرافی", "ps-AF": "د صرافۍ عاید" }, route: "/money-in/income", capability: "financial.post.money" },
-      { label: { en: "Owner capital", "fa-AF": "سرمایه مالک", "ps-AF": "د مالک پانګه" }, route: "/money-in/owner-capital", capability: "owner.capital.post" },
+      { label: { en: "Owner capital", "fa-AF": "سرمایه مالک", "ps-AF": "د مالک پانګه" }, route: "/money-in/owner-investment", capability: "owner.capital.post" },
     ],
   },
   {
@@ -39,8 +39,8 @@ const families: Family[] = [
     intro: { en: "Why is money going out?", "fa-AF": "پول چرا خارج می‌شود؟", "ps-AF": "پیسې ولې وځي؟" },
     icon: "pay",
     actions: [
-      { label: { en: "To a customer", "fa-AF": "به مشتری", "ps-AF": "پېرېدونکي ته" }, route: "/money-out/customer", capability: "financial.post.money" },
-      { label: { en: "Debt payment", "fa-AF": "پرداخت قرض", "ps-AF": "د پور ورکړه" }, route: "/money-out/debt-payment", capability: "financial.post.debt" },
+      { label: { en: "To a customer", "fa-AF": "به مشتری", "ps-AF": "پېرېدونکي ته" }, route: "/money-out/pay", capability: "financial.post.money" },
+      { label: { en: "Debt payment", "fa-AF": "پرداخت قرض", "ps-AF": "د پور ورکړه" }, route: "/debts", capability: "debt.settle.payable" },
       { label: { en: "Business expense", "fa-AF": "مصرف صرافی", "ps-AF": "د صرافۍ لګښت" }, route: "/money-out/expense", capability: "financial.post.money" },
       { label: { en: "Owner withdrawal", "fa-AF": "برداشت مالک", "ps-AF": "د مالک ایستل" }, route: "/money-out/owner-withdrawal", capability: "owner.capital.post" },
     ],
@@ -51,9 +51,9 @@ const families: Family[] = [
     intro: { en: "Move money without changing profit.", "fa-AF": "پول را بدون تغییر مفاد انتقال دهید.", "ps-AF": "پیسې بې له دې چې ګټه بدله شي ولېږدوئ." },
     icon: "transfer",
     actions: [
-      { label: { en: "Between cashboxes", "fa-AF": "بین صندوق‌ها", "ps-AF": "د صندوقونو ترمنځ" }, route: "/move/cashbox", capability: "financial.post.money" },
-      { label: { en: "Between branches", "fa-AF": "بین شعبه‌ها", "ps-AF": "د څانګو ترمنځ" }, route: "/move/branch", capability: "financial.post.money" },
-      { label: { en: "Bank movement", "fa-AF": "انتقال بانکی", "ps-AF": "بانکي لېږد" }, route: "/move/bank", capability: "financial.post.money" },
+      { label: { en: "Between cashboxes", "fa-AF": "بین صندوق‌ها", "ps-AF": "د صندوقونو ترمنځ" }, route: "/move/transfer", capability: "financial.post.money" },
+      { label: { en: "Deposit to bank", "fa-AF": "واریز به بانک", "ps-AF": "بانک ته جمع" }, route: "/move/bank-deposit", capability: "financial.post.money" },
+      { label: { en: "Withdraw from bank", "fa-AF": "برداشت از بانک", "ps-AF": "له بانک څخه ایستل" }, route: "/move/bank-withdrawal", capability: "financial.post.money" },
     ],
   },
   {
@@ -62,9 +62,9 @@ const families: Family[] = [
     intro: { en: "Record who owes whom or settle an open debt.", "fa-AF": "ثبت کنید چه کسی بدهکار است یا قرض باز را تصفیه کنید.", "ps-AF": "ثبت کړئ چې څوک پوروړی دی یا پرانیستی پور تصفیه کړئ." },
     icon: "debt",
     actions: [
-      { label: { en: "They owe us", "fa-AF": "به ما بدهکار است", "ps-AF": "موږ ته پوروړی دی" }, route: "/debt/receivable", capability: "financial.post.debt" },
-      { label: { en: "We owe them", "fa-AF": "ما بدهکار استیم", "ps-AF": "موږ پوروړي یو" }, route: "/debt/payable", capability: "financial.post.debt" },
-      { label: { en: "Settle a debt", "fa-AF": "تصفیه قرض", "ps-AF": "پور تصفیه کول" }, route: "/debts/settle", capability: "financial.post.debt" },
+      { label: { en: "They owe us", "fa-AF": "به ما بدهکار است", "ps-AF": "موږ ته پوروړی دی" }, route: "/debt/receivable", capability: "debt.create.receivable" },
+      { label: { en: "We owe them", "fa-AF": "ما بدهکار استیم", "ps-AF": "موږ پوروړي یو" }, route: "/debt/payable", capability: "debt.create.payable" },
+      { label: { en: "Settle a debt", "fa-AF": "تصفیه قرض", "ps-AF": "پور تصفیه کول" }, route: "/debts", capability: "debt.view" },
     ],
   },
   {
@@ -73,10 +73,10 @@ const families: Family[] = [
     intro: { en: "Choose the exact Hawala job.", "fa-AF": "کار دقیق حواله را انتخاب کنید.", "ps-AF": "د حوالې کره کار وټاکئ." },
     icon: "hawala",
     actions: [
-      { label: { en: "Send Hawala", "fa-AF": "فرستادن حواله", "ps-AF": "حواله لېږل" }, route: "/hawala/send", capability: "financial.post.hawala" },
-      { label: { en: "Incoming instruction", "fa-AF": "حواله رسیده", "ps-AF": "رارسېدلې حواله" }, route: "/hawala/incoming", capability: "financial.post.hawala" },
-      { label: { en: "Pay beneficiary", "fa-AF": "پرداخت گیرنده", "ps-AF": "ګټه‌اخیستونکي ته ورکول" }, route: "/hawala/payout", capability: "financial.post.hawala" },
-      { label: { en: "Settle partner", "fa-AF": "تصفیه همکار", "ps-AF": "له همکار سره تصفیه" }, route: "/hawala/settlement", capability: "financial.post.hawala" },
+      { label: { en: "Send Hawala", "fa-AF": "فرستادن حواله", "ps-AF": "حواله لېږل" }, route: "/hawala/send", capability: "hawala.send" },
+      { label: { en: "Incoming instruction", "fa-AF": "حواله رسیده", "ps-AF": "رارسېدلې حواله" }, route: "/hawala/incoming", capability: "hawala.incoming" },
+      { label: { en: "Pay beneficiary", "fa-AF": "پرداخت گیرنده", "ps-AF": "ګټه‌اخیستونکي ته ورکول" }, route: "/hawala/payout", capability: "hawala.payout" },
+      { label: { en: "Settle partner", "fa-AF": "تصفیه همکار", "ps-AF": "له همکار سره تصفیه" }, route: "/hawala/partners", capability: "hawala.settle" },
     ],
   },
 ];
@@ -94,7 +94,7 @@ export function TransactionCenter({
   language: Language;
   capabilities: readonly string[];
   hawalaEnabled: boolean;
-  onOpen: (route: FinancialRoute) => void;
+  onOpen: (route: FinancialDestination) => void;
 }) {
   const [selectedFamily, setSelectedFamily] = useState<FamilyId | null>(null);
   const visibleFamilies = useMemo(
@@ -106,12 +106,11 @@ export function TransactionCenter({
     [capabilities, hawalaEnabled],
   );
   const selected = visibleFamilies.find((family) => family.id === selectedFamily) ?? null;
-  const quickActions = visibleFamilies.flatMap((family) => family.actions).filter((action) => ["/fx/buy", "/fx/sell", "/money-in/customer", "/money-out/customer"].includes(action.route)).slice(0, 4);
   const copy = language === "en"
-    ? { kicker: "One task at a time", title: "Make a Transaction", intro: "Choose what happened with the money.", quick: "Quick actions", back: "All transaction families", unavailable: "This family is not enabled for your assignment." }
+    ? { kicker: "One task at a time", title: "Make a Transaction", intro: "Choose what happened with the money.", back: "All transaction families", unavailable: "This family is not enabled for your assignment." }
     : language === "fa-AF"
-      ? { kicker: "هر بار یک کار", title: "ثبت معامله", intro: "انتخاب کنید با پول چه اتفاق افتاده است.", quick: "کارهای سریع", back: "همه نوع‌های معامله", unavailable: "این بخش در وظیفه شما فعال نیست." }
-      : { kicker: "په یو وخت کې یو کار", title: "معامله ثبتول", intro: "وټاکئ چې له پیسو سره څه شوي دي.", quick: "چټک کارونه", back: "د معاملو ټول ډولونه", unavailable: "دا برخه ستاسو په دنده کې فعاله نه ده." };
+      ? { kicker: "هر بار یک کار", title: "ثبت معامله", intro: "انتخاب کنید با پول چه اتفاق افتاده است.", back: "همه نوع‌های معامله", unavailable: "این بخش در وظیفه شما فعال نیست." }
+      : { kicker: "په یو وخت کې یو کار", title: "معامله ثبتول", intro: "وټاکئ چې له پیسو سره څه شوي دي.", back: "د معاملو ټول ډولونه", unavailable: "دا برخه ستاسو په دنده کې فعاله نه ده." };
 
   return (
     <section className="calm-page transaction-hub" aria-labelledby="transaction-center-title">
@@ -139,9 +138,7 @@ export function TransactionCenter({
           ) : <p className="calm-empty" role="status">{copy.unavailable}</p>}
         </section>
       ) : (
-        <>
-          {quickActions.length ? <section className="quick-actions" aria-labelledby="quick-actions-title"><h2 id="quick-actions-title">{copy.quick}</h2><div>{quickActions.map((action) => <button type="button" key={action.route} onClick={() => onOpen(action.route)}>{local(language, action.label)}</button>)}</div></section> : null}
-          <div className="transaction-family-grid">
+        <div className="transaction-family-grid">
             {visibleFamilies.map((family) => (
               <button type="button" key={family.id} onClick={() => setSelectedFamily(family.id)} aria-controls={`family-${family.id}`}>
                 <AppIcon name={family.icon} size={24} />
@@ -149,8 +146,7 @@ export function TransactionCenter({
                 <span aria-hidden="true">→</span>
               </button>
             ))}
-          </div>
-        </>
+        </div>
       )}
     </section>
   );

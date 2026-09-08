@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { recordClientError } from "../lib/financialApi";
 
 type Props = { children: ReactNode };
 type State = { failed: boolean; reference: string };
@@ -11,10 +12,10 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    void recordClientError({ eventName: "render_error", sourceName: "react_render", errorCode: error.name || "ERROR" });
     console.error("SARAFI_RENDER_FAILURE", {
       name: error.name,
-      message: error.message,
-      componentStack: info.componentStack,
+      component: info.componentStack?.split("\n").find(Boolean)?.trim() ?? "unknown",
       reference: this.state.reference,
     });
   }

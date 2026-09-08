@@ -52,13 +52,13 @@ test.describe("role-aware workspace presentation", () => {
   }
 
   for (const [role, labels] of [
-    ["owner", ["Home", "Make a Transaction", "Activity", "Reports", "Manage Sarafi"]],
-    ["business_admin", ["Home", "Make a Transaction", "Activity", "Reports", "Manage Sarafi"]],
-    ["manager", ["Home", "Make a Transaction", "Activity", "Customers", "My Money"]],
-    ["cashier", ["Home", "Make a Transaction", "My Activity", "Customers", "Reconcile"]],
-    ["accountant", ["Home", "Activity", "Customers", "My Money", "Reports"]],
-    ["compliance_officer", ["Home", "Activity", "Customers", "My Money", "Reviews"]],
-    ["viewer", ["Home", "Activity", "Customers", "My Money", "Reports"]],
+    ["owner", ["Home", "Make a Transaction", "My Money", "Activity", "Manage Sarafi"]],
+    ["business_admin", ["Home", "Make a Transaction", "Customers", "Activity", "Manage Sarafi"]],
+    ["manager", ["Home", "Make a Transaction", "Cashboxes", "Activity", "Team"]],
+    ["cashier", ["Home", "Make a Transaction", "Customers", "My Activity", "Close Cashbox"]],
+    ["accountant", ["Home", "Activity", "Reports", "Debts", "Reconcile"]],
+    ["compliance_officer", ["Home", "Hawala Review", "Reviews", "Cases", "Search"]],
+    ["viewer", ["Home", "My Money", "Activity", "Reports", "Search"]],
   ] as const) {
     test(`${role} receives the required five-item navigation`, async ({ page }) => {
       await page.goto(`/?role=${role}`);
@@ -74,7 +74,7 @@ test.describe("role-aware workspace presentation", () => {
     await page.goto("/?role=accountant");
     await expect(page.locator(".sidebar nav").getByRole("button", { name: /Make a Transaction/ })).toHaveCount(0);
     await expect(page.locator(".sidebar nav").getByRole("button", { name: /^Reports/ })).toBeVisible();
-    await page.goto("/app/inspection/transactions/new/money-in/customer?role=accountant");
+    await page.goto("/app/inspection/transactions/new/money-in/receive?role=accountant");
     await expect(page.getByRole("heading", { name: "Access not allowed" })).toBeVisible();
     await expect(page.locator(".financial-task-form")).toHaveCount(0);
   });

@@ -6,7 +6,9 @@ import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix } fro
 describe("calm premium capability contract", () => {
   it("keeps Business Administrator operational while owner powers remain unavailable", () => {
     const capabilities = inspectionCapabilities("business_admin");
-    expect(hasCapability(capabilities, "financial.post.fx")).toBe(false);
+    expect(hasCapability(capabilities, "financial.post.fx")).toBe(true);
+    expect(hasCapability(capabilities, "financial.post.money")).toBe(true);
+    expect(hasCapability(capabilities, "financial.post.opening")).toBe(true);
     expect(hasCapability(capabilities, "financial.post.debt")).toBe(true);
     expect(hasCapability(capabilities, "hawala.send")).toBe(true);
     expect(hasCapability(capabilities, "organization.manage")).toBe(true);
@@ -36,22 +38,30 @@ describe("calm premium capability contract", () => {
 
   it("maps every exact transaction route to its server capability", () => {
     expect(capabilityForFinancialRoute("/fx/buy")).toBe("financial.post.fx");
-    expect(capabilityForFinancialRoute("/money-in/debt-payment")).toBe("debt.settle.receivable");
-    expect(capabilityForFinancialRoute("/money-in/owner-capital")).toBe("owner.capital.post");
+    expect(capabilityForFinancialRoute("/money-in/owner-investment")).toBe("owner.capital.post");
     expect(capabilityForFinancialRoute("/hawala/payout")).toBe("hawala.payout");
-    expect(capabilityForFinancialRoute("/move/branch")).toBe("financial.post.money");
-    expect(financialRoute("inspection", "/debts/settle")).toBe("/app/inspection/debts/settle");
-    expect(financialRouteSuffix("/app/inspection/debts/settle")).toBe("/debts/settle");
+    expect(capabilityForFinancialRoute("/move/bank-withdrawal")).toBe("financial.post.money");
+    expect(financialRoute("inspection", "/money-in/receive")).toBe("/app/inspection/transactions/new/money-in/receive");
+    expect(financialRouteSuffix("/app/inspection/hawala/payout")).toBe("/hawala/payout");
   });
 
   it("keeps a rate-managing branch manager in the focused operational navigation", () => {
     expect(navigationSections(inspectionCapabilities("manager"))).toEqual([
       "Dashboard",
       "Trade",
-      "Transactions",
-      "People",
       "Cash & Accounts",
+      "Transactions",
+      "Team & Devices",
     ]);
+  });
+
+  it("uses the exact five capability-derived destinations for every role", () => {
+    expect(navigationSections(inspectionCapabilities("owner"))).toEqual(["Dashboard", "Trade", "Cash & Accounts", "Transactions", "Control"]);
+    expect(navigationSections(inspectionCapabilities("business_admin"))).toEqual(["Dashboard", "Trade", "People", "Transactions", "Control"]);
+    expect(navigationSections(inspectionCapabilities("cashier"))).toEqual(["Dashboard", "Trade", "People", "Transactions", "Cashbox Close"]);
+    expect(navigationSections(inspectionCapabilities("accountant"))).toEqual(["Dashboard", "Transactions", "Reports", "Debts", "Reconciliation"]);
+    expect(navigationSections(inspectionCapabilities("compliance_officer"))).toEqual(["Dashboard", "Hawala", "Compliance Reviews", "Compliance Cases", "Search"]);
+    expect(navigationSections(inspectionCapabilities("viewer"))).toEqual(["Dashboard", "Cash & Accounts", "Transactions", "Reports", "Search"]);
   });
 });
 
