@@ -800,8 +800,8 @@ create policy journal_entries_scoped_read_v6 on public.journal_entries
   for select to authenticated
   using (exists (
     select 1 from public.financial_events fe
-    where fe.id = financial_event_id
-      and fe.organization_id = organization_id
+    where fe.id = journal_entries.financial_event_id
+      and fe.organization_id = journal_entries.organization_id
       and public.can_read_financial_event_v6(fe.id, fe.organization_id, fe.branch_id, fe.metadata)
   ));
 
@@ -812,8 +812,8 @@ create policy journal_lines_scoped_read_v6 on public.journal_lines
     select 1
     from public.journal_entries je
     join public.financial_events fe on fe.id = je.financial_event_id
-    where je.id = journal_entry_id
-      and je.organization_id = organization_id
+    where je.id = journal_lines.journal_entry_id
+      and je.organization_id = journal_lines.organization_id
       and public.can_read_financial_event_v6(fe.id, fe.organization_id, fe.branch_id, fe.metadata)
   ));
 
@@ -822,18 +822,18 @@ create policy ledger_accounts_scoped_read_v6 on public.ledger_accounts
   for select to authenticated
   using (
     (
-      public.can_access_cashbox_v6(organization_id, cashbox_id, 'financial.overview')
-      or public.can_access_cashbox_v6(organization_id, cashbox_id, 'financial.report')
+      public.can_access_cashbox_v6(ledger_accounts.organization_id, ledger_accounts.cashbox_id, 'financial.overview')
+      or public.can_access_cashbox_v6(ledger_accounts.organization_id, ledger_accounts.cashbox_id, 'financial.report')
     )
     and (
-      cashbox_id is null
+      ledger_accounts.cashbox_id is null
       or exists (
         select 1 from public.cashboxes cb
-        where cb.id = cashbox_id
-          and cb.organization_id = organization_id
+        where cb.id = ledger_accounts.cashbox_id
+          and cb.organization_id = ledger_accounts.organization_id
           and (
-            public.can_access_branch_v6(organization_id, cb.branch_id, 'financial.overview')
-            or public.can_access_branch_v6(organization_id, cb.branch_id, 'financial.report')
+            public.can_access_branch_v6(ledger_accounts.organization_id, cb.branch_id, 'financial.overview')
+            or public.can_access_branch_v6(ledger_accounts.organization_id, cb.branch_id, 'financial.report')
           )
       )
     )
@@ -846,8 +846,8 @@ create policy receipts_scoped_read_v6 on public.receipts
     select 1
     from public.journal_entries je
     join public.financial_events fe on fe.id = je.financial_event_id
-    where je.id = journal_entry_id
-      and je.organization_id = organization_id
+    where je.id = receipts.journal_entry_id
+      and je.organization_id = receipts.organization_id
       and public.can_read_financial_event_v6(fe.id, fe.organization_id, fe.branch_id, fe.metadata)
   ));
 
@@ -1087,11 +1087,13 @@ declare
   entry_row public.journal_entries;
   cashbox_id_value uuid;
 begin
-  select je, fe into entry_row, event_row
+  select je.* into entry_row
   from public.journal_entries je
-  join public.financial_events fe on fe.id = je.financial_event_id
   where je.id = target_entry and je.organization_id = target_org;
   if entry_row.id is null then return null; end if;
+  select fe.* into event_row
+  from public.financial_events fe
+  where fe.id = entry_row.financial_event_id;
   if not public.can_read_financial_event_v6(event_row.id, target_org, event_row.branch_id, event_row.metadata) then
     raise exception 'CAPABILITY_REQUIRED:transactions.view';
   end if;

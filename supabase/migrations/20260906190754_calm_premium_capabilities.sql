@@ -258,7 +258,7 @@ as $$
         )
       )
     )
-  )), false)
+  ), false)
   from decision;
 $$;
 

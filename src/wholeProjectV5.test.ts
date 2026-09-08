@@ -190,6 +190,8 @@ describe("whole-project v5 authorization contract", () => {
     expect(capabilityFunction).toContain("requires_active_plan");
     expect(capabilityFunction).toContain("requires_trusted_device");
     expect(capabilityFunction).toContain("requires_mfa");
+    expect(capabilityFunction).toContain("), false)\n  from decision;");
+    expect(capabilityFunction).not.toContain(")), false)\n  from decision;");
     expect(migration).toContain("drop trigger if exists enforce_premium_financial_actor_before_insert");
   });
 });

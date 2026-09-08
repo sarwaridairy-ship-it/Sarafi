@@ -154,6 +154,16 @@ describe("whole-web v6 acceptance contracts", () => {
     expect(migration).toContain("revoke select on table");
   });
 
+  it("qualifies outer RLS rows and loads transaction rowtypes independently", () => {
+    expect(migration).toContain("fe.id = journal_entries.financial_event_id");
+    expect(migration).toContain("je.id = journal_lines.journal_entry_id");
+    expect(migration).toContain("cb.id = ledger_accounts.cashbox_id");
+    expect(migration).toContain("je.id = receipts.journal_entry_id");
+    expect(migration).toContain("select je.* into entry_row");
+    expect(migration).toContain("select fe.* into event_row");
+    expect(migration).not.toContain("select je, fe into entry_row, event_row");
+  });
+
   it("issues outgoing Hawala references on the server and records purpose-specific events", () => {
     expect(financialApi).toContain("client.rpc('record_hawala_send_v6'");
     expect(hawalaMigration).toContain("reference_source', 'server'");

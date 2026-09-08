@@ -241,7 +241,7 @@ as $$
           and dv.status = 'trusted'
       )
     )
-  )), false)
+  ), false)
   from decision;
 $$;
 

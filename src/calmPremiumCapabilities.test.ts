@@ -74,6 +74,8 @@ describe("calm premium migration contract", () => {
   it("uses one capability source without PostgreSQL function-source patching", () => {
     expect(migration).toContain("create or replace function public.has_capability");
     expect(migration).toContain("create or replace function public.require_capability");
+    expect(migration).toContain("), false)\n  from decision;");
+    expect(migration).not.toContain(")), false)\n  from decision;");
     expect(migration).not.toContain("pg_get_functiondef");
     expect(migration).not.toMatch(/replace\s*\(\s*function_definition/i);
   });
