@@ -1554,7 +1554,7 @@ begin
     created_by, client_command_id, metadata
   ) values (
     line_row.organization_id, transfer_row.branch_id,
-    case when line_row.direction = 'payable' then 'pay_money' else 'receive_money' end,
+    (case when line_row.direction = 'payable' then 'pay_money' else 'receive_money' end)::public.financial_event_type,
     'hawala-partner-settlement-' || line_row.id || '-' || client_id,
     now(), actor_id, client_id, command
   ) returning id into event_id;

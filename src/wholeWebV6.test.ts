@@ -17,6 +17,7 @@ const serviceWorker = read("../public/sw.js");
 const migration = read("../supabase/migrations/20260908104812_whole_web_v6_reporting_compliance_evidence.sql");
 const hawalaMigration = read("../supabase/migrations/20260908110100_hawala_evidence_v6.sql");
 const hawalaEventTypes = read("../supabase/migrations/20260908110000_hawala_event_types_v6.sql");
+const hawalaRepairMigration = read("../supabase/migrations/20260908221542_repair_hawala_v6_function_lint.sql");
 const ci = read("../.github/workflows/ci.yml");
 const release = read("../.github/workflows/release.yml");
 
@@ -173,6 +174,9 @@ describe("whole-web v6 acceptance contracts", () => {
     }
     expect(hawalaMigration).toContain("HAWALA_IMMUTABLE_EVIDENCE");
     expect(hawalaMigration).toContain("remaining_amount");
+    expect(hawalaMigration).toContain("extensions.gen_random_bytes(10)");
+    expect(hawalaRepairMigration).toContain("extensions.gen_random_bytes(10)");
+    expect(hawalaRepairMigration).toContain("::public.financial_event_type");
     expect(hawalaMigration).not.toContain("case when new.direction = 'outgoing' then new.sender_id");
     expect(referenceScanner).toContain("BarcodeDetector");
     expect(referenceScanner).toContain("getUserMedia");

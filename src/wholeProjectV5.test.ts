@@ -217,7 +217,7 @@ describe("whole-project v5 accounting and privacy contract", () => {
   it("binds settlement to canonical statement identity and supports both directions", () => {
     expect(migration).toContain("HAWALA_PARTNER_MISMATCH");
     expect(migration).toContain("direction text not null check (direction in ('payable', 'receivable'))");
-    expect(migration).toContain("case when line_row.direction = 'payable' then 'pay_money' else 'receive_money' end");
+    expect(migration).toContain("(case when line_row.direction = 'payable' then 'pay_money' else 'receive_money' end)::public.financial_event_type");
     expect(migration).toContain("net_receivable");
   });
 

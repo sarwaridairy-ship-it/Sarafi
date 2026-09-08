@@ -159,7 +159,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  generated_reference text := 'SAR-' || upper(encode(gen_random_bytes(10), 'hex'));
+  generated_reference text := 'SAR-' || upper(encode(extensions.gen_random_bytes(10), 'hex'));
 begin
   return public.record_hawala_send(
     (coalesce(command, '{}'::jsonb) - 'reference_code')
