@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { hasCapability, inspectionCapabilities } from "./app/capabilities";
+import { hasCapability, inspectionCapabilities, navigationSections } from "./app/capabilities";
 import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix } from "./app/routes";
 
 describe("calm premium capability contract", () => {
@@ -42,6 +42,16 @@ describe("calm premium capability contract", () => {
     expect(capabilityForFinancialRoute("/move/branch")).toBe("financial.post.money");
     expect(financialRoute("inspection", "/debts/settle")).toBe("/app/inspection/debts/settle");
     expect(financialRouteSuffix("/app/inspection/debts/settle")).toBe("/debts/settle");
+  });
+
+  it("keeps a rate-managing branch manager in the focused operational navigation", () => {
+    expect(navigationSections(inspectionCapabilities("manager"))).toEqual([
+      "Dashboard",
+      "Trade",
+      "Transactions",
+      "People",
+      "Cash & Accounts",
+    ]);
   });
 });
 

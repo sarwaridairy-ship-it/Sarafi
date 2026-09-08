@@ -164,7 +164,10 @@ export function navigationSections(capabilities: readonly string[]): NavigationS
     if (allowed && result.length < 5 && !result.includes(section)) result.push(section);
   };
 
-  const hasManagement = hasAnyCapability(capabilities, ["organization.manage", "team.manage", "rates.manage", "security.manage", "billing.manage"]);
+  // Rate managers still need the focused operational five-item navigation.
+  // Organization/team/security administration is what promotes Control into
+  // the primary rail; rate publishing remains available contextually.
+  const hasManagement = hasAnyCapability(capabilities, ["organization.manage", "team.manage", "security.manage", "billing.manage"]);
   add("Trade", hasAnyCapability(capabilities, financialPostCapabilities));
   add("Transactions", hasAnyCapability(capabilities, ["transactions.view", "financial.overview", "financial.report", ...financialPostCapabilities]));
   if (hasManagement) {
