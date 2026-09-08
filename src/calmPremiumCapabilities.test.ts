@@ -6,7 +6,9 @@ import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix } fro
 describe("calm premium capability contract", () => {
   it("keeps Business Administrator operational while owner powers remain unavailable", () => {
     const capabilities = inspectionCapabilities("business_admin");
-    expect(hasCapability(capabilities, "financial.post.fx")).toBe(true);
+    expect(hasCapability(capabilities, "financial.post.fx")).toBe(false);
+    expect(hasCapability(capabilities, "financial.post.debt")).toBe(true);
+    expect(hasCapability(capabilities, "hawala.send")).toBe(true);
     expect(hasCapability(capabilities, "organization.manage")).toBe(true);
     expect(hasCapability(capabilities, "team.capabilities.manage")).toBe(true);
     expect(hasCapability(capabilities, "billing.manage")).toBe(false);
@@ -25,15 +27,18 @@ describe("calm premium capability contract", () => {
       "financial.post.opening",
       "financial.reverse",
     ] as const) expect(hasCapability(capabilities, capability)).toBe(false);
+    expect(hasCapability(capabilities, "debt.settle.receivable")).toBe(false);
+    expect(hasCapability(capabilities, "debt.settle.payable")).toBe(false);
+    expect(hasCapability(capabilities, "hawala.settle")).toBe(false);
     expect(hasCapability(capabilities, "financial.report")).toBe(true);
     expect(hasCapability(capabilities, "reconciliation.submit")).toBe(true);
   });
 
   it("maps every exact transaction route to its server capability", () => {
     expect(capabilityForFinancialRoute("/fx/buy")).toBe("financial.post.fx");
-    expect(capabilityForFinancialRoute("/money-in/debt-payment")).toBe("financial.post.debt");
+    expect(capabilityForFinancialRoute("/money-in/debt-payment")).toBe("debt.settle.receivable");
     expect(capabilityForFinancialRoute("/money-in/owner-capital")).toBe("owner.capital.post");
-    expect(capabilityForFinancialRoute("/hawala/payout")).toBe("financial.post.hawala");
+    expect(capabilityForFinancialRoute("/hawala/payout")).toBe("hawala.payout");
     expect(capabilityForFinancialRoute("/move/branch")).toBe("financial.post.money");
     expect(financialRoute("inspection", "/debts/settle")).toBe("/app/inspection/debts/settle");
     expect(financialRouteSuffix("/app/inspection/debts/settle")).toBe("/debts/settle");

@@ -780,6 +780,28 @@ test.describe("workspace controls", () => {
     await expect(page.locator(".financial-task-form").getByRole("textbox", { name: /We receive/ })).toHaveValue("1000");
   });
 
+  test("foreign expense resolves an expired rate without losing its draft", async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem("sarafi-language", "en"));
+    await page.goto("/app/inspection/transactions/new/money-out/expense?rate=stale");
+    await page.getByRole("textbox", { name: "Amount" }).fill("1234");
+    await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
+    await expect(page.getByRole("region", { name: "Accounting rate" })).toContainText("This rate has expired");
+    await expect(page.getByRole("button", { name: /Post operation/ })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Shop buy rate" }).fill("70.40");
+    await page.getByRole("textbox", { name: "Shop sell rate" }).fill("70.50");
+    await expect(page.getByRole("textbox", { name: "Amount" })).toHaveValue("1234");
+    await expect(page.getByRole("button", { name: /Post operation/ })).toBeEnabled();
+  });
+
+  test("cashier foreign expense stays in task while a manager rate is required", async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem("sarafi-language", "en"));
+    await page.goto("/app/inspection/transactions/new/money-out/expense?role=cashier&rate=missing");
+    await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
+    await expect(page.getByText(/A manager must publish the rate/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Post operation/ })).toBeDisabled();
+    await expect(page).toHaveURL(/transactions\/new\/money-out\/expense/);
+  });
+
   test("daily report downloads as a localized A4 PDF", async ({ page, browserName }) => {
     test.skip(browserName !== "chromium", "One browser verifies the generated PDF artifact");
     test.setTimeout(60_000);
@@ -861,21 +883,43 @@ test.describe("workspace controls", () => {
     await expect(confirmation).toContainText("70.35 AFN");
   });
 
-  test("Exchange accepts an explicit cross-currency rate and shows both money sides", async ({
+  test("Exchange derives two authoritative legs and reveals a reasoned customer override", async ({
     page,
   }) => {
     await page.goto("/");
     await openFxForm(page);
     await page.getByRole("tab", { name: "Exchange currency" }).click();
     const dialog = page.locator(".financial-task-form");
+    await expect(dialog.getByText("USD → AFN", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("EUR → AFN", { exact: true })).toBeVisible();
     await dialog.getByRole("textbox", { name: "We give" }).fill("100");
-    await dialog.getByRole("textbox", { name: "Rate" }).fill("0.92");
+    await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("93.68");
+    await dialog.getByRole("checkbox", { name: "Use a different rate for this transaction" }).check();
+    await dialog.getByRole("textbox", { name: "Rate", exact: true }).fill("0.92");
+    await dialog.getByRole("textbox", { name: "Reason for the rate decision" }).fill("Customer negotiated rate");
     await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("92.00");
     await dialog.getByRole("button", { name: "Review transaction" }).click();
     const confirmation = dialog.locator(".trade-confirmation");
     await expect(confirmation).toContainText("100.00 USD");
     await expect(confirmation).toContainText("92.00 EUR");
     await expect(confirmation).toContainText("0.92 EUR");
+  });
+
+  test("Exchange keeps the draft blocked until both missing AFN legs are resolved in place", async ({ page }) => {
+    await page.goto("/app/inspection/transactions/new/fx/exchange?rate=missing");
+    await expect(page.locator(".financial-task-form")).toBeVisible();
+    const dialog = page.locator(".financial-task-form");
+    await dialog.getByRole("textbox", { name: "We give" }).fill("100");
+    const review = dialog.getByRole("button", { name: "Review transaction" });
+    await expect(review).toBeDisabled();
+    const resolvers = dialog.locator(".inline-rate-resolver");
+    await expect(resolvers).toHaveCount(2);
+    await resolvers.nth(0).getByRole("textbox", { name: "Shop buy rate" }).fill("70.25");
+    await resolvers.nth(0).getByRole("textbox", { name: "Shop sell rate" }).fill("70.35");
+    await resolvers.nth(1).getByRole("textbox", { name: "Shop buy rate" }).fill("75.10");
+    await resolvers.nth(1).getByRole("textbox", { name: "Shop sell rate" }).fill("75.20");
+    await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("93.68");
+    await expect(review).toBeEnabled();
   });
 
   test("worker connection lobby accepts an owner-issued code before opening the assigned workspace", async ({ page }) => {

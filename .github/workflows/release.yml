@@ -8,6 +8,10 @@ on:
         required: true
         default: "false"
         type: boolean
+      backup_evidence:
+        description: "Verified backup/PITR or restore-drill reference for this release"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,6 +28,27 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run smoke
+      - name: Require authenticated release fixtures
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
+          SARAFI_E2E_PASSWORD: ${{ secrets.SARAFI_E2E_PASSWORD }}
+          SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
+        run: |
+          test -n "$VITE_SUPABASE_URL"
+          test -n "$VITE_SUPABASE_ANON_KEY"
+          test -n "$SARAFI_E2E_EMAIL"
+          test -n "$SARAFI_E2E_PASSWORD"
+          test -n "$SARAFI_E2E_ORGANIZATION_ID"
+      - name: Authenticated authorization journeys
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
+          SARAFI_E2E_PASSWORD: ${{ secrets.SARAFI_E2E_PASSWORD }}
+          SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
+        run: npx playwright test tests/e2e/authenticated-security.spec.ts --project=chromium
       - name: Initialize isolated local database configuration
         run: npx supabase init --yes
       - name: Start isolated local database
@@ -42,6 +67,8 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,15 +76,44 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify production deployment credentials
+      - name: Verify protected release evidence and credentials
         env:
+          BACKUP_EVIDENCE: ${{ inputs.backup_evidence }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
+          test -n "$BACKUP_EVIDENCE"
           test -n "$VERCEL_TOKEN"
           test -n "$VERCEL_ORG_ID"
           test -n "$VERCEL_PROJECT_ID"
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$SUPABASE_PROJECT_REF"
+      - name: Link the reviewed production database
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - name: Verify the exact forward migration set
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: npx supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD"
+      - name: Apply reviewed forward migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: npx supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Lint the promoted database
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: npx supabase db lint --linked --level error --fail-on error
       - name: Pull protected production settings
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -71,8 +127,21 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: npx vercel@54.18.7 build --prod --token="$VERCEL_TOKEN"
       - name: Deploy the verified artifact to production
+        id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx vercel@54.18.7 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: |
+          deployment_url=$(npx vercel@54.18.7 deploy --prebuilt --prod --token="$VERCEL_TOKEN" --meta gitCommitSha="$GITHUB_SHA")
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Deployment: $deployment_url" >> "$GITHUB_STEP_SUMMARY"
+          echo "Git SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Inspect immutable deployment metadata
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@54.18.7 inspect "${{ steps.deploy.outputs.url }}" --json --token="$VERCEL_TOKEN"
+      - name: Production smoke
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel@54.18.7 curl / --deployment "${{ steps.deploy.outputs.url }}" --token="$VERCEL_TOKEN" -- --fail --silent --show-error

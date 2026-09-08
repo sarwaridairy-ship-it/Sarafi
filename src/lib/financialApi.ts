@@ -1,18 +1,31 @@
 import { getSupabaseClient } from './supabase'
 import Decimal from 'decimal.js'
-import { parseFxTradeCommand, type FxTradeCommand } from '../domain/commands'
+import {
+  parseDebtCreateCommand,
+  parseDebtSettlementCommand,
+  parseFxTradeCommand,
+  parseHawalaIncomingCommand,
+  parseHawalaPayoutCommand,
+  parseHawalaSendCommand,
+  parseHawalaSettlementCommand,
+  type FxTradeCommand,
+} from '../domain/commands'
 import { validateDocumentFile, type DocumentType } from './integrations'
 
 export type RpcResult<T> = { data: T | null; error: string | null }
-export type DashboardSnapshot = { transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string; currency: string; quantity: string }>; receivables: Array<{ currency: string; amount: string }>; payables: Array<{ currency: string; amount: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
-export type DebtRecord = { id: string; counterparty_id: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null }
+export type DashboardSnapshot = { role_code?: string; profit_hidden?: boolean; transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string; currency: string; quantity: string }>; receivables: Array<{ currency: string; amount: string }>; payables: Array<{ currency: string; amount: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
+export type DebtRecord = { id: string; branch_id?: string; counterparty_id: string; counterparty_name?: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null; created_at?: string }
 export type CounterpartyRecord = { id: string; display_name: string; counterparty_type: string; risk_status: string; phone?: string | null; notes?: string | null }
-export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string }
+export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string; direction?: 'incoming' | 'outgoing'; workflow_type?: string; hawala_partner_id?: string | null; integrity_state?: 'valid' | 'review_required'; payout_journal_entry_id?: string | null; payout_receipt_id?: string | null }
+export type HawalaPartnerRecord = { id: string; counterparty_id: string | null; name: string; active: boolean }
+export type HawalaPayoutMatch = { reference_code: string; beneficiary_name: string; destination_location: string; currency_code: string; amount: string; branch_id: string; hawala_partner_id: string }
+export type HawalaPartnerStatement = { partner_id: string; totals: Array<{ currency_code: string; payable: string; receivable: string; net_receivable: string }>; lines: Array<{ id: string; transfer_id: string; branch_id?: string; reference_code: string; beneficiary_name: string; direction: 'payable' | 'receivable'; currency_code: string; original_amount: string; settled_amount: string; remaining_amount: string; status: string; created_at: string }> }
 export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null; counterparty_name?: string | null; employee_name?: string | null; given_amount?: string | null; given_currency?: string | null; received_amount?: string | null; received_currency?: string | null }
 export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string }
 export type CashboxBalanceRecord = { currency_code: string; expected_amount: string }
 export type CounterpartyStatementRecord = { id: string; occurred_at: string; event_type: string; reference: string; status: string; memo: string | null; direction: 'receivable' | 'payable' | null; currency_code: string | null; amount: string | null }
 export type RateHistoryRecord = { id: string; from_currency: string; to_currency: string; buy_rate: string; sell_rate: string; effective_from: string; group_name: string; branch_id: string | null }
+export type OperationRateContext = { rate_id?: string; rate_group_id?: string; context_id?: string; from_currency: string; to_currency: string; buy_rate?: string; sell_rate?: string; spread_tolerance?: string; tolerance_bps?: string; effective_from?: string; expires_at?: string; age_seconds?: number; max_age_minutes?: number; branch_id?: string | null; source?: string; stale: boolean; missing: boolean; approval_required?: boolean }
 export type CurrencyCatalogRecord = { code: string; name_en: string; name_dari: string; name_pashto: string; symbol: string; minor_unit: number; enabled: boolean }
 export type MoneyAccountRecord = { id: string; name: string; account_type: 'cashbox' | 'safe' | 'bank' | 'mobile_money' | 'partner' | 'other'; branch_id: string | null; cashbox_id: string | null; reference_label: string | null; active: boolean; balances: Array<{ currency: string; amount: string }> }
 export type TeamScopeRecord = { id: string; name: string; branch_id?: string }
@@ -32,13 +45,14 @@ export type WorkspaceContextRecord = {
   subscription: { status?: string; period_end?: string | null; plan_code?: string }
 }
 export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null }
+export type ResumableApprovalDraft = { id: string; action_type: 'fx_trade' | 'hawala_payout'; status: string; reason: string; amount_base: string | null; currency_code: string | null; requested_at: string; expires_at: string; decided_at: string | null; decision_reason: string | null; resume_route: string | null; draft: Record<string, unknown>; consumed_at: string | null; consumed_journal_entry_id: string | null }
 export type TeamControlPlane = { members: TeamMemberRecord[]; invitations: TeamInvitationRecord[]; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[]; devices: DeviceRecord[]; approvals: ApprovalRecord[] }
 export type CreatedTeamInvitation = { id: string; invite_token: string; connection_code?: string; email: string; display_name: string; role_code: string; expires_at: string }
 export type WorkerJoinRequestRecord = { id: string; display_name: string; email: string; status: string; requested_at: string; assigned_role: string | null; branch_ids: string[]; cashbox_ids: string[]; capability_overrides: Array<{ capability: string; allowed: boolean }>; limits: Record<string, unknown>; mfa_required: boolean; device_review_required: boolean }
 export type MembershipCapabilityMatrixRecord = { membership_id: string; role_code: string; effective_capabilities: string[]; overrides: Array<{ capability: string; allowed: boolean; branch_ids: string[]; cashbox_ids: string[]; limits: Record<string, unknown> }> }
 export type PrivateDocumentRecord = { id: string; organization_id: string; entity_id: string; entity_type: string; storage_path: string; content_type: string; size_bytes: number; sha256: string; uploaded_by: string; created_at: string }
 export type ReceiptRecord = { id: string; journal_entry_id: string; receipt_number: string; language_code: string; created_at: string }
-export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; date_display?: 'gregorian' | 'solar_hijri' | 'both'; digit_display?: 'western' | 'localized'; default_cost_basis?: 'weighted_average'; approval_threshold_base?: string; offline_limit_base?: string; cashier_profit_hidden?: boolean; receipt_number_pattern?: string; features: Array<{ feature_code: string; enabled: boolean }> }
+export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; date_display?: 'gregorian' | 'solar_hijri' | 'both'; digit_display?: 'western' | 'localized'; default_cost_basis?: 'weighted_average'; approval_threshold_base?: string; offline_limit_base?: string; cashier_profit_hidden?: boolean; receipt_number_pattern?: string; rate_max_age_minutes?: number; rate_tolerance_bps?: string; features: Array<{ feature_code: string; enabled: boolean }> }
 export type NotificationRecord = { id: string; notification_type: string; subject_id: string; message: string; status: 'unread' | 'read' | 'dismissed'; created_at: string }
 export type NotificationPreferenceRecord = { id: string; notification_type: string; in_app: boolean; push: boolean; threshold_base: string | null }
 export type ReportExportRecord = { id: string; report_name: string; format: 'csv' | 'pdf' | 'xlsx' | 'print'; filters: Record<string, unknown>; generated_at: string; expires_at: string | null }
@@ -77,7 +91,7 @@ export async function postFxTrade(command: unknown): Promise<RpcResult<Record<st
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('record_fx_trade', { command: parsed })
+  const result = await client.rpc('record_fx_trade_v5', { command: parsed })
   return { data: result.data, error: result.error?.message ?? null }
 }
 
@@ -87,8 +101,26 @@ export async function requestFxTradeApproval(command: unknown): Promise<RpcResul
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('request_fx_trade_approval', { command: parsed })
+  const result = await client.rpc('request_fx_trade_approval_v5', { command: parsed })
   return { data: result.data as ApprovalRecord | null, error: result.error?.message ?? null }
+}
+
+export async function resumeApprovedFxTrade(approvalId: string): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('resume_approved_fx_trade', { target_approval: approvalId })
+  return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
+}
+
+export async function getMyResumableApprovalDraft(approvalId: string): Promise<RpcResult<ResumableApprovalDraft>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('get_my_resumable_approval_draft', { target_approval: approvalId })
+  return { data: result.data as ResumableApprovalDraft | null, error: result.error?.message ?? null }
 }
 
 export async function getReceiptForJournalEntry(organizationId: string, journalEntryId: string): Promise<RpcResult<ReceiptRecord>> {
@@ -102,7 +134,7 @@ export async function getWorkspaceSettings(organizationId: string): Promise<RpcR
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const [settings, features] = await Promise.all([
-    client.from('organization_settings').select('default_language,base_currency_code,negative_cash_allowed,receipt_prefix,timezone,date_display,digit_display,default_cost_basis,approval_threshold_base,offline_limit_base,cashier_profit_hidden,receipt_number_pattern').eq('organization_id', organizationId).maybeSingle(),
+    client.from('organization_settings').select('default_language,base_currency_code,negative_cash_allowed,receipt_prefix,timezone,date_display,digit_display,default_cost_basis,approval_threshold_base,offline_limit_base,cashier_profit_hidden,receipt_number_pattern,rate_max_age_minutes,rate_tolerance_bps').eq('organization_id', organizationId).maybeSingle(),
     client.from('organization_features').select('feature_code,enabled').eq('organization_id', organizationId).order('feature_code'),
   ])
   const error = settings.error?.message ?? features.error?.message ?? null
@@ -110,7 +142,7 @@ export async function getWorkspaceSettings(organizationId: string): Promise<RpcR
   return { data: { ...settings.data, features: (features.data ?? []) as Array<{ feature_code: string; enabled: boolean }> } as WorkspaceSettingsRecord, error: null }
 }
 
-export async function updateWorkspaceSettings(input: { organizationId: string; language: string; timezone: string; receiptPrefix: string; negativeCashAllowed: boolean; dateDisplay?: string; digitDisplay?: string; approvalThresholdBase?: string; offlineLimitBase?: string; cashierProfitHidden?: boolean }): Promise<RpcResult<WorkspaceSettingsRecord>> {
+export async function updateWorkspaceSettings(input: { organizationId: string; language: string; timezone: string; receiptPrefix: string; negativeCashAllowed: boolean; dateDisplay?: string; digitDisplay?: string; approvalThresholdBase?: string; offlineLimitBase?: string; cashierProfitHidden?: boolean; rateMaxAgeMinutes?: number; rateToleranceBps?: string }): Promise<RpcResult<WorkspaceSettingsRecord>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.rpc('update_organization_control_settings', {
@@ -125,6 +157,8 @@ export async function updateWorkspaceSettings(input: { organizationId: string; l
       approval_threshold_base: input.approvalThresholdBase ?? '0',
       offline_limit_base: input.offlineLimitBase ?? '0',
       cashier_profit_hidden: input.cashierProfitHidden ?? true,
+      rate_max_age_minutes: input.rateMaxAgeMinutes ?? 1440,
+      rate_tolerance_bps: input.rateToleranceBps ?? '50',
     },
   })
   return { data: result.data ? { ...result.data, features: [] } as WorkspaceSettingsRecord : null, error: result.error?.message ?? null }
@@ -441,29 +475,38 @@ export async function commitImport(command: Record<string, unknown>): Promise<Rp
   return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
 }
 
-export async function recordDebt(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+export async function recordDebt(command: unknown): Promise<RpcResult<Record<string, unknown>>> {
+  const parsed = parseDebtCreateCommand(command)
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('record_debt', { command })
+  const result = await client.rpc('record_debt', { command: parsed })
   return { data: result.data, error: result.error?.message ?? null }
 }
 
-export async function settleDebt(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+export async function settleDebt(command: unknown): Promise<RpcResult<Record<string, unknown>>> {
+  const parsed = parseDebtSettlementCommand(command)
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('settle_debt', { command })
+  const result = await client.rpc('settle_debt', { command: parsed })
   return { data: result.data, error: result.error?.message ?? null }
 }
 
 export async function listDebts(organizationId: string): Promise<RpcResult<DebtRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.from('debts').select('id,counterparty_id,direction,currency_code,original_amount,outstanding_amount,due_at,notes').eq('organization_id', organizationId).gt('outstanding_amount', 0).order('created_at', { ascending: false })
+  const result = await client.rpc('get_debts_v5', { target_org: organizationId })
   return { data: result.data as DebtRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function getDebtDetail(organizationId: string, debtId: string): Promise<RpcResult<DebtRecord & { can_settle: boolean; settlements: Array<Record<string, unknown>> }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_debt_detail_v5', { target_org: organizationId, target_debt: debtId })
+  return { data: result.data as (DebtRecord & { can_settle: boolean; settlements: Array<Record<string, unknown>> }) | null, error: result.error?.message ?? null }
 }
 
 export async function listCounterparties(organizationId: string): Promise<RpcResult<CounterpartyRecord[]>> {
@@ -471,6 +514,13 @@ export async function listCounterparties(organizationId: string): Promise<RpcRes
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.from('counterparties').select('id,display_name,counterparty_type,risk_status').eq('organization_id', organizationId).neq('risk_status', 'blocked').order('display_name')
   return { data: result.data as CounterpartyRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function getCounterpartyDetail(organizationId: string, counterpartyId: string): Promise<RpcResult<CounterpartyRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_counterparty_detail_v5', { target_org: organizationId, target_counterparty: counterpartyId })
+  return { data: result.data as CounterpartyRecord | null, error: result.error?.message ?? null }
 }
 
 export async function createCounterparty(input: {
@@ -531,20 +581,42 @@ export async function revokeTeamDevice(deviceId: string, reason: string): Promis
   return { data: result.data as LinkedDeviceRecord | null, error: result.error?.message ?? null }
 }
 
-export async function recordHawalaSend(command: Record<string, unknown>): Promise<RpcResult<HawalaTransferRecord>> {
+export async function recordHawalaSend(command: unknown): Promise<RpcResult<HawalaTransferRecord>> {
+  const parsed = parseHawalaSendCommand(command)
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('record_hawala_send', { command })
+  const result = await client.rpc('record_hawala_send', { command: parsed })
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
 export async function listHawalaTransfers(organizationId: string): Promise<RpcResult<HawalaTransferRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.from('hawala_transfers').select('id,beneficiary_name,origin_location,destination_location,currency_code,amount,fee,reference_code,status,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false })
+  const result = await client.from('hawala_transfers').select('id,beneficiary_name,origin_location,destination_location,currency_code,amount,fee,reference_code,status,created_at,direction,workflow_type,hawala_partner_id,integrity_state,payout_journal_entry_id,payout_receipt_id').eq('organization_id', organizationId).order('created_at', { ascending: false })
   return { data: result.data as HawalaTransferRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function listHawalaPartners(organizationId: string): Promise<RpcResult<HawalaPartnerRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_hawala_partners', { target_org: organizationId })
+  return { data: result.data as HawalaPartnerRecord[] | null, error: result.error?.message ?? null }
+}
+
+export async function findHawalaPayout(organizationId: string, referenceCode: string): Promise<RpcResult<HawalaPayoutMatch>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('find_hawala_payout', { target_org: organizationId, reference_code_input: referenceCode.trim().toUpperCase() })
+  return { data: result.data as HawalaPayoutMatch | null, error: result.error?.message ?? null }
+}
+
+export async function getHawalaPartnerStatement(organizationId: string, partnerId: string): Promise<RpcResult<HawalaPartnerStatement>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_hawala_partner_statement', { target_org: organizationId, target_partner: partnerId })
+  return { data: result.data as HawalaPartnerStatement | null, error: result.error?.message ?? null }
 }
 
 export async function recordReportExport(command: Record<string, unknown>): Promise<RpcResult<ReportExportRecord>> {
@@ -565,30 +637,50 @@ export async function transitionHawalaStatus(command: Record<string, unknown>): 
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
-export async function recordHawalaIncoming(command: Record<string, unknown>): Promise<RpcResult<HawalaTransferRecord>> {
+export async function recordHawalaIncoming(command: unknown): Promise<RpcResult<HawalaTransferRecord>> {
+  const parsed = parseHawalaIncomingCommand(command)
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('record_hawala_incoming', { command })
+  const result = await client.rpc('record_hawala_incoming', { command: parsed })
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
-export async function payHawalaBeneficiary(command: Record<string, unknown>): Promise<RpcResult<HawalaTransferRecord>> {
+export async function payHawalaBeneficiary(command: unknown): Promise<RpcResult<HawalaTransferRecord>> {
+  const parsed = parseHawalaPayoutCommand(command)
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('pay_hawala_beneficiary', { command })
+  const result = await client.rpc('pay_hawala_beneficiary', { command: parsed })
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
-export async function settleHawalaPartner(command: Record<string, unknown>): Promise<RpcResult<Record<string, unknown>>> {
+export async function requestHawalaPayoutApproval(command: unknown): Promise<RpcResult<ApprovalRecord>> {
+  const parsed = parseHawalaPayoutCommand(command)
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('request_hawala_payout_approval', { command: parsed })
+  return { data: result.data as ApprovalRecord | null, error: result.error?.message ?? null }
+}
+
+export async function resumeApprovedHawalaPayout(approvalId: string): Promise<RpcResult<HawalaTransferRecord>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('settle_hawala_partner', { command })
+  const result = await client.rpc('resume_approved_hawala_payout', { target_approval: approvalId })
+  return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
+}
+
+export async function settleHawalaPartner(command: unknown): Promise<RpcResult<Record<string, unknown>>> {
+  const parsed = parseHawalaSettlementCommand(command)
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('settle_hawala_partner', { command: parsed })
   return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
 }
 
@@ -670,6 +762,13 @@ export async function listJournalEntries(organizationId: string): Promise<RpcRes
   return { data: rows, error: result.error?.message ?? cashboxes.error?.message ?? null }
 }
 
+export async function getTransactionDetail(organizationId: string, entryId: string): Promise<RpcResult<JournalRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_transaction_detail', { target_org: organizationId, target_entry: entryId })
+  return { data: result.data as JournalRecord | null, error: result.error?.message ?? null }
+}
+
 export async function listCompleteJournalEntries(organizationId: string): Promise<RpcResult<JournalRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
@@ -729,7 +828,7 @@ export async function getOwnerDashboard(organizationId: string, targetDay?: stri
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('get_owner_dashboard', { target_org: organizationId, target_day: targetDay })
+  const result = await client.rpc('get_role_dashboard', { target_org: organizationId, target_day: targetDay })
   return { data: result.data as DashboardSnapshot | null, error: result.error?.message ?? null }
 }
 
@@ -755,11 +854,11 @@ export async function getTeamControlPlane(organizationId: string): Promise<RpcRe
   return { data: result.data as TeamControlPlane | null, error: result.error?.message ?? null }
 }
 
-export async function getTransactionRateContext(organizationId: string, branchId: string, fromCurrency: string, toCurrency = 'AFN'): Promise<RpcResult<{ buy_rate?: string; sell_rate?: string; stale?: boolean; effective_from?: string; spread_tolerance?: string }>> {
+export async function getTransactionRateContext(organizationId: string, branchId: string, fromCurrency: string, toCurrency = 'AFN'): Promise<RpcResult<OperationRateContext>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.rpc('get_transaction_rate_context', { target_org: organizationId, target_branch: branchId, source_currency: fromCurrency, target_currency: toCurrency })
-  return { data: result.data as { buy_rate?: string; sell_rate?: string; stale?: boolean; effective_from?: string; spread_tolerance?: string } | null, error: result.error?.message ?? null }
+  return { data: result.data as OperationRateContext | null, error: result.error?.message ?? null }
 }
 
 export async function createTeamInvitation(input: { organizationId: string; email: string; displayName: string; role: string; branchIds: string[]; cashboxIds: string[]; capabilityOverrides?: Array<{ capability: string; allowed: boolean }>; limits?: Record<string, unknown>; requiresMfa?: boolean }): Promise<RpcResult<CreatedTeamInvitation>> {
@@ -928,10 +1027,10 @@ export async function getPrivateCounterpartyDocuments(organizationId: string, co
 export async function getPrivateDocumentUrl(organizationId: string, documentId: string): Promise<RpcResult<string>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const document = await client.from('attachments').select('id,storage_path').eq('organization_id', organizationId).eq('id', documentId).maybeSingle()
-  if (document.error || !document.data) return { data: null, error: document.error?.message ?? 'Document not found' }
-  const signed = await client.storage.from('sarafi-private-documents').createSignedUrl(document.data.storage_path, 300)
-  if (signed.error || !signed.data?.signedUrl) return { data: null, error: signed.error?.message ?? 'Document access denied' }
-  const audit = await client.rpc('record_sensitive_document_access', { target_org: organizationId, target_entity: documentId, action: 'view' })
-  return audit.error ? { data: null, error: audit.error.message } : { data: signed.data.signedUrl, error: null }
+  const result = await client.functions.invoke('private-document-url', {
+    body: { organization_id: organizationId, document_id: documentId, action: 'view' },
+  })
+  const signedUrl = (result.data as { signedUrl?: string } | null)?.signedUrl
+  if (result.error || !signedUrl) return { data: null, error: result.error?.message ?? 'Document access denied' }
+  return { data: signedUrl, error: null }
 }

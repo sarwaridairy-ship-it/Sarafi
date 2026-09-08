@@ -523,6 +523,19 @@
   .transaction-family-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+.inline-rate-resolver { margin: 4px 0 18px; }
+.inline-rate-resolver .applied-rate-row > span,
+.inline-rate-context span { display: grid; gap: 3px; }
+.inline-rate-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.inline-rate-context span { padding: 10px 12px; border: 1px solid var(--line, #d8e1dd); border-radius: 8px; background: color-mix(in srgb, white 88%, var(--surface-soft, #f3f7f5)); }
+.inline-rate-context small,
+.inline-rate-resolver .applied-rate-row small { color: var(--muted, #62726f); }
+.inline-rate-resolver fieldset { margin: 0; padding: 12px; border: 1px solid var(--line, #d8e1dd); border-radius: 8px; }
+.approval-draft-status { align-items: center; background: var(--calm-surface); border: 1px solid var(--calm-line); border-radius: var(--calm-radius); display: flex; gap: 16px; justify-content: space-between; margin-block-end: 16px; padding: 18px; }
+.approval-draft-status h2,
+.approval-draft-status p { margin-block: 4px; }
+.exchange-rate-governance { display: grid; gap: 12px; }
+
 @media (max-width: 700px) {
   .transaction-inline-form {
     inset-block-start: 56px;
@@ -562,6 +575,7 @@
   .export-menu > .activity-actions { inset-inline: 0; position: static; }
   .role-limit-grid,
   .role-limit-grid fieldset { grid-template-columns: 1fr; }
+  .approval-draft-status { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 380px) {

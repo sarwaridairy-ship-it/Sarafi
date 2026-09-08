@@ -51,8 +51,15 @@ export function financialRouteSuffix(pathname: string): FinancialRoute | null {
 
 export function capabilityForFinancialRoute(route: FinancialRoute): Capability {
   if (route.startsWith("/fx/")) return "financial.post.fx";
-  if (route.startsWith("/debt/") || route.startsWith("/debts/") || route.includes("debt-payment")) return "financial.post.debt";
-  if (route.startsWith("/hawala/")) return "financial.post.hawala";
+  if (route === "/debt/receivable") return "debt.create.receivable";
+  if (route === "/debt/payable") return "debt.create.payable";
+  if (route === "/money-in/debt-payment") return "debt.settle.receivable";
+  if (route === "/money-out/debt-payment") return "debt.settle.payable";
+  if (route === "/debts/settle") return "debt.view";
+  if (route === "/hawala/send") return "hawala.send";
+  if (route === "/hawala/incoming") return "hawala.incoming";
+  if (route === "/hawala/payout") return "hawala.payout";
+  if (route === "/hawala/settlement") return "hawala.settle";
   if (route === "/money-in/owner-capital" || route === "/money-out/owner-withdrawal") return "owner.capital.post";
   return "financial.post.money";
 }

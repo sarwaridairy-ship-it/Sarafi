@@ -7,11 +7,14 @@ import "./styles/calm-premium.css";
 import { validateClientEnvironment } from "./lib/env";
 import { readPublicSupabaseConfig } from "./lib/supabase";
 import { deriveTradeAmounts } from "./domain/tradePricing";
+import type { InlineRatePublication } from "./domain/commands";
 import { buildCsvReport } from "./domain/reporting";
 import { isRtl, translate, type Language } from "./lib/i18n";
 import { ux } from "./lib/uxCopy";
 import {
   getTransactionRateContext,
+  getMyResumableApprovalDraft,
+  getTransactionDetail,
   getOrganizationControlPlane,
   getNamedFinancialReport,
   getReconciliationWorkspace,
@@ -39,15 +42,21 @@ import {
   getPrivateDocumentUrl,
   listCashboxBalances,
   listCounterparties,
+  getCounterpartyDetail,
   listCounterpartyStatement,
   listDebts,
+  getDebtDetail,
   listHawalaTransfers,
+  listHawalaPartners,
+  findHawalaPayout,
+  getHawalaPartnerStatement,
   listJournalEntries,
   listLocationEvidence,
   listRateHistory,
   listReportExports,
   postFxTrade,
   requestFxTradeApproval,
+  resumeApprovedFxTrade,
   recordCashboxClose,
   approveCashboxClose,
   rejectCashboxClose,
@@ -55,6 +64,8 @@ import {
   recordHawalaSend,
   recordHawalaIncoming,
   payHawalaBeneficiary,
+  requestHawalaPayoutApproval,
+  resumeApprovedHawalaPayout,
   settleHawalaPartner,
   recordOpeningBalance,
   recordOperation,
@@ -75,6 +86,9 @@ import {
   type CounterpartyRecord,
   type DebtRecord,
   type HawalaTransferRecord,
+  type HawalaPartnerRecord,
+  type HawalaPayoutMatch,
+  type HawalaPartnerStatement,
   type JournalRecord,
   type LocationEvidenceRecord,
   type RateHistoryRecord,
@@ -90,6 +104,7 @@ import {
   type LinkedDeviceRecord,
   type WorkspaceContextRecord,
   type ApprovalRecord,
+  type ResumableApprovalDraft,
   type PrivateDocumentRecord,
   type NotificationRecord,
   type NamedReportRow,
@@ -141,6 +156,7 @@ import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, work
 import { TransactionCenter } from "./features/transactions/TransactionCenter";
 import { RoleHome } from "./features/home/RoleHome";
 import { ManageSarafi } from "./features/manage/ManageSarafi";
+import { InlineRateResolver } from "./features/rates/InlineRateResolver";
 
 const loadExports = () => import("./lib/exports");
 const SettingsView = lazy(() => import("./ProfessionalWorkspace").then((module) => ({ default: module.SettingsView })));
@@ -280,6 +296,31 @@ function localizedInvitationError(language: Language, error: string): string {
   if (message.includes("email address") || message.includes("invited email"))
     return ux(language, "invitationWrongAccount");
   return ux(language, "invitationInvalid");
+}
+
+function localizedFinancialError(language: Language, error: string | null, fallback: string): string {
+  if (!error) return fallback;
+  const code = error.toUpperCase();
+  const message = (en: string, dari: string, pashto: string) => language === "en" ? en : language === "fa-AF" ? dari : pashto;
+  if (code.includes("RATE_MISSING") || code.includes("RATE_STALE") || code.includes("RATE_RESOLUTION"))
+    return message("Resolve the accounting rate in this task before saving.", "پیش از ثبت، نرخ حسابداری را در همین کار حل کنید.", "له ثبت مخکې حسابي نرخ په همدې کار کې حل کړئ.");
+  if (code.includes("RATE_APPROVAL_REQUIRED") || code.includes("APPROVAL_REQUIRED"))
+    return message("Manager approval is required. Your draft has been kept.", "تأیید مدیر لازم است. پیش‌نویس شما محفوظ مانده است.", "د مدیر تایید اړین دی. ستاسو مسوده خوندي ده.");
+  if (code.includes("CAPABILITY_REQUIRED") || code.includes("WORKSPACE_ACCESS_REQUIRED"))
+    return message("Your assigned access does not allow this action.", "دسترسی تعیین‌شده شما این کار را اجازه نمی‌دهد.", "ستاسو ټاکل شوی لاسرسی د دې کار اجازه نه ورکوي.");
+  if (code.includes("DEVICE") || code.includes("AAL2") || code.includes("MFA"))
+    return message("Use a trusted device and complete two-step security before continuing.", "پیش از ادامه از دستگاه قابل اعتماد استفاده کرده و امنیت دومرحله‌ای را تکمیل کنید.", "له دوام مخکې باوري وسیله وکاروئ او دوه پړاوه امنیت بشپړ کړئ.");
+  if (code.includes("MONEY_ACCOUNT") || code.includes("BRANCH_UNAVAILABLE"))
+    return message("Choose an active money account in your assigned branch.", "یک حساب پول فعال در شعبه تعیین‌شده انتخاب کنید.", "په خپلې ټاکل شوې څانګه کې یو فعال پولي حساب وټاکئ.");
+  if (code.includes("BALANCE") || code.includes("INVENTORY") || code.includes("NEGATIVE_CASH"))
+    return message("The selected account does not have enough available money.", "حساب انتخاب‌شده پول کافی در دسترس ندارد.", "ټاکل شوی حساب کافي موجودې پیسې نه لري.");
+  if (code.includes("REFERENCE_AMBIGUOUS") || code.includes("REVIEW_REQUIRED"))
+    return message("This record needs compliance review before it can continue.", "این رکورد پیش از ادامه به بررسی مطابقت نیاز دارد.", "دا ریکارډ له دوام مخکې د مطابقت کتنې ته اړتیا لري.");
+  if (code.includes("KYC") || code.includes("IDENTITY_REQUIRED"))
+    return message("Complete the required identity check before continuing.", "پیش از ادامه بررسی لازم هویت را تکمیل کنید.", "له دوام مخکې اړینه پېژندپاڼې کتنه بشپړه کړئ.");
+  if (code.includes("IDEMPOTENCY_CONFLICT"))
+    return message("This draft identifier was already used for another transaction. Reopen the task and try again.", "شناسه این پیش‌نویس قبلاً برای معامله دیگری استفاده شده است. کار را دوباره باز کرده و کوشش کنید.", "د دې مسودې پېژند مخکې د بلې معاملې لپاره کارول شوی. کار بیا پرانیزئ او هڅه وکړئ.");
+  return fallback;
 }
 
 type Trade = {
@@ -486,11 +527,15 @@ function App() {
   );
   const [openingAmount, setOpeningAmount] = useState("");
   const [openingCurrency, setOpeningCurrency] = useState("AFN");
+  const [openingRatePublication, setOpeningRatePublication] = useState<InlineRatePublication>();
+  const [openingRateReady, setOpeningRateReady] = useState(true);
   const [operationKind, setOperationKind] = useState<OperationKind | null>(
     null,
   );
   const [operationAmount, setOperationAmount] = useState("");
   const [operationCurrency, setOperationCurrency] = useState("AFN");
+  const [operationRatePublication, setOperationRatePublication] = useState<InlineRatePublication>();
+  const [operationRateReady, setOperationRateReady] = useState(true);
   const [operationSourceAccount, setOperationSourceAccount] = useState("");
   const [operationDestinationAccount, setOperationDestinationAccount] =
     useState("");
@@ -515,12 +560,27 @@ function App() {
   const [tradeCurrency, setTradeCurrency] = useState("USD");
   const [tradeReceiveCurrency, setTradeReceiveCurrency] = useState("EUR");
   const [tradeExchangeRate, setTradeExchangeRate] = useState("");
+  const [tradeReceiveBuyRate, setTradeReceiveBuyRate] = useState(
+    inspectionMode && inspectionRateScenario !== "missing" ? "75.10" : "",
+  );
+  const [exchangeSourceRatePublication, setExchangeSourceRatePublication] =
+    useState<InlineRatePublication>();
+  const [exchangeTargetRatePublication, setExchangeTargetRatePublication] =
+    useState<InlineRatePublication>();
+  const [exchangeSourceRateReady, setExchangeSourceRateReady] = useState(
+    inspectionRateScenario === "current",
+  );
+  const [exchangeTargetRateReady, setExchangeTargetRateReady] = useState(
+    inspectionRateScenario === "current",
+  );
   const [tradeFee, setTradeFee] = useState("");
   const [tradeNote, setTradeNote] = useState("");
   const [tradeCounterparty, setTradeCounterparty] = useState("");
   const [tradeCounterparties, setTradeCounterparties] = useState<CounterpartyRecord[]>([]);
   const [counterpartyRefresh, setCounterpartyRefresh] = useState(0);
   const [tradeBusy, setTradeBusy] = useState(false);
+  const [fxApprovalDraft, setFxApprovalDraft] = useState<ResumableApprovalDraft | null>(null);
+  const [fxApprovalBusy, setFxApprovalBusy] = useState(false);
   const [tradeCommandId, setTradeCommandId] = useState(() => crypto.randomUUID());
   const [tradeReviewing, setTradeReviewing] = useState(false);
   const [completedTrade, setCompletedTrade] = useState<CompletedTrade | null>(
@@ -537,6 +597,7 @@ function App() {
     missing: boolean;
     effectiveFrom?: string;
     tolerance: string;
+    toleranceBps: string;
   }>(() => ({
     stale: inspectionRateScenario === "stale" || inspectionRateScenario === "missing",
     missing: inspectionRateScenario === "missing",
@@ -547,6 +608,21 @@ function App() {
           ? undefined
           : new Date().toISOString(),
     tolerance: "0.10",
+    toleranceBps: "50",
+  }));
+  const [tradeReceiveRateContext, setTradeReceiveRateContext] = useState<{
+    stale: boolean;
+    missing: boolean;
+    effectiveFrom?: string;
+    toleranceBps: string;
+  }>(() => ({
+    stale: inspectionRateScenario === "stale",
+    missing: inspectionRateScenario === "missing",
+    effectiveFrom:
+      inspectionRateScenario === "missing"
+        ? undefined
+        : new Date().toISOString(),
+    toleranceBps: "50",
   }));
   const [rateOverrideEnabled, setRateOverrideEnabled] = useState(false);
   const [rateOverride, setRateOverride] = useState("");
@@ -946,13 +1022,18 @@ function App() {
   useEffect(() => {
     if (inspectionMode || !organizationId) return;
     if (!branchId) return;
-    void getTransactionRateContext(organizationId, branchId, tradeCurrency, "AFN").then(
-      (result) => {
-        if (result.error) {
+    const requests = [
+      getTransactionRateContext(organizationId, branchId, tradeCurrency, "AFN"),
+      tradeSide === "EXCHANGE_FX"
+        ? getTransactionRateContext(organizationId, branchId, tradeReceiveCurrency, "AFN")
+        : Promise.resolve(null),
+    ] as const;
+    void Promise.all(requests).then(([sourceResult, targetResult]) => {
+        if (sourceResult.error || targetResult?.error) {
           setToast(ux(language, "couldNotLoad"));
           return;
         }
-        const current = result.data;
+        const current = sourceResult.data;
         if (current) {
           setRateState(current.buy_rate ?? "");
           setSellRate(current.sell_rate ?? "");
@@ -961,6 +1042,7 @@ function App() {
             missing: !current.buy_rate || !current.sell_rate,
             effectiveFrom: current.effective_from,
             tolerance: current.spread_tolerance ?? "0",
+            toleranceBps: current.tolerance_bps ?? "50",
           });
           setRateOverrideEnabled(false);
           setRateOverride("");
@@ -971,11 +1053,22 @@ function App() {
         } else {
           setRateState("");
           setSellRate("");
-          setRateContext({ stale: true, missing: true, tolerance: "0" });
+          setRateContext({ stale: true, missing: true, tolerance: "0", toleranceBps: "50" });
         }
-      },
-    );
-  }, [branchId, inspectionMode, language, organizationId, tradeCurrency]);
+        if (targetResult) {
+          const target = targetResult.data;
+          setTradeReceiveBuyRate(target?.buy_rate ?? "");
+          setTradeReceiveRateContext({
+            stale: Boolean(target?.stale),
+            missing: !target?.buy_rate || !target?.sell_rate,
+            effectiveFrom: target?.effective_from,
+            toleranceBps: target?.tolerance_bps ?? "50",
+          });
+        }
+        setExchangeSourceRatePublication(undefined);
+        setExchangeTargetRatePublication(undefined);
+      });
+  }, [branchId, inspectionMode, language, organizationId, tradeCurrency, tradeReceiveCurrency, tradeSide]);
 
   const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1085,7 +1178,15 @@ function App() {
   const addTrade = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (tradeBusy) return;
-    if (tradeSide === "EXCHANGE_FX" && (!tradeExchangeRate || !new Decimal(tradeExchangeRate).isFinite() || new Decimal(tradeExchangeRate).lte(0) || (!sellRate && !rate))) {
+    if (tradeSide === "EXCHANGE_FX" && (
+      !exchangeSourceRateReady
+      || !exchangeTargetRateReady
+      || !effectiveTradeRate
+      || !new Decimal(effectiveTradeRate).isFinite()
+      || new Decimal(effectiveTradeRate).lte(0)
+      || !exchangeSourceValuationRate
+      || !exchangeTargetValuationRate
+    )) {
       setToast(u("pairRateUnavailable"));
       return;
     }
@@ -1099,7 +1200,7 @@ function App() {
       setToast(language === "en" ? "Choose how to handle the old shop rate before continuing." : language === "fa-AF" ? "پیش از ادامه، روش استفاده از نرخ قدیمی را انتخاب کنید." : "له دوام مخکې د زاړه نرخ د کارولو لاره وټاکئ.");
       return;
     }
-    if (tradeSide !== "EXCHANGE_FX" && (rateOverrideEnabled || allowStaleRate) && rateOverrideReason.trim().length < 3) {
+    if ((rateOverrideEnabled || allowStaleRate) && rateOverrideReason.trim().length < 3) {
       setToast(language === "en" ? "Add a reason for this rate decision." : language === "fa-AF" ? "دلیل این تصمیم نرخ را بنویسید." : "د دې نرخ پرېکړې دلیل ولیکئ.");
       return;
     }
@@ -1130,14 +1231,16 @@ function App() {
       const boughtCurrency = tradeSide === "BUY_FX" ? tradeCurrency : tradeSide === "EXCHANGE_FX" ? tradeReceiveCurrency : "AFN";
       const pricing = tradeSide === "EXCHANGE_FX"
         ? {
-            rate: tradeExchangeRate,
+            rate: effectiveTradeRate,
             soldAmount: new Decimal(amount).toFixed(12),
-            boughtAmount: new Decimal(amount).times(tradeExchangeRate).toFixed(12),
-            soldBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
-            boughtBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
+            boughtAmount: new Decimal(amount).times(effectiveTradeRate).toFixed(12),
+            soldBaseValue: new Decimal(amount).times(exchangeSourceValuationRate).toFixed(12),
+            boughtBaseValue: new Decimal(amount).times(effectiveTradeRate).times(exchangeTargetValuationRate).toFixed(12),
           }
         : deriveTradeAmounts(tradeSide, amount, appliedRate, appliedRate);
       const { rate: effectiveRate, soldAmount, boughtAmount, soldBaseValue, boughtBaseValue } = pricing;
+      const exchangeRatePublications = [exchangeSourceRatePublication, exchangeTargetRatePublication]
+        .filter((item): item is InlineRatePublication => Boolean(item));
       const command = {
         organization_id: organizationId,
         branch_id: branchId,
@@ -1152,7 +1255,7 @@ function App() {
         sold_base_value: soldBaseValue,
         bought_base_value: boughtBaseValue,
         customer_rate: effectiveRate,
-        rate_source: rateOverrideEnabled ? "transaction_override" as const : rateContext.stale ? "approved_stale_shop_rate" as const : "shop_rate" as const,
+        rate_source: rateOverrideEnabled ? "transaction_override" as const : (rateContext.stale || (tradeSide === "EXCHANGE_FX" && tradeReceiveRateContext.stale)) ? "approved_stale_shop_rate" as const : "shop_rate" as const,
         override_reason: rateOverrideReason.trim() || undefined,
         approval_reason: rateOverrideReason.trim() || undefined,
         allow_stale_rate: allowStaleRate || undefined,
@@ -1161,22 +1264,31 @@ function App() {
         fee_currency: "AFN",
         counterparty_id: tradeCounterparty || undefined,
         memo: tradeNote || undefined,
+        publish_rate: publishRate && rateOverrideEnabled && tradeSide !== "EXCHANGE_FX"
+          ? {
+              branch_id: branchId,
+              source_currency: tradeCurrency,
+              target_currency: "AFN",
+              buy_rate: tradeSide === "BUY_FX" ? appliedRate : rate || appliedRate,
+              sell_rate: tradeSide === "SELL_FX" ? appliedRate : sellRate || appliedRate,
+            }
+          : undefined,
+        publish_rates: tradeSide === "EXCHANGE_FX" && exchangeRatePublications.length
+          ? exchangeRatePublications
+          : undefined,
       };
 
-      if (publishRate && rateOverrideEnabled && tradeSide !== "EXCHANGE_FX") {
-        const published = await setExchangeRate({
-          organizationId,
-          branchId,
-          sourceCurrency: tradeCurrency,
-          targetCurrency: "AFN",
-          buyRate: tradeSide === "BUY_FX" ? appliedRate : rate || appliedRate,
-          sellRate: tradeSide === "SELL_FX" ? appliedRate : sellRate || appliedRate,
-        });
-        if (published.error) throw new Error(published.error);
-      }
-
-      const outsideTolerance = tradeSide !== "EXCHANGE_FX" && Boolean(shopRate) && new Decimal(appliedRate).sub(shopRate || appliedRate).abs().gt(rateContext.tolerance || "0");
-      const cashierNeedsApproval = workspaceRole === "cashier" && tradeSide !== "EXCHANGE_FX" && (rateContext.missing || rateContext.stale || outsideTolerance);
+      const outsideTolerance = tradeSide !== "EXCHANGE_FX" && Boolean(shopRate)
+        && new Decimal(appliedRate).sub(shopRate || appliedRate).abs().div(shopRate || appliedRate).times(10000).gt(rateContext.toleranceBps || "50");
+      const exchangeOutsideTolerance = tradeSide === "EXCHANGE_FX" && rateOverrideEnabled && Boolean(impliedExchangeRate)
+        && new Decimal(effectiveTradeRate).sub(impliedExchangeRate).abs().div(impliedExchangeRate).times(10000).gt(
+          Decimal.max(rateContext.toleranceBps || "50", tradeReceiveRateContext.toleranceBps || "50"),
+        );
+      const cashierNeedsApproval = workspaceRole === "cashier" && (
+        tradeSide === "EXCHANGE_FX"
+          ? exchangeOutsideTolerance
+          : rateContext.missing || rateContext.stale || outsideTolerance
+      );
       if (cashierNeedsApproval) {
         if (organizationId === "inspection") {
           setTradeBusy(false);
@@ -1186,13 +1298,28 @@ function App() {
         const approval = await requestFxTradeApproval(command);
         setTradeBusy(false);
         if (approval.error) {
-          setToast(u("couldNotSave"));
+          setToast(localizedFinancialError(language, approval.error, u("couldNotSave")));
           return;
         }
-        setToast(language === "en" ? "Approval requested. Your transaction draft is still here." : language === "fa-AF" ? "درخواست تأیید فرستاده شد. پیش‌نویس معامله شما محفوظ است." : "د تایید غوښتنه ولېږل شوه. ستاسو د معاملې مسوده خوندي ده.");
-        return;
+        if (approval.data?.status === "approved") {
+          const resumed = await resumeApprovedFxTrade(approval.data.id);
+          if (resumed.error) {
+            setToast(localizedFinancialError(language, resumed.error, u("couldNotSave")));
+            return;
+          }
+          sessionCheck = resumed;
+        } else {
+          if (approval.data?.id) {
+            const approvalParams = new URLSearchParams(location.search);
+            approvalParams.set("approval", approval.data.id);
+            navigate(`${location.pathname}?${approvalParams.toString()}`, { replace: true });
+          }
+          setToast(language === "en" ? "Approval requested. Your transaction draft is still here." : language === "fa-AF" ? "درخواست تأیید فرستاده شد. پیش‌نویس معامله شما محفوظ است." : "د تایید غوښتنه ولېږل شوه. ستاسو د معاملې مسوده خوندي ده.");
+          return;
+        }
+      } else {
+        sessionCheck = await postFxTrade(command);
       }
-      sessionCheck = await postFxTrade(command);
     } catch (error) {
       void error;
       setToast(u("couldNotSave"));
@@ -1200,7 +1327,7 @@ function App() {
       return;
     }
     if (sessionCheck.error) {
-      setToast(u("couldNotSave"));
+      setToast(localizedFinancialError(language, sessionCheck.error, u("couldNotSave")));
       setTradeBusy(false);
       return;
     }
@@ -1230,8 +1357,42 @@ function App() {
     setRateOverrideReason("");
     setPublishRate(false);
     setAllowStaleRate(false);
+    setExchangeSourceRatePublication(undefined);
+    setExchangeTargetRatePublication(undefined);
     setTradeReviewing(false);
     setTradeBusy(false);
+  };
+
+  const resumeFxApprovalDraft = async () => {
+    if (!fxApprovalDraft || fxApprovalDraft.status !== "approved" || fxApprovalBusy) return;
+    setFxApprovalBusy(true);
+    const result = await resumeApprovedFxTrade(fxApprovalDraft.id);
+    setFxApprovalBusy(false);
+    if (result.error) {
+      setToast(localizedFinancialError(language, result.error, u("couldNotSave")));
+      return;
+    }
+    const journalEntryId = String(result.data?.id ?? "");
+    const receiptResult = journalEntryId && organizationId
+      ? await getReceiptForJournalEntry(organizationId, journalEntryId)
+      : { data: null, error: "Missing journal entry reference" };
+    const draft = fxApprovalDraft.draft;
+    setCompletedTrade({
+      receiptNumber: receiptResult.data?.receipt_number ?? null,
+      journalEntryId,
+      givenAmount: String(draft.sold_amount ?? "—"),
+      givenCurrency: String(draft.sold_currency ?? ""),
+      receivedAmount: String(draft.bought_amount ?? "—"),
+      receivedCurrency: String(draft.bought_currency ?? ""),
+      rate: String(draft.customer_rate ?? "—"),
+      occurredAt: new Date().toISOString(),
+    });
+    setFxApprovalDraft(null);
+    const approvalParams = new URLSearchParams(location.search);
+    approvalParams.delete("approval");
+    navigate(`${location.pathname}${approvalParams.size ? `?${approvalParams.toString()}` : ""}`, { replace: true });
+    setDashboardRefresh((value) => value + 1);
+    setToast(u("savedSuccessfully"));
   };
 
   const printCompletedTrade = async (width: "58mm" | "80mm") => {
@@ -1290,6 +1451,10 @@ function App() {
       setToast(u("activeBranchRequired"));
       return;
     }
+    if (operationCurrency !== "AFN" && !operationRateReady) {
+      setToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
+      return;
+    }
     const incoming = [
       "RECEIVE_MONEY",
       "RECORD_INCOME",
@@ -1329,12 +1494,14 @@ function App() {
       memo: operationMemo,
       device_id: linkedDevice?.id || undefined,
       client_command_id: crypto.randomUUID(),
+      publish_rate: operationRatePublication,
     });
     if (result.error) {
-      setToast(u("couldNotSave"));
+      setToast(localizedFinancialError(language, result.error, u("couldNotSave")));
       return;
     }
     setOperationKind(null);
+    setOperationRatePublication(undefined);
     openSection("Trade", true);
     setDashboardRefresh((value) => value + 1);
     setToast(u("savedSuccessfully"));
@@ -1431,6 +1598,10 @@ function App() {
       setToast(u("activeCashboxRequired"));
       return;
     }
+    if (openingCurrency !== "AFN" && !openingRateReady) {
+      setToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
+      return;
+    }
     const result = await recordOpeningBalance({
       organization_id: organizationId,
       branch_id: branchId,
@@ -1438,12 +1609,14 @@ function App() {
       currency: openingCurrency,
       amount: openingAmount,
       client_command_id: crypto.randomUUID(),
+      publish_rate: openingRatePublication,
     });
     if (result.error) {
-      setToast(u("couldNotSave"));
+      setToast(localizedFinancialError(language, result.error, u("couldNotSave")));
       return;
     }
     setOpeningAmount("");
+    setOpeningRatePublication(undefined);
     openSection("Trade", true);
     setDashboardRefresh((value) => value + 1);
     setMoneyContextRefresh((value) => value + 1);
@@ -1494,6 +1667,25 @@ function App() {
     if (["RECEIVE_MONEY", "PAY_MONEY", "TRANSFER_CASH", "RECORD_EXPENSE", "RECORD_INCOME", "OWNER_INVESTMENT", "OWNER_WITHDRAWAL", "BANK_DEPOSIT", "BANK_WITHDRAWAL"].includes(action ?? ""))
       setOperationKind(action as OperationKind);
   }, [activeFinancialRoute, fxFormActive, location.pathname, location.search, openingFormActive, transactionFormActive]);
+  useEffect(() => {
+    const approvalId = new URLSearchParams(location.search).get("approval");
+    if (!fxFormActive || !approvalId || inspectionMode) {
+      setFxApprovalDraft(null);
+      return;
+    }
+    let active = true;
+    setFxApprovalBusy(true);
+    void getMyResumableApprovalDraft(approvalId).then((result) => {
+      if (!active) return;
+      setFxApprovalBusy(false);
+      if (result.error) {
+        setToast(localizedFinancialError(language, result.error, ux(language, "couldNotLoad")));
+        return;
+      }
+      setFxApprovalDraft(result.data);
+    });
+    return () => { active = false; };
+  }, [fxFormActive, inspectionMode, language, location.search]);
   useEffect(() => {
     if (!operationKind || !branchMoneyAccounts.length) return;
     const preferred = branchMoneyAccounts.find((account) => account.account_type === "cashbox") ?? branchMoneyAccounts[0];
@@ -1581,8 +1773,24 @@ function App() {
       BANK_WITHDRAWAL: u("bankWithdrawal"),
     })[kind];
   const shopTradeRate = tradeSide === "BUY_FX" ? rate : sellRate;
+  const exchangeSourceValuationRate =
+    exchangeSourceRatePublication?.sell_rate || sellRate;
+  const exchangeTargetValuationRate =
+    exchangeTargetRatePublication?.buy_rate || tradeReceiveBuyRate;
+  let impliedExchangeRate = "";
+  try {
+    if (exchangeSourceValuationRate && exchangeTargetValuationRate) {
+      impliedExchangeRate = new Decimal(exchangeSourceValuationRate)
+        .div(exchangeTargetValuationRate)
+        .toFixed(12);
+    }
+  } catch {
+    impliedExchangeRate = "";
+  }
   const effectiveTradeRate = tradeSide === "EXCHANGE_FX"
-    ? tradeExchangeRate
+    ? rateOverrideEnabled
+      ? tradeExchangeRate
+      : impliedExchangeRate
     : rateOverrideEnabled
       ? rateOverride
       : shopTradeRate;
@@ -1627,13 +1835,13 @@ function App() {
         };
   let tradePreview: ReturnType<typeof deriveTradeAmounts> | null = null;
   try {
-    if (amount && tradeSide === "EXCHANGE_FX" && tradeExchangeRate)
+    if (amount && tradeSide === "EXCHANGE_FX" && effectiveTradeRate && exchangeSourceValuationRate && exchangeTargetValuationRate)
       tradePreview = {
-        rate: tradeExchangeRate,
+        rate: effectiveTradeRate,
         soldAmount: new Decimal(amount).toFixed(12),
-        boughtAmount: new Decimal(amount).times(tradeExchangeRate).toFixed(12),
-        soldBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
-        boughtBaseValue: new Decimal(amount).times(sellRate || rate || "1").toFixed(12),
+        boughtAmount: new Decimal(amount).times(effectiveTradeRate).toFixed(12),
+        soldBaseValue: new Decimal(amount).times(exchangeSourceValuationRate).toFixed(12),
+        boughtBaseValue: new Decimal(amount).times(effectiveTradeRate).times(exchangeTargetValuationRate).toFixed(12),
       };
     else if (amount && tradeSide !== "EXCHANGE_FX" && effectiveTradeRate)
       tradePreview = deriveTradeAmounts(tradeSide, amount, effectiveTradeRate, effectiveTradeRate);
@@ -2052,6 +2260,7 @@ function App() {
                   canApproveReconciliation={capability("reconciliation.approve")}
                   canManageMoney={hasAnyCapability(workspaceCapabilities, ["organization.manage", "money_accounts.manage", "rates.manage"])}
                   canReverse={capability("financial.reverse")}
+                  capabilities={workspaceCapabilities}
                   userId={user?.id ?? "inspection-user"}
                   deviceId={linkedDevice?.id ?? ""}
                   branchId={branchId}
@@ -2088,6 +2297,24 @@ function App() {
       </main>
       {routeAuthorized && fxFormActive && transactionFormActive && (
         <div className="transaction-inline-form">
+          {fxApprovalBusy && !fxApprovalDraft ? <div className="empty-live" role="status">{language === "en" ? "Loading approval draft…" : language === "fa-AF" ? "بارگیری پیش‌نویس تأیید…" : "د تایید مسوده پورته کېږي…"}</div> : null}
+          {fxApprovalDraft ? (
+            <section className="approval-draft-status" aria-live="polite">
+              <div>
+                <p className="kicker">{language === "en" ? "Saved approval draft" : language === "fa-AF" ? "پیش‌نویس تأیید ذخیره‌شده" : "ساتل شوې د تایید مسوده"}</p>
+                <h2>{fxApprovalDraft.status === "approved" ? (language === "en" ? "Approved — ready to post" : language === "fa-AF" ? "تأیید شد — آماده ثبت" : "تایید شوه — ثبت ته چمتو") : fxApprovalDraft.status === "pending" ? (language === "en" ? "Waiting for approval" : language === "fa-AF" ? "در انتظار تأیید" : "تایید ته په تمه") : fxApprovalDraft.status}</h2>
+                <p dir="ltr">{String(fxApprovalDraft.draft.sold_amount ?? "—")} {String(fxApprovalDraft.draft.sold_currency ?? "")} → {String(fxApprovalDraft.draft.bought_amount ?? "—")} {String(fxApprovalDraft.draft.bought_currency ?? "")}</p>
+                <small>{language === "en" ? "This immutable server draft survives refresh and navigation." : language === "fa-AF" ? "این پیش‌نویس تغییرناپذیر سرور پس از تازه‌سازی و رفت‌وآمد محفوظ می‌ماند." : "دا نه بدلېدونکې سروري مسوده له بیا پورته کولو او تګ راتګ وروسته هم ساتل کېږي."}</small>
+              </div>
+              {fxApprovalDraft.status === "approved" ? <button type="button" className="primary-action" disabled={fxApprovalBusy} onClick={() => void resumeFxApprovalDraft()}>{fxApprovalBusy ? t("working") : (language === "en" ? "Post approved transaction" : language === "fa-AF" ? "ثبت معامله تأییدشده" : "تایید شوې معامله ثبت کړئ")}</button> : null}
+              {fxApprovalDraft.status === "pending" ? <button type="button" className="text-button" disabled={fxApprovalBusy} onClick={() => {
+                void getMyResumableApprovalDraft(fxApprovalDraft.id).then((result) => {
+                  if (result.data) setFxApprovalDraft(result.data);
+                  if (result.error) setToast(localizedFinancialError(language, result.error, u("couldNotLoad")));
+                });
+              }}>{language === "en" ? "Refresh status" : language === "fa-AF" ? "تازه‌سازی وضعیت" : "حالت تازه کړئ"}</button> : null}
+            </section>
+          ) : null}
           <form
             className="financial-task-form transaction-page-form"
             onSubmit={addTrade}
@@ -2167,6 +2394,9 @@ function App() {
                       setRateState("");
                       setSellRate("");
                       setTradeExchangeRate("");
+                      setRateOverrideEnabled(false);
+                      setExchangeSourceRatePublication(undefined);
+                      setExchangeTargetRatePublication(undefined);
                     }}
                   >
                     {tradeCurrencies.map((currency) => (
@@ -2192,9 +2422,13 @@ function App() {
                   {tradeSide === "EXCHANGE_FX" ? (
                     <select
                       value={tradeReceiveCurrency}
-                      onChange={(event) =>
-                        setTradeReceiveCurrency(event.target.value)
-                      }
+                      onChange={(event) => {
+                        setTradeReceiveCurrency(event.target.value);
+                        setTradeExchangeRate("");
+                        setRateOverrideEnabled(false);
+                        setExchangeTargetRatePublication(undefined);
+                        setTradeReviewing(false);
+                      }}
                     >
                       {tradeCurrencies
                         .filter((currency) => currency !== tradeCurrency)
@@ -2250,11 +2484,7 @@ function App() {
             <div className="rate-box">
               <span>{t("exchangeRate")}</span>
               {tradeSide === "EXCHANGE_FX" ? (
-                <label className="cross-rate-input">
-                  <span dir="ltr">1 {tradeCurrency} =</span>
-                  <input required min="0.000001" step="any" inputMode="decimal" value={tradeExchangeRate} onChange={(event) => { setTradeExchangeRate(event.target.value); setTradeReviewing(false); }} placeholder="0.00" aria-label={t("exchangeRate")} />
-                  <b dir="ltr">{tradeReceiveCurrency}</b>
-                </label>
+                <b dir="ltr">1 {tradeCurrency} = {effectiveTradeRate || "—"} {tradeReceiveCurrency}</b>
               ) : (
                 <>
                   <b dir="ltr">
@@ -2266,6 +2496,64 @@ function App() {
                 </>
               )}
             </div>
+            {tradeSide === "EXCHANGE_FX" && (
+              <section className={`rate-governance exchange-rate-governance ${!exchangeSourceRateReady || !exchangeTargetRateReady ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
+                <InlineRateResolver
+                  organizationId={organizationId}
+                  branchId={branchId}
+                  currency={tradeCurrency}
+                  language={language}
+                  canPublish={canPublishTransactionRate}
+                  value={exchangeSourceRatePublication}
+                  onChange={(value) => { setExchangeSourceRatePublication(value); setTradeReviewing(false); }}
+                  onReadyChange={setExchangeSourceRateReady}
+                />
+                <InlineRateResolver
+                  organizationId={organizationId}
+                  branchId={branchId}
+                  currency={tradeReceiveCurrency}
+                  language={language}
+                  canPublish={canPublishTransactionRate}
+                  value={exchangeTargetRatePublication}
+                  onChange={(value) => { setExchangeTargetRatePublication(value); setTradeReviewing(false); }}
+                  onReadyChange={setExchangeTargetRateReady}
+                />
+                {impliedExchangeRate ? (
+                  <div className="applied-rate-row">
+                    <span>{language === "en" ? "Implied cross-rate" : language === "fa-AF" ? "نرخ متقاطع محاسبه‌شده" : "محاسبه شوی متقابل نرخ"}</span>
+                    <b dir="ltr">1 {tradeCurrency} = {impliedExchangeRate} {tradeReceiveCurrency}</b>
+                  </div>
+                ) : null}
+                <label className="choice-row">
+                  <input
+                    type="checkbox"
+                    checked={rateOverrideEnabled}
+                    disabled={tradeReviewing || tradeBusy || !exchangeSourceRateReady || !exchangeTargetRateReady}
+                    onChange={(event) => {
+                      setRateOverrideEnabled(event.target.checked);
+                      setTradeExchangeRate(event.target.checked ? impliedExchangeRate : "");
+                      setRateOverrideReason("");
+                      setTradeReviewing(false);
+                    }}
+                  />
+                  <span>{rateWorkflowCopy.useDifferent}</span>
+                </label>
+                {rateOverrideEnabled ? (
+                  <>
+                    <label className="cross-rate-input">
+                      <span dir="ltr">1 {tradeCurrency} =</span>
+                      <input required min="0.000001" step="any" inputMode="decimal" value={tradeExchangeRate} onChange={(event) => { setTradeExchangeRate(event.target.value); setTradeReviewing(false); }} placeholder={impliedExchangeRate || "0.00"} aria-label={t("exchangeRate")} />
+                      <b dir="ltr">{tradeReceiveCurrency}</b>
+                    </label>
+                    <label>
+                      {rateWorkflowCopy.reason}
+                      <textarea required minLength={3} value={rateOverrideReason} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverrideReason(event.target.value); setTradeReviewing(false); }} placeholder={rateWorkflowCopy.reasonPlaceholder} />
+                    </label>
+                    {capability("approval.request") && !capability("approval.decide") ? <p>{rateWorkflowCopy.approval}</p> : null}
+                  </>
+                ) : null}
+              </section>
+            )}
             {tradeSide !== "EXCHANGE_FX" && (
               <section className={`rate-governance ${rateContext.missing || rateContext.stale ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
                 <div className="applied-rate-row">
@@ -2354,7 +2642,7 @@ function App() {
             <button
               className="primary-action full"
               type="submit"
-              disabled={tradeBusy}
+              disabled={tradeBusy || (tradeSide === "EXCHANGE_FX" && (!exchangeSourceRateReady || !exchangeTargetRateReady || !effectiveTradeRate))}
             >
               {tradeBusy
                 ? t("working")
@@ -2407,7 +2695,12 @@ function App() {
               {t("currency")}
               <select
                 value={operationCurrency}
-                onChange={(event) => setOperationCurrency(event.target.value)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setOperationCurrency(next);
+                  setOperationRatePublication(undefined);
+                  setOperationRateReady(next === "AFN");
+                }}
               >
                 {enabledCurrencies.map((currency) => (
                   <option key={currency.code} value={currency.code}>
@@ -2425,6 +2718,16 @@ function App() {
                     : "یوازې د هماغو اسعارو مبلغ ولیکئ. سرافي یې د ثبت پر مهال د صرافۍ له تایید شوي نرخ څخه حسابوي."}
               </p>
             )}
+            <InlineRateResolver
+              organizationId={organizationId}
+              branchId={branchId}
+              currency={operationCurrency}
+              language={language}
+              canPublish={capability("rates.manage")}
+              value={operationRatePublication}
+              onChange={setOperationRatePublication}
+              onReadyChange={setOperationRateReady}
+            />
             {operationKind === "RECORD_EXPENSE" && (
               <label>
                 {t("expenseCategory")}
@@ -2548,7 +2851,7 @@ function App() {
                 placeholder={u("reasonReference")}
               />
             </label>
-            <button className="primary-action full" type="submit">
+            <button className="primary-action full" type="submit" disabled={operationCurrency !== "AFN" && !operationRateReady}>
               {t("postOperation")} <span>→</span>
             </button>
             <p className="modal-note">{u("shopCheck")}</p>
@@ -2621,7 +2924,12 @@ function App() {
               {t("currency")}
               <select
                 value={openingCurrency}
-                onChange={(event) => setOpeningCurrency(event.target.value)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setOpeningCurrency(next);
+                  setOpeningRatePublication(undefined);
+                  setOpeningRateReady(next === "AFN");
+                }}
               >
                 {enabledCurrencies.map((currency) => (
                   <option key={currency.code} value={currency.code}>
@@ -2641,7 +2949,17 @@ function App() {
                 placeholder="0.00"
               />
             </label>
-            <button className="primary-action full" type="submit">
+            <InlineRateResolver
+              organizationId={organizationId}
+              branchId={branchId}
+              currency={openingCurrency}
+              language={language}
+              canPublish={capability("rates.manage")}
+              value={openingRatePublication}
+              onChange={setOpeningRatePublication}
+              onReadyChange={setOpeningRateReady}
+            />
+            <button className="primary-action full" type="submit" disabled={openingCurrency !== "AFN" && !openingRateReady}>
               {u("saveOpeningMoney")} <span>→</span>
             </button>
             <p className="modal-note">{u("openingMoneyNote")}</p>
@@ -2747,6 +3065,7 @@ function WorkspaceView({
   canApproveReconciliation,
   canManageMoney,
   canReverse,
+  capabilities,
   userId,
   deviceId,
   branchId,
@@ -2774,6 +3093,7 @@ function WorkspaceView({
   canApproveReconciliation: boolean;
   canManageMoney: boolean;
   canReverse: boolean;
+  capabilities: readonly string[];
   userId: string;
   deviceId: string;
   branchId: string | null;
@@ -2853,6 +3173,9 @@ function WorkspaceView({
       <PeopleView
         language={language}
         organizationId={organizationId}
+        canListDocuments={hasCapability(capabilities, "documents.list")}
+        canUploadDocuments={hasCapability(capabilities, "documents.upload")}
+        canViewDocuments={hasCapability(capabilities, "documents.view")}
         onDashboard={onDashboard}
         onAddDebt={() => onNavigate("Debts")}
         onToast={onToast}
@@ -2903,6 +3226,7 @@ function WorkspaceView({
         organizationId={organizationId}
         branchId={branchId}
         pathname={pathname}
+        capabilities={capabilities}
         onRoute={onRoute}
         onDashboard={onDashboard}
         onToast={onToast}
@@ -2927,6 +3251,9 @@ function WorkspaceView({
         organizationId={organizationId}
         branchId={branchId}
         pathname={pathname}
+        deviceId={deviceId}
+        capabilities={capabilities}
+        onRoute={onRoute}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -4753,6 +5080,9 @@ function MoneyLocationView({
 function PeopleView({
   language,
   organizationId,
+  canListDocuments,
+  canUploadDocuments,
+  canViewDocuments,
   onDashboard,
   onAddDebt,
   onToast,
@@ -4760,6 +5090,9 @@ function PeopleView({
 }: {
   language: Language;
   organizationId: string | null;
+  canListDocuments: boolean;
+  canUploadDocuments: boolean;
+  canViewDocuments: boolean;
   onDashboard: () => void;
   onAddDebt: () => void;
   onToast: (message: string) => void;
@@ -4791,8 +5124,17 @@ function PeopleView({
   const [newPersonNotes, setNewPersonNotes] = useState("");
   const [newPersonType, setNewPersonType] = useState<"customer" | "saraf" | "hawala_partner" | "supplier" | "employee" | "other">("customer");
   const [personBusy, setPersonBusy] = useState(false);
-  const [selected, setSelected] = useState<CounterpartyRecord | null>(null);
-  const [documents, setDocuments] = useState<PrivateDocumentRecord[]>([]);
+  const [selectedResult, setSelectedResult] = useState<CounterpartyRecord | null>(null);
+  const routeCounterpartyId = location.pathname.match(/\/customers\/([^/]+)$/)?.[1] ?? null;
+  const selected = routeCounterpartyId
+    ? organizationId === "inspection"
+      ? people.find((person) => person.id === routeCounterpartyId) ?? null
+      : selectedResult?.id === routeCounterpartyId ? selectedResult : null
+    : null;
+  const [documentResult, setDocumentResult] = useState<{
+    counterpartyId: string;
+    data: PrivateDocumentRecord[];
+  } | null>(null);
   const [documentType, setDocumentType] = useState<DocumentType>("tazkira");
   const fileInput = useRef<HTMLInputElement>(null);
   const captureProvider = useRef(new BrowserDocumentCaptureProvider()).current;
@@ -4809,18 +5151,15 @@ function PeopleView({
     });
   }, [language, onToast, organizationId]);
   useEffect(() => {
-    const match = location.pathname.match(/\/customers\/([^/]+)$/);
-    if (!match) {
-      // oxlint-disable-next-line react/set-state-in-effect -- customer selection follows the shareable URL.
-      setSelected(null);
-      return;
-    }
-    const found = people.find((person) => person.id === match[1]);
-    if (found) {
-      // oxlint-disable-next-line react/set-state-in-effect -- direct customer links restore their detail record.
-      setSelected(found);
-    }
-  }, [location.pathname, people]);
+    if (!routeCounterpartyId || !organizationId || organizationId === "inspection") return;
+    let active = true;
+    void getCounterpartyDetail(organizationId, routeCounterpartyId).then((result) => {
+      if (!active) return;
+      setSelectedResult(result.data);
+      if (result.error) onToast(ux(language, "couldNotLoad"));
+    });
+    return () => { active = false; };
+  }, [language, onToast, organizationId, routeCounterpartyId]);
   useEffect(() => {
     if (!organizationId || organizationId === "inspection" || !selected) return;
     void listCounterpartyStatement(organizationId, selected.id).then(
@@ -4829,15 +5168,23 @@ function PeopleView({
         if (result.error) onToast(ux(language, "couldNotLoad"));
       },
     );
-    void getPrivateCounterpartyDocuments(organizationId, selected.id).then(
-      (result) => {
-        if (result.data) setDocuments(result.data);
-        if (result.error) onToast(ux(language, "couldNotLoad"));
-      },
-    );
-  }, [language, onToast, organizationId, selected]);
+    if (canListDocuments) {
+      void getPrivateCounterpartyDocuments(organizationId, selected.id).then(
+        (result) => {
+          if (result.data) {
+            setDocumentResult({ counterpartyId: selected.id, data: result.data });
+          }
+          if (result.error) onToast(ux(language, "couldNotLoad"));
+        },
+      );
+    }
+  }, [canListDocuments, language, onToast, organizationId, selected]);
+  const documents =
+    canListDocuments && selected && documentResult?.counterpartyId === selected.id
+      ? documentResult.data
+      : [];
   const captureDocument = async () => {
-    if (!organizationId || !selected || !fileInput.current) return;
+    if (!canUploadDocuments || !organizationId || !selected || !fileInput.current) return;
     const file = await captureProvider.capture(fileInput.current);
     if (!file) return;
     const validationError = validateDocumentFile(file);
@@ -4856,14 +5203,17 @@ function PeopleView({
       return;
     }
     if (result.data)
-      setDocuments((current) => [
-        result.data as PrivateDocumentRecord,
-        ...current,
-      ]);
+      setDocumentResult((current) => ({
+        counterpartyId: selected.id,
+        data: [
+          result.data as PrivateDocumentRecord,
+          ...(current?.counterpartyId === selected.id ? current.data : []),
+        ],
+      }));
     onToast(u("documentSaved"));
   };
   const previewDocument = async (documentId: string) => {
-    if (!organizationId) return;
+    if (!canViewDocuments || !organizationId) return;
     const result = await getPrivateDocumentUrl(organizationId, documentId);
     if (result.error) onToast(u("requestFailed"));
     else if (result.data)
@@ -4978,7 +5328,7 @@ function PeopleView({
               className="balance-row"
               key={person.id}
               onClick={() => {
-                setSelected(person);
+                setSelectedResult(person);
                 navigate(`${location.pathname.replace(/\/$/, "")}/${person.id}`);
               }}
             >
@@ -5006,13 +5356,13 @@ function PeopleView({
               <p>{u("balancesStaySeparate")}</p>
             </div>
             <button className="text-button" onClick={() => {
-              setSelected(null);
+              setSelectedResult(null);
               navigate(location.pathname.replace(/\/[^/]+$/, ""));
             }}>
               {u("closeStatement")}
             </button>
           </div>
-          <div className="rate-strip">
+          {canListDocuments ? <><div className="rate-strip">
             <label>
               {u("documentType")}
               <select
@@ -5030,12 +5380,14 @@ function PeopleView({
             <input
               ref={fileInput}
               type="file"
+              disabled={!canUploadDocuments}
               accept="image/jpeg,image/png,application/pdf"
               capture="environment"
               onChange={() => void captureDocument()}
             />
             <button
               className="export-button"
+              disabled={!canUploadDocuments}
               onClick={() => fileInput.current?.click()}
             >
               {u("captureUpload")}
@@ -5047,6 +5399,7 @@ function PeopleView({
                 <button
                   className="balance-row"
                   key={document.id}
+                  disabled={!canViewDocuments}
                   onClick={() => void previewDocument(document.id)}
                 >
                   <span className="currency-badge usd">D</span>
@@ -5072,7 +5425,7 @@ function PeopleView({
             ) : (
               <div className="empty-live">{u("noDocuments")}</div>
             )}
-          </div>
+          </div></> : null}
           {currencies.length ? (
             currencies.map((item) => (
               <div className="balance-row" key={item}>
@@ -5156,7 +5509,8 @@ function TransactionsView({
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [entries, setEntries] = useState<JournalRecord[]>([]);
-  const [selected, setSelected] = useState<JournalRecord | null>(null);
+  const [selectedResult, setSelectedResult] = useState<JournalRecord | null>(null);
+  const routeEntryId = location.pathname.match(/\/transactions\/([^/]+)$/)?.[1] ?? null;
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const visibleEntries: JournalRecord[] = useMemo(() => organizationId === "inspection"
@@ -5196,6 +5550,11 @@ function TransactionsView({
           },
         ]
       : entries, [entries, language, organizationId]);
+  const selected = routeEntryId
+    ? organizationId === "inspection"
+      ? visibleEntries.find((entry) => entry.id === routeEntryId) ?? null
+      : selectedResult?.id === routeEntryId ? selectedResult : null
+    : null;
   useEffect(() => {
     if (organizationId && organizationId !== "inspection")
       void listJournalEntries(organizationId).then((result) => {
@@ -5203,18 +5562,16 @@ function TransactionsView({
       });
   }, [organizationId]);
   useEffect(() => {
-    const match = location.pathname.match(/\/transactions\/([^/]+)$/);
-    if (!match) {
-      // oxlint-disable-next-line react/set-state-in-effect -- URL changes clear the selected detail record.
-      setSelected(null);
-      return;
-    }
-    const found = visibleEntries.find((entry) => entry.id === match[1]);
-    if (found) {
-      // oxlint-disable-next-line react/set-state-in-effect -- URL deep links synchronize the selected detail record.
-      setSelected(found);
-    }
-  }, [entries, location.pathname, organizationId, visibleEntries]);
+    if (!routeEntryId || !organizationId) return;
+    if (organizationId === "inspection") return;
+    let active = true;
+    void getTransactionDetail(organizationId, routeEntryId).then((result) => {
+      if (!active) return;
+      if (result.data) setSelectedResult(result.data);
+      else if (result.error) onToast(ux(language, "couldNotLoad"));
+    });
+    return () => { active = false; };
+  }, [language, onToast, organizationId, routeEntryId, visibleEntries]);
   const reverse = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selected) return;
@@ -5227,7 +5584,7 @@ function TransactionsView({
     setBusy(false);
     onToast(result.error ? u("couldNotSave") : u("savedSuccessfully"));
     if (!result.error) {
-      setSelected(null);
+      setSelectedResult(null);
       setReason("");
       if (organizationId) {
         const refreshed = await listJournalEntries(organizationId);
@@ -5333,7 +5690,7 @@ function TransactionsView({
               key={entry.id}
               onClick={() => {
                 navigate(`${location.pathname.replace(/\/$/, "")}/${entry.id}`);
-                setSelected(entry);
+                setSelectedResult(entry);
                 setReason("");
               }}
             >
@@ -6009,6 +6366,7 @@ function DebtsView({
   organizationId,
   branchId,
   pathname,
+  capabilities,
   onRoute,
   onDashboard,
   onToast,
@@ -6017,6 +6375,7 @@ function DebtsView({
   organizationId: string | null;
   branchId: string | null;
   pathname: string;
+  capabilities: readonly string[];
   onRoute: (path: string) => void;
   onDashboard: () => void;
   onToast: (message: string) => void;
@@ -6029,11 +6388,15 @@ function DebtsView({
   const [counterpartyId, setCounterpartyId] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("AFN");
+  const [createRatePublication, setCreateRatePublication] = useState<InlineRatePublication>();
+  const [createRateReady, setCreateRateReady] = useState(false);
   const [moneyAccountId, setMoneyAccountId] = useState(inspection ? "inspection-cashbox" : "");
   const [accounts, setAccounts] = useState<MoneyAccountRecord[]>(() => inspection ? inspectionMoneyAccounts(language) : []);
   const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>(() => inspection ? inspectionCurrencies : []);
   const [selectedDebtChoice, setSelectedDebt] = useState<DebtRecord | null>(null);
   const [settlementAmount, setSettlementAmount] = useState("");
+  const [settlementRatePublication, setSettlementRatePublication] = useState<InlineRatePublication>();
+  const [settlementRateReady, setSettlementRateReady] = useState(false);
   const [settlementAccountId, setSettlementAccountId] = useState(inspection ? "inspection-cashbox" : "");
   const [busy, setBusy] = useState(false);
   const journey = pathname.includes("/transactions/new/debt/receivable")
@@ -6047,7 +6410,12 @@ function DebtsView({
            : "list";
   const direction: "receivable" | "payable" = journey === "payable" ? "payable" : "receivable";
   const debtIdFromPath = pathname.includes("/transactions/new/") ? null : pathname.match(/\/debts\/([^/]+)/)?.[1] ?? null;
-  const selectedDebt = debtIdFromPath ? debts.find((debt) => debt.id === debtIdFromPath) ?? null : selectedDebtChoice;
+  const [selectedDebtResult, setSelectedDebtResult] = useState<DebtRecord | null>(null);
+  const selectedDebt = debtIdFromPath
+    ? inspection
+      ? debts.find((debt) => debt.id === debtIdFromPath) ?? null
+      : selectedDebtResult?.id === debtIdFromPath ? selectedDebtResult : null
+    : selectedDebtChoice;
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
     void Promise.all([
@@ -6066,6 +6434,17 @@ function DebtsView({
       if (currencyResult.data) setCatalog(currencyResult.data);
     });
   }, [organizationId]);
+  useEffect(() => {
+    if (!debtIdFromPath || !organizationId) return;
+    if (organizationId === "inspection") return;
+    let active = true;
+    void getDebtDetail(organizationId, debtIdFromPath).then((result) => {
+      if (!active) return;
+      setSelectedDebtResult(result.data);
+      if (result.error) onToast(ux(language, "couldNotLoad"));
+    });
+    return () => { active = false; };
+  }, [debtIdFromPath, debts, language, onToast, organizationId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!organizationId || !branchId || !counterpartyId || !moneyAccountId) {
@@ -6076,6 +6455,10 @@ function DebtsView({
             ? u("chooseMoneyAccount")
             : u("businessSetupRequired"),
       );
+      return;
+    }
+    if (currency !== "AFN" && !createRateReady) {
+      onToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
       return;
     }
     setBusy(true);
@@ -6091,12 +6474,14 @@ function DebtsView({
       destination_money_account_id:
         direction === "payable" ? moneyAccountId : undefined,
       client_command_id: crypto.randomUUID(),
+      publish_rate: createRatePublication,
     });
     setBusy(false);
-    onToast(result.error ? u("couldNotSave") : u("savedSuccessfully"));
+    onToast(result.error ? localizedFinancialError(language, result.error, u("couldNotSave")) : u("savedSuccessfully"));
     if (!result.error) {
       setCounterpartyId("");
       setAmount("");
+      setCreateRatePublication(undefined);
     }
   };
   const settle = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -6104,6 +6489,10 @@ function DebtsView({
     if (!selectedDebt) return;
     if (!settlementAccountId) {
       onToast(u("chooseMoneyAccount"));
+      return;
+    }
+    if (selectedDebt.currency_code !== "AFN" && !settlementRateReady) {
+      onToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
       return;
     }
     setBusy(true);
@@ -6119,12 +6508,14 @@ function DebtsView({
           ? settlementAccountId
           : undefined,
       client_command_id: crypto.randomUUID(),
+      publish_rate: settlementRatePublication,
     });
     setBusy(false);
-    onToast(result.error ? u("couldNotSave") : u("savedSuccessfully"));
+    onToast(result.error ? localizedFinancialError(language, result.error, u("couldNotSave")) : u("savedSuccessfully"));
     if (!result.error) {
       setSelectedDebt(null);
       setSettlementAmount("");
+      setSettlementRatePublication(undefined);
       if (organizationId) {
         const refreshed = await listDebts(organizationId);
         if (refreshed.data) setDebts(refreshed.data);
@@ -6175,7 +6566,12 @@ function DebtsView({
           </label>
           <label>
             {t("currency")}
-            <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
+            <select value={currency} onChange={(event) => {
+              const next = event.target.value;
+              setCurrency(next);
+              setCreateRatePublication(undefined);
+              setCreateRateReady(next === "AFN");
+            }}>
               {catalog.filter((item) => item.enabled).map((item) => (
                 <option key={item.code} value={item.code}>
                   {item.code} · {currencyName(language, item)}
@@ -6184,6 +6580,16 @@ function DebtsView({
             </select>
           </label>
         </div>
+        <InlineRateResolver
+          organizationId={organizationId}
+          branchId={branchId}
+          currency={currency}
+          language={language}
+          canPublish={hasCapability(capabilities, "rates.manage")}
+          value={createRatePublication}
+          onChange={setCreateRatePublication}
+          onReadyChange={setCreateRateReady}
+        />
         <label>
           {direction === "receivable" ? u("sourceAccount") : u("destinationAccount")}
           <select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}>
@@ -6198,7 +6604,7 @@ function DebtsView({
           <strong aria-hidden="true">→</strong>
           <span><small>{u("destinationAccount")}</small><b>{direction === "payable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
         </div>
-        <button className="primary-action full" type="submit" disabled={busy}>
+        <button className="primary-action full" type="submit" disabled={busy || (currency !== "AFN" && !createRateReady)}>
           {busy ? u("posting") : u("postDebt")} <span>→</span>
         </button>
       </form>}
@@ -6210,7 +6616,10 @@ function DebtsView({
               key={debt.id}
               onClick={() => {
                 setSelectedDebt(debt);
+                setSelectedDebtResult(debt);
                 setSettlementAmount(debt.outstanding_amount);
+                setSettlementRatePublication(undefined);
+                setSettlementRateReady(debt.currency_code === "AFN");
                 onRoute(`${workspaceRoot(organizationId)}/debts/${debt.id}${journey === "settle" ? "/settle" : ""}`);
               }}
             >
@@ -6249,7 +6658,11 @@ function DebtsView({
             <button
               type="button"
               className="close"
-              onClick={() => setSelectedDebt(null)}
+              onClick={() => {
+                setSelectedDebt(null);
+                setSelectedDebtResult(null);
+                onRoute(`${workspaceRoot(organizationId)}/debts`);
+              }}
               aria-label={t("closeSettlement")}
             >
               ×
@@ -6279,7 +6692,17 @@ function DebtsView({
               ))}
             </select>
           </label>
-          <button className="primary-action full" type="submit" disabled={busy}>
+          <InlineRateResolver
+            organizationId={organizationId}
+            branchId={selectedDebt.branch_id ?? branchId}
+            currency={selectedDebt.currency_code}
+            language={language}
+            canPublish={hasCapability(capabilities, "rates.manage")}
+            value={settlementRatePublication}
+            onChange={setSettlementRatePublication}
+            onReadyChange={setSettlementRateReady}
+          />
+          <button className="primary-action full" type="submit" disabled={busy || (selectedDebt.currency_code !== "AFN" && !settlementRateReady)}>
             {busy ? u("settling") : u("savePayment")} <span>→</span>
           </button>
         </form>
@@ -6362,7 +6785,7 @@ function ReconciliationView({
       variance_reason: reason,
     });
     setBusy(false);
-    onToast(result.error ? u("couldNotSave") : u("savedSuccessfully"));
+    onToast(result.error ? localizedFinancialError(language, result.error, u("couldNotSave")) : u("savedSuccessfully"));
     if (!result.error && organizationId) {
       const workspace = await getReconciliationWorkspace(organizationId);
       if (workspace.data) setCloses(workspace.data.closes);
@@ -6454,6 +6877,9 @@ function HawalaView({
   organizationId,
   branchId,
   pathname,
+  deviceId,
+  capabilities,
+  onRoute,
   onDashboard,
   onToast,
 }: {
@@ -6461,6 +6887,9 @@ function HawalaView({
   organizationId: string | null;
   branchId: string | null;
   pathname: string;
+  deviceId: string;
+  capabilities: readonly string[];
+  onRoute: (path: string) => void;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -6468,16 +6897,34 @@ function HawalaView({
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const [transfers, setTransfers] = useState<HawalaTransferRecord[]>([]);
   const [beneficiary, setBeneficiary] = useState("");
-  const hawalaMode = pathname.includes("/hawala/incoming") ? "incoming" : pathname.includes("/hawala/payout") ? "payout" : pathname.includes("/hawala/settlement") ? "settle" : pathname.includes("/hawala/send") ? "send" : "overview";
+  const routePartnerId = pathname.match(/\/hawala\/partners\/([^/]+)\/settle/)?.[1] ?? null;
+  const hawalaMode = pathname.includes("/hawala/incoming") ? "incoming" : pathname.includes("/hawala/payout") ? "payout" : pathname.includes("/hawala/settlement") || routePartnerId ? "settle" : pathname.includes("/hawala/send") ? "send" : "overview";
   const [origin, setOrigin] = useState("");
-  const [settlementPartnerId, setSettlementPartnerId] = useState("");
-  const [partners, setPartners] = useState<CounterpartyRecord[]>(organizationId === "inspection" ? [{ id: "inspection-partner", display_name: "Herat Partner Exchange", counterparty_type: "saraf", risk_status: "approved" }] : []);
+  const [selectedSettlementPartnerId, setSelectedSettlementPartnerId] = useState("");
+  const settlementPartnerId = routePartnerId ?? selectedSettlementPartnerId;
+  const [createPartnerId, setCreatePartnerId] = useState(organizationId === "inspection" ? "inspection-partner" : "");
+  const [partners, setPartners] = useState<HawalaPartnerRecord[]>(organizationId === "inspection" ? [{ id: "inspection-partner", counterparty_id: null, name: "Herat Partner Exchange", active: true }] : []);
+  const [statementResult, setStatementResult] = useState<{
+    partnerId: string;
+    data: HawalaPartnerStatement;
+  } | null>(null);
+  const statement = statementResult?.partnerId === settlementPartnerId
+    ? statementResult.data
+    : null;
   const [payoutCode, setPayoutCode] = useState("");
-  const [settlementAmount, setSettlementAmount] = useState("");
+  const [payoutMatch, setPayoutMatch] = useState<HawalaPayoutMatch | null>(null);
+  const [identityReference, setIdentityReference] = useState("");
+  const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  const [settlementAmounts, setSettlementAmounts] = useState<Record<string, string>>({});
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
   const [fee, setFee] = useState("0");
   const [currency, setCurrency] = useState("AFN");
+  const [createRatePublication, setCreateRatePublication] = useState<InlineRatePublication>();
+  const [createRateReady, setCreateRateReady] = useState(false);
+  const [settlementRateLineId, setSettlementRateLineId] = useState<string | null>(null);
+  const [settlementRatePublication, setSettlementRatePublication] = useState<InlineRatePublication>();
+  const [settlementRateReady, setSettlementRateReady] = useState(false);
   const [moneyAccountId, setMoneyAccountId] = useState(
     organizationId === "inspection" ? "inspection-cashbox" : "",
   );
@@ -6491,6 +6938,7 @@ function HawalaView({
     : loadedCatalog;
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
   const [transitionBusy, setTransitionBusy] = useState<string | null>(null);
   useEffect(() => {
     if (organizationId === "inspection") return;
@@ -6499,7 +6947,7 @@ function HawalaView({
         listHawalaTransfers(organizationId),
         listMoneyAccounts(organizationId),
         listCurrencyCatalog(organizationId),
-        listCounterparties(organizationId),
+        listHawalaPartners(organizationId),
       ]).then(([result, accountResult, currencyResult, partnerResult]) => {
         if (result.data) setTransfers(result.data);
         if (accountResult.data) {
@@ -6507,33 +6955,57 @@ function HawalaView({
           setMoneyAccountId((current) => current || accountResult.data?.[0]?.id || "");
         }
         if (currencyResult.data) setCatalog(currencyResult.data);
-        if (partnerResult.data) setPartners(partnerResult.data.filter((person) => person.counterparty_type === "saraf" || person.counterparty_type === "partner"));
+        if (partnerResult.data) {
+          setPartners(partnerResult.data);
+          setCreatePartnerId((current) => current || partnerResult.data?.[0]?.id || "");
+        }
       });
   }, [language, organizationId]);
+  useEffect(() => {
+    if (!organizationId || organizationId === "inspection" || !settlementPartnerId) return;
+    void getHawalaPartnerStatement(organizationId, settlementPartnerId).then((result) => {
+      if (result.data) {
+        setStatementResult({ partnerId: settlementPartnerId, data: result.data });
+      }
+      else if (result.error) onToast(ux(language, "couldNotLoad"));
+    });
+  }, [language, organizationId, settlementPartnerId, onToast]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!organizationId || !branchId || !moneyAccountId) {
-      onToast(moneyAccountId ? u("activeBranchRequired") : u("chooseMoneyAccount"));
+    if (!organizationId || !branchId || !createPartnerId || (hawalaMode === "send" && !moneyAccountId)) {
+      onToast(!createPartnerId ? (language === "en" ? "Choose a Hawala partner." : language === "fa-AF" ? "همکار حواله را انتخاب کنید." : "د حوالې همکار وټاکئ.") : moneyAccountId ? u("activeBranchRequired") : u("chooseMoneyAccount"));
+      return;
+    }
+    if (currency !== "AFN" && !createRateReady) {
+      onToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
+      return;
+    }
+    if (organizationId === "inspection") {
+      onToast(u("savedSuccessfully"));
+      setBeneficiary(""); setOrigin(""); setDestination(""); setAmount(""); setFee("0"); setReference("");
       return;
     }
     setBusy(true);
     const command = {
       organization_id: organizationId,
       branch_id: branchId,
+      hawala_partner_id: createPartnerId,
       beneficiary_name: beneficiary,
       destination_location: destination,
       currency,
       amount,
       fee,
-      destination_money_account_id: moneyAccountId,
+      destination_money_account_id: hawalaMode === "send" ? moneyAccountId : undefined,
       reference_code: reference,
+      device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
+      publish_rate: createRatePublication,
     };
     const result = hawalaMode === "incoming"
       ? await recordHawalaIncoming({ ...command, origin_location: origin })
       : await recordHawalaSend(command);
     setBusy(false);
-    onToast(result.error ? u("couldNotSave") : u("savedSuccessfully"));
+    onToast(result.error ? localizedFinancialError(language, result.error, u("couldNotSave")) : u("savedSuccessfully"));
     if (!result.error) {
       setBeneficiary("");
       setOrigin("");
@@ -6541,14 +7013,105 @@ function HawalaView({
       setAmount("");
       setFee("0");
       setReference("");
+      setCreateRatePublication(undefined);
       if (organizationId) {
         const refreshed = await listHawalaTransfers(organizationId);
         if (refreshed.data) setTransfers(refreshed.data);
       }
     }
   };
-  const matchingPayout = payoutCode.trim().length >= 4
-    ? transfers.find((transfer) => transfer.status === "ready" && transfer.reference_code.toLocaleLowerCase() === payoutCode.trim().toLocaleLowerCase()) ?? null
+  const searchPayout = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId || payoutCode.trim().length < 4) return;
+    setSearchBusy(true);
+    if (organizationId === "inspection") {
+      setPayoutMatch(payoutCode.trim().toUpperCase() === "INCOMING-1001" ? {
+        reference_code: "INCOMING-1001", beneficiary_name: "Ahmad Rahimi", destination_location: "Kabul",
+        currency_code: "AFN", amount: "25000", branch_id: "inspection-branch", hawala_partner_id: "inspection-partner",
+      } : null);
+      setSearchBusy(false);
+      return;
+    }
+    const result = await findHawalaPayout(organizationId, payoutCode);
+    setPayoutMatch(result.data);
+    setSearchBusy(false);
+    if (result.error) onToast(u("couldNotLoad"));
+  };
+  const confirmPayout = async () => {
+    if (!organizationId || !payoutMatch || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2) return;
+    if (organizationId === "inspection") {
+      setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
+      onToast(u("savedSuccessfully"));
+      return;
+    }
+    setTransitionBusy(payoutMatch.reference_code);
+    const command = {
+      organization_id: organizationId,
+      reference_code: payoutMatch.reference_code,
+      money_account_id: moneyAccountId,
+      identity_confirmed: true as const,
+      recipient_identity_reference: identityReference,
+      device_id: deviceId || undefined,
+      approval_reason: "Beneficiary payout above the configured approval threshold",
+      client_command_id: crypto.randomUUID(),
+    };
+    const result = await payHawalaBeneficiary(command);
+    if (result.error?.includes("HAWALA_APPROVAL_REQUIRED")) {
+      const approval = await requestHawalaPayoutApproval(command);
+      if (approval.data?.status === "approved") {
+        const resumed = await resumeApprovedHawalaPayout(approval.data.id);
+        setTransitionBusy(null);
+        if (resumed.error) { onToast(localizedFinancialError(language, resumed.error, u("couldNotSave"))); return; }
+        setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
+        setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
+        onToast(u("savedSuccessfully"));
+        return;
+      }
+      setTransitionBusy(null);
+      onToast(approval.error ? localizedFinancialError(language, approval.error, u("couldNotSave")) : (language === "en" ? "Approval requested. The verified payout draft is preserved." : language === "fa-AF" ? "درخواست تأیید فرستاده شد و پیش‌نویس پرداخت محفوظ است." : "د تایید غوښتنه ولېږل شوه او د ورکړې مسوده خوندي ده."));
+      return;
+    }
+    setTransitionBusy(null);
+    if (result.error) { onToast(localizedFinancialError(language, result.error, u("couldNotSave"))); return; }
+    setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
+    setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
+    onToast(u("savedSuccessfully"));
+  };
+  const settleLine = async (line: HawalaPartnerStatement["lines"][number]) => {
+    const settlementAmount = settlementAmounts[line.id] || line.remaining_amount;
+    if (!organizationId || !settlementPartnerId || !moneyAccountId || !settlementAmount) return;
+    if (organizationId === "inspection") { onToast(u("savedSuccessfully")); return; }
+    if (line.currency_code !== "AFN" && (settlementRateLineId !== line.id || !settlementRateReady)) {
+      setSettlementRateLineId(line.id);
+      setSettlementRatePublication(undefined);
+      setSettlementRateReady(false);
+      onToast(language === "en" ? "Resolve this line’s accounting rate below, then choose Settle again." : language === "fa-AF" ? "نرخ حسابداری این قلم را در پایین حل کرده و دوباره تصفیه را انتخاب کنید." : "د دې توکي حسابي نرخ لاندې حل کړئ، بیا تصفیه وټاکئ.");
+      return;
+    }
+    setTransitionBusy(line.id);
+    const result = await settleHawalaPartner({
+      statement_line_id: line.id,
+      hawala_partner_id: settlementPartnerId,
+      money_account_id: moneyAccountId,
+      amount: settlementAmount,
+      device_id: deviceId || undefined,
+      client_command_id: crypto.randomUUID(),
+      publish_rate: settlementRatePublication,
+    });
+    setTransitionBusy(null);
+    if (result.error) { onToast(localizedFinancialError(language, result.error, u("couldNotSave"))); return; }
+    setSettlementAmounts((current) => ({ ...current, [line.id]: "" }));
+    setSettlementRateLineId(null);
+    setSettlementRatePublication(undefined);
+    const refreshed = await getHawalaPartnerStatement(organizationId, settlementPartnerId);
+    if (refreshed.data) {
+      setStatementResult({ partnerId: settlementPartnerId, data: refreshed.data });
+    }
+    onToast(u("savedSuccessfully"));
+  };
+  const canSettle = hasCapability(capabilities, "hawala.settle");
+  const settlementRateLine = settlementRateLineId
+    ? statement?.lines.find((line) => line.id === settlementRateLineId) ?? null
     : null;
   return (
     <section className="panel">
@@ -6565,37 +7128,69 @@ function HawalaView({
       {hawalaMode === "settle" ? (
         <section className="financial-task-form hawala-settlement-form" aria-labelledby="hawala-settlement-title">
           <h2 id="hawala-settlement-title">{language === "en" ? "Settle a Hawala partner" : language === "fa-AF" ? "تصفیه همکار حواله" : "د حوالې له همکار سره تصفیه"}</h2>
-          <label>{language === "en" ? "Partner" : language === "fa-AF" ? "همکار" : "همکار"}<select required value={settlementPartnerId} onChange={(event) => setSettlementPartnerId(event.target.value)}><option value="">{language === "en" ? "Search or choose a partner" : language === "fa-AF" ? "همکار را جستجو یا انتخاب کنید" : "همکار ولټوئ یا وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.display_name}</option>)}</select></label>
+          {!canSettle ? <p className="calm-empty" role="status">{u("readOnlyRoleNotice")}</p> : null}
+          <label>{language === "en" ? "Partner" : language === "fa-AF" ? "همکار" : "همکار"}<select required disabled={!canSettle} value={settlementPartnerId} onChange={(event) => { const next = event.target.value; setSelectedSettlementPartnerId(next); if (next) onRoute(`${workspaceRoot(organizationId)}/hawala/partners/${next}/settle`); }}><option value="">{language === "en" ? "Search or choose a partner" : language === "fa-AF" ? "همکار را جستجو یا انتخاب کنید" : "همکار ولټوئ یا وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}</select></label>
           <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-          <div className="partner-statement-summary"><span>{language === "en" ? "Paid transfers waiting for settlement" : language === "fa-AF" ? "حواله‌های پرداخت‌شده منتظر تصفیه" : "ورکړل شوې حوالې چې تصفیې ته منتظرې دي"}</span><strong>{transfers.filter((transfer) => transfer.status === "paid").length}</strong></div>
+          <div className="partner-statement-summary"><span>{language === "en" ? "Open statement lines" : language === "fa-AF" ? "اقلام باز صورت‌حساب" : "د حساب پرانیستي توکي"}</span><strong>{statement?.lines.filter((line) => line.status === "open" || line.status === "partial").length ?? 0}</strong></div>
+          {statement?.totals.map((total) => <div className="partner-statement-summary" key={total.currency_code}><span>{total.currency_code} · {language === "en" ? "Payable / Receivable / Net" : language === "fa-AF" ? "پرداختنی / دریافتنی / خالص" : "ورکول / اخیستل / خالص"}</span><strong dir="ltr">{total.payable} / {total.receivable} / {total.net_receivable}</strong></div>)}
           <div className="balance-list hawala-payout-list">
-            {transfers.filter((transfer) => transfer.status === "paid").map((transfer) => <article className="balance-row" key={transfer.id}><span className="balance-name"><b>{transfer.beneficiary_name}</b><small><bdi>{transfer.reference_code}</bdi> · {transfer.currency_code}</small></span><input className="hawala-settlement-amount" aria-label={t("amount")} required min="0.01" step="0.01" value={settlementAmount} onChange={(event) => setSettlementAmount(event.target.value)} placeholder={transfer.amount} inputMode="decimal" /><button className="primary-action" type="button" disabled={transitionBusy === transfer.id || !settlementPartnerId || !moneyAccountId} onClick={() => { setTransitionBusy(transfer.id); void settleHawalaPartner({ transfer_id: transfer.id, partner_id: settlementPartnerId, money_account_id: moneyAccountId, amount: settlementAmount, client_command_id: crypto.randomUUID() }).then((result) => { setTransitionBusy(null); if (result.error) onToast(u("couldNotSave")); else { setSettlementAmount(""); onToast(u("savedSuccessfully")); } }); }}>{transitionBusy === transfer.id ? "…" : (language === "en" ? "Settle" : language === "fa-AF" ? "تصفیه" : "تصفیه")}</button></article>)}
-            {!transfers.some((transfer) => transfer.status === "paid") ? <div className="empty-live">{u("noHawala")}</div> : null}
+            {statement?.lines.filter((line) => line.status === "open" || line.status === "partial").map((line) => <article className="balance-row" key={line.id}><span className="balance-name"><b>{line.beneficiary_name}</b><small><bdi>{line.reference_code}</bdi> · {line.direction} · {line.currency_code}</small></span><input className="hawala-settlement-amount" aria-label={t("amount")} required min="0.01" max={line.remaining_amount} step="0.01" value={settlementAmounts[line.id] ?? ""} onChange={(event) => setSettlementAmounts((current) => ({ ...current, [line.id]: event.target.value }))} placeholder={line.remaining_amount} inputMode="decimal" /><button className="primary-action" type="button" disabled={!canSettle || transitionBusy === line.id || !settlementPartnerId || !moneyAccountId} onClick={() => void settleLine(line)}>{transitionBusy === line.id ? "…" : (language === "en" ? "Settle" : language === "fa-AF" ? "تصفیه" : "تصفیه")}</button></article>)}
+            {settlementPartnerId && !statement?.lines.some((line) => line.status === "open" || line.status === "partial") ? <div className="empty-live">{u("noHawala")}</div> : null}
           </div>
+          {settlementRateLine ? (
+            <InlineRateResolver
+              organizationId={organizationId}
+              branchId={settlementRateLine.branch_id ?? branchId}
+              currency={settlementRateLine.currency_code}
+              language={language}
+              canPublish={hasCapability(capabilities, "rates.manage")}
+              value={settlementRatePublication}
+              onChange={setSettlementRatePublication}
+              onReadyChange={setSettlementRateReady}
+            />
+          ) : null}
         </section>
       ) : hawalaMode === "payout" ? (
         <section className="financial-task-form hawala-payout-form" aria-labelledby="hawala-payout-title">
           <h2 id="hawala-payout-title">{language === "en" ? "Pay by reference code" : language === "fa-AF" ? "پرداخت با رمز حواله" : "د حوالې په کوډ ورکړه"}</h2>
           <p>{language === "en" ? "Enter the customer’s code. SARAFI shows only the matching ready transfer." : language === "fa-AF" ? "رمز مشتری را وارد کنید. سرافی فقط حواله آماده و مطابق را نشان می‌دهد." : "د پېرېدونکي کوډ ولیکئ. سرافي یوازې برابره چمتو حواله ښيي."}</p>
-          <label>{t("referenceCode")}<input autoFocus required dir="ltr" value={payoutCode} onChange={(event) => setPayoutCode(event.target.value.trimStart())} placeholder={u("uniqueReference")} /></label>
-          {payoutCode.trim().length >= 4 && !matchingPayout ? <p className="calm-empty" role="status">{language === "en" ? "No ready transfer matches this code." : language === "fa-AF" ? "حواله آماده مطابق این رمز پیدا نشد." : "له دې کوډ سره برابره چمتو حواله ونه موندل شوه."}</p> : null}
-          {matchingPayout ? <>
-            <article className="payout-match"><span><strong>{matchingPayout.beneficiary_name}</strong><small>{matchingPayout.destination_location}</small></span><b dir="ltr">{formatFinancialAmount(matchingPayout.amount)} {matchingPayout.currency_code}</b></article>
+          <form className="hawala-code-search" onSubmit={searchPayout}><label>{t("referenceCode")}<input autoFocus required dir="ltr" value={payoutCode} onChange={(event) => { setPayoutCode(event.target.value.trimStart()); setPayoutMatch(null); }} placeholder={u("uniqueReference")} /></label><button className="secondary-action" type="submit" disabled={searchBusy || payoutCode.trim().length < 4}>{searchBusy ? "…" : (language === "en" ? "Find transfer" : language === "fa-AF" ? "یافتن حواله" : "حواله ومومئ")}</button></form>
+          {payoutCode.trim().length >= 4 && !payoutMatch && !searchBusy ? <p className="calm-empty" role="status">{language === "en" ? "Enter the exact code and choose Find transfer." : language === "fa-AF" ? "رمز دقیق را وارد کرده و یافتن حواله را بزنید." : "کره کوډ ولیکئ او حواله ومومئ وټاکئ."}</p> : null}
+          {payoutMatch ? <>
+            <article className="payout-match"><span><strong>{payoutMatch.beneficiary_name}</strong><small>{payoutMatch.destination_location}</small></span><b dir="ltr">{formatFinancialAmount(payoutMatch.amount)} {payoutMatch.currency_code}</b></article>
             <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
-            <button className="primary-action full" type="button" disabled={transitionBusy === matchingPayout.id || !moneyAccountId} onClick={() => { setTransitionBusy(matchingPayout.id); void payHawalaBeneficiary({ transfer_id: matchingPayout.id, money_account_id: moneyAccountId, client_command_id: crypto.randomUUID() }).then((result) => { setTransitionBusy(null); if (result.error) onToast(u("couldNotSave")); else { setTransfers((current) => current.map((item) => item.id === matchingPayout.id ? { ...item, status: "paid" } : item)); setPayoutCode(""); onToast(u("savedSuccessfully")); } }); }}>{transitionBusy === matchingPayout.id ? "…" : (language === "en" ? "Confirm payout" : language === "fa-AF" ? "تأیید پرداخت" : "ورکړه تایید کړئ")}</button>
+            <label>{language === "en" ? "Checked identity reference" : language === "fa-AF" ? "مرجع هویت بررسی‌شده" : "کتل شوې پېژندپاڼې مرجع"}<input required value={identityReference} onChange={(event) => setIdentityReference(event.target.value)} placeholder={language === "en" ? "Document type and last digits" : language === "fa-AF" ? "نوع سند و رقم‌های آخر" : "د سند ډول او وروستۍ شمېرې"} /></label>
+            <label className="inline-check"><input type="checkbox" checked={identityConfirmed} onChange={(event) => setIdentityConfirmed(event.target.checked)} />{language === "en" ? "I matched the recipient to the transfer beneficiary." : language === "fa-AF" ? "هویت گیرنده را با مستفید حواله مطابقت دادم." : "ما د اخیستونکي هویت د حوالې له ګټه اخیستونکي سره برابر کړ."}</label>
+            <button className="primary-action full" type="button" disabled={transitionBusy === payoutMatch.reference_code || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2} onClick={() => void confirmPayout()}>{transitionBusy === payoutMatch.reference_code ? "…" : (language === "en" ? "Confirm payout" : language === "fa-AF" ? "تأیید پرداخت" : "ورکړه تایید کړئ")}</button>
           </> : null}
         </section>
       ) : hawalaMode === "send" || hawalaMode === "incoming" ? (
         <form className="financial-task-form" onSubmit={submit}>
           <h2>{hawalaMode === "send" ? (language === "en" ? "Send Hawala" : language === "fa-AF" ? "فرستادن حواله" : "حواله لېږل") : (language === "en" ? "Record incoming instruction" : language === "fa-AF" ? "ثبت حواله رسیده" : "رارسېدلې حواله ثبتول")}</h2>
+          <label>{language === "en" ? "Hawala partner" : language === "fa-AF" ? "همکار حواله" : "د حوالې همکار"}<select required value={createPartnerId} onChange={(event) => setCreatePartnerId(event.target.value)}><option value="">{language === "en" ? "Choose the canonical partner" : language === "fa-AF" ? "همکار اصلی را انتخاب کنید" : "اصلي همکار وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}</select></label>
           <label>{u("receiver")}<input required value={beneficiary} onChange={(event) => setBeneficiary(event.target.value)} placeholder={u("fullBeneficiaryName")} /></label>
           {hawalaMode === "incoming" ? <label>{language === "en" ? "Origin location" : language === "fa-AF" ? "محل مبدأ" : "د پیل ځای"}<input required value={origin} onChange={(event) => setOrigin(event.target.value)} placeholder={u("cityCountry")} /></label> : null}
           <label>{t("destination")}<input required value={destination} onChange={(event) => setDestination(event.target.value)} placeholder={u("cityCountry")} /></label>
           <div className="form-grid"><label>{t("amount")}<input required min="0.01" step="0.01" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /></label><label>{t("fee")}<input min="0" step="0.01" inputMode="decimal" value={fee} onChange={(event) => setFee(event.target.value)} /></label></div>
-          <label>{t("currency")}<select value={currency} onChange={(event) => setCurrency(event.target.value)}>{catalog.filter((item) => item.enabled).map((item) => <option key={item.code} value={item.code}>{item.code} · {currencyName(language, item)}</option>)}</select></label>
-          <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+          <label>{t("currency")}<select value={currency} onChange={(event) => {
+            const next = event.target.value;
+            setCurrency(next);
+            setCreateRatePublication(undefined);
+            setCreateRateReady(next === "AFN");
+          }}>{catalog.filter((item) => item.enabled).map((item) => <option key={item.code} value={item.code}>{item.code} · {currencyName(language, item)}</option>)}</select></label>
+          <InlineRateResolver
+            organizationId={organizationId}
+            branchId={branchId}
+            currency={currency}
+            language={language}
+            canPublish={hasCapability(capabilities, "rates.manage")}
+            value={createRatePublication}
+            onChange={setCreateRatePublication}
+            onReadyChange={setCreateRateReady}
+          />
+          {hawalaMode === "send" ? <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label> : null}
           <label>{t("referenceCode")}<input required dir="ltr" value={reference} onChange={(event) => setReference(event.target.value)} placeholder={u("uniqueReference")} /></label>
-          <button className="primary-action full" type="submit" disabled={busy}>{busy ? u("postingHawala") : u("saveHawala")} <span>→</span></button>
+          <button className="primary-action full" type="submit" disabled={busy || (currency !== "AFN" && !createRateReady)}>{busy ? u("postingHawala") : u("saveHawala")} <span>→</span></button>
         </form>
       ) : null}
       {hawalaMode === "overview" ? <div className="balance-list">
@@ -6608,12 +7203,12 @@ function HawalaView({
               <span className="balance-name">
                 <b>{transfer.beneficiary_name}</b>
                 <small>
-                  {transfer.reference_code} · {transfer.destination_location}
+                  {transfer.reference_code} · {transfer.destination_location} · {transfer.direction ?? "legacy"}
                 </small>
               </span>
               <strong>{formatFinancialAmount(transfer.amount)}</strong>
               <span className="hawala-status-actions">
-                <small className={`status-pill status-${transfer.status}`}>● {transfer.status}</small>
+                <small className={`status-pill status-${transfer.status}`}>● {transfer.status}{transfer.integrity_state === "review_required" ? " · review" : ""}</small>
               </span>
             </div>
           ))

@@ -407,21 +407,21 @@ const controlCopy: Record<Language, Record<string, string>> = {
   en: {
     businessProfile: "Business profile", displayName: "Shop name", legalName: "Legal name", licenseNumber: "License number", licenseExpiry: "License expiry", saveProfile: "Save business profile",
     branchesCashboxes: "Branches and cashboxes", addBranch: "Add branch", branchName: "Branch name", addCashbox: "Add cashbox", cashboxName: "Cashbox name", active: "Active", inactive: "Inactive", deactivate: "Deactivate", activate: "Activate", reasonPrompt: "Write the reason for this change",
-    workingRules: "Daily working rules", dateStyle: "Date shown", gregorian: "Gregorian", solarHijri: "Afghan Solar Hijri", bothDates: "Show both", digitStyle: "Number style", westernDigits: "Western digits", localDigits: "Local digits", approvalLimit: "Approval threshold in AFN", offlineLimit: "Offline limit (deferred; kept at zero)", hideCashierProfit: "Hide owner profit from cashiers",
+    workingRules: "Daily working rules", dateStyle: "Date shown", gregorian: "Gregorian", solarHijri: "Afghan Solar Hijri", bothDates: "Show both", digitStyle: "Number style", westernDigits: "Western digits", localDigits: "Local digits", approvalLimit: "Approval threshold in AFN", offlineLimit: "Offline limit (deferred; kept at zero)", hideCashierProfit: "Hide owner profit from cashiers", rateMaxAge: "Maximum rate age (minutes)", rateTolerance: "Allowed rate difference (basis points)",
     categories: "Expense categories", addCategory: "Add category", categoryName: "Category name", services: "Optional services", dataExport: "Business data export", exportHelp: "Download the organization’s authorized ledger and operating records as JSON.", downloadData: "Download business data", securityHistory: "Security history", supportRequests: "Support access requests", approveSupport: "Approve temporarily", rejectSupport: "Reject", revokeSupport: "Revoke now", noSupport: "No support request is waiting.", ownerApproval: "Owner approval and verification code are required.",
     saved: "Saved successfully.", failed: "This action could not be completed.", mfaNeeded: "Enter your authenticator code in Team & Devices, then try again.", pending: "Pending", approved: "Approved", rejected: "Rejected", revoked: "Revoked", hours: "hours", scope: "Access", noSecurityEvents: "No security event has been recorded.",
   },
   "fa-AF": {
     businessProfile: "معلومات صرافی", displayName: "نام صرافی", legalName: "نام رسمی", licenseNumber: "شماره جواز", licenseExpiry: "تاریخ ختم جواز", saveProfile: "ذخیره معلومات صرافی",
     branchesCashboxes: "شعبه‌ها و صندوق‌ها", addBranch: "افزودن شعبه", branchName: "نام شعبه", addCashbox: "افزودن صندوق", cashboxName: "نام صندوق", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعال کردن", activate: "فعال کردن", reasonPrompt: "دلیل این تغییر را بنویسید",
-    workingRules: "قواعد کار روزانه", dateStyle: "نمایش تاریخ", gregorian: "میلادی", solarHijri: "هجری شمسی افغانستان", bothDates: "هر دو تاریخ", digitStyle: "شکل اعداد", westernDigits: "اعداد انگلیسی", localDigits: "اعداد محلی", approvalLimit: "حد تأیید به افغانی", offlineLimit: "حد کار آفلاین (فعلاً صفر)", hideCashierProfit: "مفاد مالک از صندوق‌دار پنهان باشد",
+    workingRules: "قواعد کار روزانه", dateStyle: "نمایش تاریخ", gregorian: "میلادی", solarHijri: "هجری شمسی افغانستان", bothDates: "هر دو تاریخ", digitStyle: "شکل اعداد", westernDigits: "اعداد انگلیسی", localDigits: "اعداد محلی", approvalLimit: "حد تأیید به افغانی", offlineLimit: "حد کار آفلاین (فعلاً صفر)", hideCashierProfit: "مفاد مالک از صندوق‌دار پنهان باشد", rateMaxAge: "بیشترین عمر نرخ (دقیقه)", rateTolerance: "تفاوت مجاز نرخ (نقطه پایه)",
     categories: "بخش‌های مصرف", addCategory: "افزودن بخش", categoryName: "نام بخش مصرف", services: "خدمات اختیاری", dataExport: "دانلود معلومات صرافی", exportHelp: "دفتر معاملات و معلومات کاری صرافی را با اجازه مالک به شکل JSON دانلود کنید.", downloadData: "دانلود معلومات", securityHistory: "تاریخچه امنیت", supportRequests: "درخواست دسترسی پشتیبانی", approveSupport: "تأیید موقت", rejectSupport: "رد کردن", revokeSupport: "قطع دسترسی", noSupport: "هیچ درخواست پشتیبانی منتظر نیست.", ownerApproval: "تأیید مالک و کود امنیتی لازم است.",
     saved: "با موفقیت ذخیره شد.", failed: "این کار انجام نشد.", mfaNeeded: "در بخش کارمندان و دستگاه‌ها کود امنیتی را تأیید کنید و دوباره کوشش کنید.", pending: "منتظر", approved: "تأیید", rejected: "رد", revoked: "قطع شده", hours: "ساعت", scope: "دسترسی", noSecurityEvents: "هنوز رویداد امنیتی ثبت نشده است.",
   },
   "ps-AF": {
     businessProfile: "د صرافۍ معلومات", displayName: "د صرافۍ نوم", legalName: "رسمي نوم", licenseNumber: "د جواز شمېره", licenseExpiry: "د جواز پای", saveProfile: "د صرافۍ معلومات ساتل",
     branchesCashboxes: "څانګې او صندوقونه", addBranch: "څانګه زیاتول", branchName: "د څانګې نوم", addCashbox: "صندوق زیاتول", cashboxName: "د صندوق نوم", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعالول", activate: "فعالول", reasonPrompt: "د دې بدلون لامل ولیکئ",
-    workingRules: "د ورځني کار اصول", dateStyle: "د نېټې ښودل", gregorian: "میلادي", solarHijri: "افغان لمریز هجري", bothDates: "دواړه نېټې", digitStyle: "د شمېرو بڼه", westernDigits: "انګلیسي شمېرې", localDigits: "سیمه‌ییزې شمېرې", approvalLimit: "د تایید حد په افغانۍ", offlineLimit: "د افلاین کار حد (اوس صفر)", hideCashierProfit: "د مالک ګټه له صندوق‌دار پټه وي",
+    workingRules: "د ورځني کار اصول", dateStyle: "د نېټې ښودل", gregorian: "میلادي", solarHijri: "افغان لمریز هجري", bothDates: "دواړه نېټې", digitStyle: "د شمېرو بڼه", westernDigits: "انګلیسي شمېرې", localDigits: "سیمه‌ییزې شمېرې", approvalLimit: "د تایید حد په افغانۍ", offlineLimit: "د افلاین کار حد (اوس صفر)", hideCashierProfit: "د مالک ګټه له صندوق‌دار پټه وي", rateMaxAge: "د نرخ تر ټولو زیات عمر (دقیقې)", rateTolerance: "د نرخ اجازه شوی توپیر (بنسټیز ټکي)",
     categories: "د لګښت برخې", addCategory: "برخه زیاتول", categoryName: "د لګښت د برخې نوم", services: "اختیاري خدمتونه", dataExport: "د صرافۍ معلومات ښکته کول", exportHelp: "د مالک په اجازه د صرافۍ دفتر او کاري معلومات د JSON په بڼه ښکته کړئ.", downloadData: "معلومات ښکته کول", securityHistory: "امنیتي تاریخ", supportRequests: "د مرستې د لاسرسي غوښتنې", approveSupport: "لنډمهاله تایید", rejectSupport: "ردول", revokeSupport: "لاس‌رسی بندول", noSupport: "د مرستې منتظره غوښتنه نشته.", ownerApproval: "د مالک تایید او امنیتي کوډ اړین دي.",
     saved: "په بریالیتوب وساتل شو.", failed: "دا کار ترسره نه شو.", mfaNeeded: "د کارکوونکو او وسیلو په برخه کې امنیتي کوډ تایید او بیا هڅه وکړئ.", pending: "منتظر", approved: "تایید", rejected: "رد", revoked: "بند شوی", hours: "ساعتونه", scope: "لاس‌رسی", noSecurityEvents: "تر اوسه امنیتي پېښه نه ده ثبت شوې.",
   },
@@ -441,6 +441,8 @@ export function SettingsView({ language, organizationId, organizationName, branc
   const [approvalThreshold, setApprovalThreshold] = useState("0");
   const [offlineLimit, setOfflineLimit] = useState("0");
   const [cashierProfitHidden, setCashierProfitHidden] = useState(true);
+  const [rateMaxAgeMinutes, setRateMaxAgeMinutes] = useState("1440");
+  const [rateToleranceBps, setRateToleranceBps] = useState("50");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<"saved" | "failed" | null>(null);
   const [preferences, setPreferences] = useState<NotificationPreferenceRecord[]>([]);
@@ -481,6 +483,8 @@ export function SettingsView({ language, organizationId, organizationName, branc
         setApprovalThreshold(result.data.approval_threshold_base ?? "0");
         setOfflineLimit(result.data.offline_limit_base ?? "0");
         setCashierProfitHidden(result.data.cashier_profit_hidden ?? true);
+        setRateMaxAgeMinutes(String(result.data.rate_max_age_minutes ?? 1440));
+        setRateToleranceBps(result.data.rate_tolerance_bps ?? "50");
       }
       if (controlResult.data) {
         setDisplayName(controlResult.data.organization.display_name);
@@ -521,7 +525,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
     }
     setSaving(true);
     setSaveMessage(null);
-    const result = await updateWorkspaceSettings({ organizationId, language: draftLanguage, timezone, receiptPrefix, negativeCashAllowed, dateDisplay, digitDisplay, approvalThresholdBase: approvalThreshold, offlineLimitBase: offlineLimit, cashierProfitHidden });
+    const result = await updateWorkspaceSettings({ organizationId, language: draftLanguage, timezone, receiptPrefix, negativeCashAllowed, dateDisplay, digitDisplay, approvalThresholdBase: approvalThreshold, offlineLimitBase: offlineLimit, cashierProfitHidden, rateMaxAgeMinutes: Number(rateMaxAgeMinutes), rateToleranceBps });
     setSaving(false);
     if (result.error || !result.data) {
       setSaveMessage("failed");
@@ -644,6 +648,8 @@ export function SettingsView({ language, organizationId, organizationName, branc
             <label>{c.digitStyle}<select value={digitDisplay} onChange={(event) => setDigitDisplay(event.target.value)}><option value="western">{c.westernDigits}</option><option value="localized">{c.localDigits}</option></select></label>
             <label>{c.approvalLimit}<input required min="0" step="0.01" inputMode="decimal" dir="ltr" value={approvalThreshold} onChange={(event) => setApprovalThreshold(event.target.value)} /></label>
             <label>{c.offlineLimit}<input required min="0" step="0.01" inputMode="decimal" dir="ltr" value={offlineLimit} onChange={(event) => setOfflineLimit(event.target.value)} /></label>
+            <label>{c.rateMaxAge}<input required min="1" max="10080" step="1" inputMode="numeric" dir="ltr" value={rateMaxAgeMinutes} onChange={(event) => setRateMaxAgeMinutes(event.target.value)} /></label>
+            <label>{c.rateTolerance}<input required min="0" max="10000" step="0.01" inputMode="decimal" dir="ltr" value={rateToleranceBps} onChange={(event) => setRateToleranceBps(event.target.value)} /></label>
             <label className="settings-checkbox"><input type="checkbox" checked={negativeCashAllowed} onChange={(event) => setNegativeCashAllowed(event.target.checked)} />{p(language, "allowNegativeCash")}</label>
             <label className="settings-checkbox"><input type="checkbox" checked={cashierProfitHidden} onChange={(event) => setCashierProfitHidden(event.target.checked)} />{c.hideCashierProfit}</label>
             <small>{p(language, "mfaSettingsNote")}</small>
