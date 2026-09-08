@@ -106,12 +106,13 @@ Rollback strategy:
 - SQL parser: PASS.
 - TypeScript: PASS.
 - Source lint: PASS.
-- Unit/integration: 98 passed, 2 skipped.
-- Production build: PASS; 520.89 kB main-chunk warning remains.
+- Unit/integration: 99 passed, 2 skipped.
+- Production build: PASS; 520.87 kB main-chunk warning remains.
 - Linked Supabase lint: PASS for currently deployed schema.
 - Migration dry run: PASS/no write; exactly two pending migrations.
 - Chromium Exchange behavior: all three focused cases reached PASS; runner teardown still hangs and was stopped after results.
 - Local in-app browser Exchange check: PASS with both rate legs missing; Review remained blocked until both inline rates were supplied, the implied cross and receive amount were derived correctly, and no console warnings/errors were logged.
+- Playwright is pinned to 1.63.0 and CI emits GitHub-native annotations; the local Windows host still cannot launch a Firefox tab subprocess, so cross-browser certification must come from the remote matrix.
 
 ## Required evidence before production
 

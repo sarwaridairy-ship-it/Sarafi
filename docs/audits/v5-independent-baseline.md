@@ -30,8 +30,8 @@ Scope: independent re-audit and forward correction requested by `SARAFI_Whole_Pr
 | --- | --- |
 | `node --max-old-space-size=4096 node_modules\typescript\bin\tsc -b --pretty false` | PASS |
 | `node_modules\.bin\oxlint.cmd --max-warnings=0 src` | PASS |
-| `node --max-old-space-size=4096 node_modules\vitest\vitest.mjs run src --maxWorkers=1 --no-file-parallelism` | PASS: 25 files passed, 1 skipped; 98 tests passed, 2 skipped |
-| `npm run build` | PASS with warning: main application chunk 520.89 kB |
+| `npm test` | PASS: 25 files passed, 1 skipped; 99 tests passed, 2 skipped |
+| `npm run build` | PASS with warning: main application chunk 520.87 kB |
 | `npm audit --audit-level=high` | PASS: 0 vulnerabilities |
 | `python -c "... pglast.parse_sql(...)"` | PASS for `20260907121336_whole_project_integrity_v5.sql` |
 | `npx supabase db lint --linked --level warning` | PASS: no schema errors in the currently deployed remote schema |
@@ -39,6 +39,7 @@ Scope: independent re-audit and forward correction requested by `SARAFI_Whole_Pr
 | `npx supabase db push --dry-run` | PASS/no write: would push only `20260906190754` and `20260907121336` |
 | `npx playwright test tests/e2e/controls.spec.ts --project=chromium --grep "Exchange"` | Scenario results PASS after correction; Playwright/Vite teardown hangs after reporting cases, so process-level clean exit is not certified |
 | Local in-app browser: Exchange with both AFN legs missing | PASS: Review disabled until both rates were supplied; derived cross was `0.936750998668`, `100 USD` produced `93.68 EUR`, review opened, and the console contained no warnings/errors |
+| Local Firefox launch | ENVIRONMENT BLOCKED: Firefox cannot start a tab subprocess on this Windows host and fails before application code runs; CI retains the full browser matrix and now emits GitHub-native failure annotations |
 | Clean local Supabase reset | BLOCKED | Docker/Podman is not installed; no isolated local database can be started |
 
 ## Baseline findings and correction disposition
