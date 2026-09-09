@@ -1,5 +1,7 @@
 # SARAFI Final Production-Web Verification
 
+> **Superseded on 2026-09-09.** This file is a historical v4-era verification record and must not be used as current launch authorization. The authoritative v6 status is [whole-web-v6-handover.md](./whole-web-v6-handover.md), which remains NO-SHIP until its independent external gates pass.
+
 **Candidate:** repository `E:\New folder`
 
 **Verification date:** 2026-09-03
