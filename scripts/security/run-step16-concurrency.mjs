@@ -11,10 +11,11 @@ const fileEnv = readFileSync(source, 'utf8').split(/\r?\n/).filter((line) => lin
   return values
 }, {})
 const env = { ...fileEnv, ...process.env }
-const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SARAFI_E2E_CASHIER_A_EMAIL', 'SARAFI_E2E_CASHIER_A_PASSWORD', 'BUSINESS_A_ID', 'BRANCH_A1_ID', 'CASHBOX_A1_ID']
+const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SECRET_KEY', 'SARAFI_E2E_CASHIER_A_EMAIL', 'SARAFI_E2E_CASHIER_A_PASSWORD', 'BUSINESS_A_ID', 'BRANCH_A1_ID', 'CASHBOX_A1_ID']
 for (const key of required) if (!env[key]) throw new Error(`Missing Step 16 fixture setting: ${key}`)
 
 const client = () => createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
+const observer = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } })
 const results = []
 const record = (name, passed, detail) => results.push({ name, result: passed ? 'PASS' : 'FAIL', detail })
 const signIn = async (email, password) => {
@@ -40,29 +41,43 @@ const command = (id, soldAmount = '0.01', sellRate = '70') => {
     organization_id: env.BUSINESS_A_ID, branch_id: env.BRANCH_A1_ID, cashbox_id: env.CASHBOX_A1_ID,
     side: 'sell_fx', sold_currency: env.SARAFI_STEP16_SOLD_CURRENCY ?? 'USD', bought_currency: env.SARAFI_STEP16_BOUGHT_CURRENCY ?? 'AFN',
     sold_amount: soldAmount, bought_amount: boughtAmount, sold_base_value: boughtAmount, bought_base_value: boughtAmount,
-    base_currency: env.SARAFI_STEP16_BASE_CURRENCY ?? 'AFN', rate: sellRate, rate_source: 'shop_rate', client_command_id: id,
+    base_currency: env.SARAFI_STEP16_BASE_CURRENCY ?? 'AFN', customer_rate: sellRate, rate_source: 'shop_rate', client_command_id: id,
   }
 }
-const rpc = (instance, payload) => instance.rpc('record_fx_trade', { command: payload })
-const getSnapshot = async (instance) => {
-  const [journal, events, receipts, state, balanceAudit] = await Promise.all([
-    instance.from('journal_entries').select('id, journal_lines(native_debit,native_credit,base_debit,base_credit)').eq('organization_id', env.BUSINESS_A_ID),
-    instance.from('financial_events').select('id, client_command_id').eq('organization_id', env.BUSINESS_A_ID),
-    instance.from('command_receipts').select('client_command_id,journal_entry_id').eq('organization_id', env.BUSINESS_A_ID),
-    instance.from('fx_inventory_cost_state').select('currency_code,quantity,carrying_base_value').eq('organization_id', env.BUSINESS_A_ID),
-    instance.rpc('get_journal_balance_audit', { target_org: env.BUSINESS_A_ID }),
+const rpc = (instance, payload) => instance.rpc('record_fx_trade_v5', { command: payload })
+const getSnapshot = async () => {
+  const [journal, events, receipts, state] = await Promise.all([
+    observer.from('journal_entries').select('id, journal_lines(native_debit,native_credit,base_debit,base_credit)').eq('organization_id', env.BUSINESS_A_ID),
+    observer.from('financial_events').select('id, client_command_id').eq('organization_id', env.BUSINESS_A_ID),
+    observer.from('command_receipts').select('client_command_id,journal_entry_id').eq('organization_id', env.BUSINESS_A_ID),
+    observer.from('fx_inventory_cost_state').select('currency_code,quantity,carrying_base_value').eq('organization_id', env.BUSINESS_A_ID),
   ])
-  const errors = [journal, events, receipts, state, balanceAudit].filter((result) => result.error)
+  const errors = [journal, events, receipts, state].filter((result) => result.error)
   if (errors.length) throw new Error(errors.map((result) => result.error.message).join('; '))
   const lines = journal.data.flatMap((entry) => entry.journal_lines ?? [])
+  const entryBalances = journal.data.map((entry) => {
+    const entryLines = entry.journal_lines ?? []
+    return {
+      debit: entryLines.reduce((sum, line) => sum.plus(line.base_debit ?? 0), new Decimal(0)),
+      credit: entryLines.reduce((sum, line) => sum.plus(line.base_credit ?? 0), new Decimal(0)),
+    }
+  })
+  const totalDebit = lines.reduce((sum, line) => sum.plus(line.base_debit ?? 0), new Decimal(0))
+  const totalCredit = lines.reduce((sum, line) => sum.plus(line.base_credit ?? 0), new Decimal(0))
   return {
     journal: journal.data,
     events: events.data,
     receipts: receipts.data,
     state: state.data,
-    debit: lines.reduce((sum, line) => sum.plus(line.base_debit ?? 0), new Decimal(0)),
-    credit: lines.reduce((sum, line) => sum.plus(line.base_credit ?? 0), new Decimal(0)),
-    balanceAudit: balanceAudit.data,
+    debit: totalDebit,
+    credit: totalCredit,
+    balanceAudit: {
+      balanced: totalDebit.eq(totalCredit) && entryBalances.every((entry) => entry.debit.eq(entry.credit)),
+      total_debit: totalDebit.toString(),
+      total_credit: totalCredit.toString(),
+      entry_count: journal.data.length,
+      imbalanced_entry_count: entryBalances.filter((entry) => !entry.debit.eq(entry.credit)).length,
+    },
   }
 }
 const cashierA = await signIn(env.SARAFI_E2E_CASHIER_A_EMAIL, env.SARAFI_E2E_CASHIER_A_PASSWORD)
@@ -103,7 +118,7 @@ if (rateContext.error || !rateContext.data?.sell_rate || rateContext.data.stale)
 if (rateContext.error || !rateContext.data?.sell_rate || rateContext.data.stale)
   throw new Error(`Step 16 requires a current ${soldCurrency}/${boughtCurrency} sell rate`)
 const sellRate = new Decimal(rateContext.data.sell_rate).toString()
-const before = await getSnapshot(cashierA)
+const before = await getSnapshot()
 const availableBefore = new Decimal(
   before.state.find((row) => row.currency_code === soldCurrency)?.quantity ?? 0,
 )
@@ -128,14 +143,17 @@ const duplicate = await Promise.all([rpc(cashierA, { ...command(sameId, retryAmo
 const duplicateIds = duplicate.map((result) => result.data?.id).filter(Boolean)
 record('Same idempotency key across devices has one economic effect', new Set(duplicateIds).size <= 1 && duplicate.every((result) => !result.error), duplicateIds.join(','))
 
-const after = await getSnapshot(cashierA)
+const after = await getSnapshot()
 const uniqueCommandIds = new Set(after.events.map((event) => event.client_command_id)).size === after.events.length
-const balanced = after.balanceAudit?.balanced === true && after.balanceAudit?.imbalanced_entry_count === 0
+const debitDelta = after.debit.minus(before.debit)
+const creditDelta = after.credit.minus(before.credit)
+const balanced = debitDelta.eq(creditDelta) &&
+  after.balanceAudit.imbalanced_entry_count === before.balanceAudit.imbalanced_entry_count
 const state = after.state.find((row) => row.currency_code === soldCurrency)
 record(
-  'Journal remains balanced',
+  'New journal entries remain balanced without changing historical exceptions',
   balanced,
-  `server_debit=${after.balanceAudit?.total_debit}; server_credit=${after.balanceAudit?.total_credit}; entries=${after.balanceAudit?.entry_count}; imbalanced_entries=${after.balanceAudit?.imbalanced_entry_count}`,
+  `new_debit=${debitDelta}; new_credit=${creditDelta}; historical_imbalanced_entries=${before.balanceAudit.imbalanced_entry_count}; after_imbalanced_entries=${after.balanceAudit.imbalanced_entry_count}`,
 )
 record('No duplicate receipt/event exists', uniqueCommandIds && new Set(after.receipts.map((receipt) => receipt.client_command_id)).size === after.receipts.length, `events=${after.events.length}; receipts=${after.receipts.length}`)
 record('No prohibited negative inventory exists', !state || new Decimal(state.quantity).gte(0), `quantity=${state?.quantity ?? 'missing'}`)

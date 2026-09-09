@@ -56,6 +56,7 @@ const viewer = await signIn('viewer')
 
 const ownerContext = await owner.rpc('get_my_workspace_context')
 const ownerWorkspace = ownerContext.data?.find((item) => item.organization_id === env.BUSINESS_A_ID)
+const roleWorkspaces = new Map([['owner', ownerWorkspace]])
 record(
   'Owner receives the real organization, branch, cashbox, and plan context',
   !ownerContext.error && ownerWorkspace?.role_code === 'owner' &&
@@ -67,6 +68,7 @@ record(
 for (const [role, client] of [['business_admin', businessAdmin], ['cashier', cashier], ['accountant', accountant], ['viewer', viewer]]) {
   const context = await client.rpc('get_my_workspace_context')
   const workspace = context.data?.find((item) => item.organization_id === env.BUSINESS_A_ID)
+  roleWorkspaces.set(role, workspace)
   record(
     `${role} receives a distinct server role and assigned workspace`,
     !context.error && workspace?.role_code === role && workspace.branches?.length > 0,
@@ -80,7 +82,7 @@ const businessAdminCapabilities = businessAdminWorkspace?.capabilities ?? []
 record(
   'Business Administrator has operational authority without owner-only powers',
   !businessAdminContext.error &&
-    ['financial.post.fx', 'financial.post.money', 'financial.report', 'team.manage', 'organization.manage'].every((capability) => businessAdminCapabilities.includes(capability)) &&
+    ['financial.post.fx', 'financial.post.money', 'financial.post.opening', 'financial.report', 'team.manage', 'organization.manage'].every((capability) => businessAdminCapabilities.includes(capability)) &&
     ['owner.capital.post', 'ownership.transfer', 'owner.delete', 'billing.manage'].every((capability) => !businessAdminCapabilities.includes(capability)),
   businessAdminContext.error?.message ?? businessAdminCapabilities.join(', '),
 )
@@ -266,30 +268,32 @@ record(
 )
 
 for (const [role, client] of [['accountant', accountant], ['viewer', viewer]]) {
-  const attempt = await client.rpc('create_counterparty', {
-    target_org: env.BUSINESS_A_ID,
-    display_name_input: 'Read only acceptance attempt',
-    counterparty_type_input: 'customer',
-    phone_input: null,
-    notes_input: null,
+  const attempt = await client.rpc('create_counterparty_v6', {
+    command: {
+      organization_id: env.BUSINESS_A_ID,
+      branch_id: roleWorkspaces.get(role)?.branches?.[0]?.id,
+      display_name: 'Read only acceptance attempt',
+      counterparty_type: 'customer',
+    },
   })
   record(
     `${role} cannot create or change customer records`,
-    Boolean(attempt.error) && /permission/i.test(attempt.error.message),
+    Boolean(attempt.error) && /CAPABILITY_REQUIRED:customers\.manage|permission/i.test(attempt.error.message),
     attempt.error?.message ?? 'Customer was unexpectedly created',
   )
 }
 
-const cashierPermissionProbe = await cashier.rpc('create_counterparty', {
-  target_org: env.BUSINESS_A_ID,
-  display_name_input: 'x',
-  counterparty_type_input: 'customer',
-  phone_input: null,
-  notes_input: null,
+const cashierPermissionProbe = await cashier.rpc('create_counterparty_v6', {
+  command: {
+    organization_id: env.BUSINESS_A_ID,
+    branch_id: roleWorkspaces.get('cashier')?.branches?.[0]?.id,
+    display_name: 'x',
+    counterparty_type: 'customer',
+  },
 })
 record(
   'Cashier reaches customer entry but server validation blocks bad data',
-  Boolean(cashierPermissionProbe.error) && /between 2 and 120/i.test(cashierPermissionProbe.error.message),
+  Boolean(cashierPermissionProbe.error) && /CUSTOMER_NAME_INVALID/i.test(cashierPermissionProbe.error.message),
   cashierPermissionProbe.error?.message ?? 'Invalid customer was unexpectedly created',
 )
 

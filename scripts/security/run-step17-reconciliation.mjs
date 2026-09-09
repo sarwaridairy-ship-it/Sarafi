@@ -15,6 +15,7 @@ const env = { ...fileEnv, ...process.env };
 const required = [
   "SUPABASE_URL",
   "SUPABASE_ANON_KEY",
+  "SUPABASE_SECRET_KEY",
   "SARAFI_E2E_CASHIER_A_EMAIL",
   "SARAFI_E2E_CASHIER_A_PASSWORD",
   "BUSINESS_A_ID",
@@ -29,6 +30,13 @@ const client = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     detectSessionInUrl: false,
   },
 });
+const observer = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+  },
+});
 const signedIn = await client.auth.signInWithPassword({
   email: env.SARAFI_E2E_CASHIER_A_EMAIL,
   password: env.SARAFI_E2E_CASHIER_A_PASSWORD,
@@ -37,7 +45,7 @@ if (signedIn.error)
   throw new Error(`sign in failed: ${signedIn.error.message}`);
 const organization = env.BUSINESS_A_ID;
 const rows = async (table, columns = "*") => {
-  const result = await client
+  const result = await observer
     .from(table)
     .select(columns)
     .eq(table === "organizations" ? "id" : "organization_id", organization);

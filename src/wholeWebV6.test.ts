@@ -18,6 +18,11 @@ const migration = read("../supabase/migrations/20260908104812_whole_web_v6_repor
 const hawalaMigration = read("../supabase/migrations/20260908110100_hawala_evidence_v6.sql");
 const hawalaEventTypes = read("../supabase/migrations/20260908110000_hawala_event_types_v6.sql");
 const hawalaRepairMigration = read("../supabase/migrations/20260908221542_repair_hawala_v6_function_lint.sql");
+const authorityRepairMigration = read("../supabase/migrations/20260909071807_align_v6_business_admin_transaction_authority.sql");
+const featureAal2RepairMigration = read("../supabase/migrations/20260909072352_restore_aal2_for_feature_controls.sql");
+const privateDocumentRepairMigration = read("../supabase/migrations/20260909073052_repair_private_document_upload_policy.sql");
+const journalBalanceRepairMigration = read("../supabase/migrations/20260909073913_repair_deferred_journal_balance_privileges.sql");
+const journalAuditRepairMigration = read("../supabase/migrations/20260909075231_repair_journal_balance_audit_privileges.sql");
 const ci = read("../.github/workflows/ci.yml");
 const release = read("../.github/workflows/release.yml");
 
@@ -104,6 +109,45 @@ describe("whole-web v6 acceptance contracts", () => {
     expect(release).toContain("local_language_uat_evidence");
     expect(release).toContain("printer_acceptance_evidence");
     expect(release).toContain("legal_provider_signoff_evidence");
+  });
+
+  it("keeps Business Administrator transaction authority explicit and non-owner", () => {
+    for (const capability of ["financial.post.fx", "financial.post.money", "financial.post.opening"]) {
+      expect(authorityRepairMigration).toContain(`('business_admin', '${capability}')`);
+    }
+    for (const ownerOnlyCapability of ["billing.manage", "ownership.transfer", "owner.delete", "owner.capital.post"]) {
+      expect(authorityRepairMigration).not.toContain(`'${ownerOnlyCapability}'`);
+    }
+  });
+
+  it("retains AAL2 after capability-based feature administration replaced the legacy function", () => {
+    expect(featureAal2RepairMigration).toContain("perform public.require_capability(target_org, 'organization.manage'");
+    expect(featureAal2RepairMigration).toContain("perform public.require_aal2()");
+    expect(featureAal2RepairMigration.indexOf("perform public.require_aal2()"))
+      .toBeLessThan(featureAal2RepairMigration.indexOf("insert into public.organization_features"));
+  });
+
+  it("keeps document upload working after V6 revokes direct counterparty reads", () => {
+    expect(privateDocumentRepairMigration).toContain("security definer");
+    expect(privateDocumentRepairMigration).toContain("private_document_upload_target_is_valid");
+    expect(privateDocumentRepairMigration).toContain("public.has_capability(target_org, 'documents.upload'");
+    expect(privateDocumentRepairMigration).toContain("create policy attachments_document_insert");
+    expect(privateDocumentRepairMigration).toContain("create policy private_documents_capability_insert");
+  });
+
+  it("runs the deferred balance invariant with server privileges after raw reads are revoked", () => {
+    expect(journalBalanceRepairMigration).toContain("function public.assert_posted_entry_balanced()");
+    expect(journalBalanceRepairMigration).toContain("security definer");
+    expect(journalBalanceRepairMigration).toContain("from public.journal_lines jl");
+    expect(journalBalanceRepairMigration).toContain("from public, anon, authenticated");
+  });
+
+  it("keeps journal auditing tenant-scoped without reopening raw ledger tables", () => {
+    expect(journalAuditRepairMigration).toContain("function public.get_journal_balance_audit(target_org uuid)");
+    expect(journalAuditRepairMigration).toContain("security definer");
+    expect(journalAuditRepairMigration).toContain("perform public.require_capability(target_org, 'financial.report'");
+    expect(journalAuditRepairMigration).toContain("where je.organization_id = target_org");
+    expect(journalAuditRepairMigration).toContain("revoke all on function public.get_journal_balance_audit(uuid) from public, anon");
   });
 
   it("keeps live device state without re-registering the browser on every organization event", () => {

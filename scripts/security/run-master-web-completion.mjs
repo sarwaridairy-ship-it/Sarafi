@@ -47,8 +47,9 @@ if (reconciliation.error || !reconciliation.data || !Array.isArray(reconciliatio
 }
 const unverifiedFeatureChange = await owner.rpc('set_organization_feature_state', {
   target_org: organizationId,
-  feature_input: 'advanced_analytics',
-  enabled_input: true,
+  // An invalid probe cannot mutate feature state even if the AAL2 guard regresses.
+  feature_input: '__aal2_probe__',
+  enabled_input: false,
 })
 if (!unverifiedFeatureChange.error || !unverifiedFeatureChange.error.message.includes('AAL2')) {
   throw new Error('Sensitive feature change did not require AAL2')

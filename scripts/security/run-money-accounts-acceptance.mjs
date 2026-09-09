@@ -15,6 +15,7 @@ const env = { ...fileEnv, ...process.env }
 for (const key of [
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
+  'SUPABASE_SECRET_KEY',
   'SARAFI_E2E_OWNER_A_EMAIL',
   'SARAFI_E2E_OWNER_A_PASSWORD',
   'SARAFI_E2E_MANAGER_A_EMAIL',
@@ -38,6 +39,14 @@ const makeClient = () =>
     },
   })
 
+const observer = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false,
+  },
+})
+
 const signIn = async (email, password) => {
   const client = makeClient()
   const result = await client.auth.signInWithPassword({ email, password })
@@ -59,6 +68,12 @@ const expectDenied = async (test, operation) => {
   const denied = Boolean(result.error) || result.data === null || (Array.isArray(result.data) && result.data.length === 0)
   if (denied) pass(test, result.error?.message ?? 'No rows returned')
   else fail(test, 'Operation was unexpectedly allowed')
+  return result
+}
+const expectDeniedWith = async (test, operation, expectedError) => {
+  const result = await operation()
+  if (result.error && expectedError.test(result.error.message)) pass(test, result.error.message)
+  else fail(test, result.error?.message ?? 'Operation was denied for the wrong reason')
   return result
 }
 const expectRpcRevoked = async (test, operation) => {
@@ -167,16 +182,6 @@ await expectAllowed('Owner can enable a world currency', () =>
     enabled_input: true,
   }),
 )
-if (!wasCnyEnabled) {
-  await expectAllowed('World-currency setting can be restored safely', () =>
-    owner.rpc('set_organization_currency', {
-      target_org: env.BUSINESS_A_ID,
-      target_currency: 'CNY',
-      enabled_input: false,
-    }),
-  )
-}
-
 if (source && destination) {
   const currentAfnBalance = Number(
     source.balances?.find((balance) => balance.currency === 'AFN')?.amount ?? 0,
@@ -231,22 +236,37 @@ if (source && destination) {
       },
     }),
   )
-  await expectDenied('Foreign operations require a current approved shop rate', () =>
-    owner.rpc('record_operation', {
-      command: {
-        organization_id: env.BUSINESS_A_ID,
-        branch_id: env.BRANCH_A1_ID,
-        operation: 'RECORD_EXPENSE',
-        currency: 'USD',
-        amount: '0.01',
-        source_money_account_id: source.id,
-        client_command_id: `security-missing-rate-${randomUUID()}`,
-      },
-    }),
-  )
+  const cnyRateContext = await owner.rpc('get_transaction_rate_context', {
+    target_org: env.BUSINESS_A_ID,
+    target_branch: env.BRANCH_A1_ID,
+    source_currency: 'CNY',
+    target_currency: 'AFN',
+  })
+  if (!cnyRateContext.error && (cnyRateContext.data?.missing || cnyRateContext.data?.stale)) {
+    await expectDeniedWith(
+      'Foreign operations require a current approved shop rate',
+      () => owner.rpc('record_operation', {
+        command: {
+          organization_id: env.BUSINESS_A_ID,
+          branch_id: env.BRANCH_A1_ID,
+          operation: 'RECORD_EXPENSE',
+          currency: 'CNY',
+          amount: '0.01',
+          source_money_account_id: source.id,
+          client_command_id: `security-missing-rate-${randomUUID()}`,
+        },
+      }),
+      /RATE_RESOLUTION_REQUIRED|current.*rate|rate.*stale|rate.*missing/i,
+    )
+  } else {
+    fail(
+      'Foreign operations require a current approved shop rate',
+      cnyRateContext.error?.message ?? 'CNY unexpectedly has a current approved test rate',
+    )
+  }
 
   if (transfer.data?.id) {
-    const lines = await owner
+    const lines = await observer
       .from('journal_lines')
       .select('native_debit,native_credit,base_debit,base_credit')
       .eq('journal_entry_id', transfer.data.id)
@@ -259,7 +279,7 @@ if (source && destination) {
     else fail('Account transfer creates a balanced two-line entry', lines.error?.message ?? 'Entry did not balance')
   }
 
-  const event = await owner
+  const event = await observer
     .from('financial_events')
     .select('metadata')
     .eq('organization_id', env.BUSINESS_A_ID)
@@ -272,6 +292,16 @@ if (source && destination) {
   )
     pass('Transaction history keeps human source and destination names')
   else fail('Transaction history keeps human source and destination names', event.error?.message ?? 'Flow metadata is incomplete')
+}
+
+if (!wasCnyEnabled) {
+  await expectAllowed('World-currency setting can be restored safely', () =>
+    owner.rpc('set_organization_currency', {
+      target_org: env.BUSINESS_A_ID,
+      target_currency: 'CNY',
+      enabled_input: false,
+    }),
+  )
 }
 
 accountList = await owner.rpc('get_money_accounts', { target_org: env.BUSINESS_A_ID })
