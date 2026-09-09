@@ -33,10 +33,10 @@ const locales = [
     slug: "dari",
     authLanguage: "دری",
     trade: /معامله جدید/,
-    buy: "خرید ارز",
-    sell: "فروش ارز",
+    buy: "خرید اسعار",
+    sell: "فروش اسعار",
     money: /پول من/,
-    people: /مشتریان و قرض‌ها/,
+    people: /مشتریان، طلب و قرض/,
     transactions: /معاملات/,
     settings: /تنظیمات/,
     compliance: /بررسی اصول کاری/,
@@ -89,30 +89,14 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
 
     await page.goto("/");
 
-    for (const [kind, route, inputLabel] of [
-      [
-        "buy",
-        "/app/inspection/transactions/new/fx/buy",
-        locale.code === "en"
-          ? /We receive/
-          : locale.code === "fa-AF"
-            ? /ما دریافت می‌کنیم/
-            : /موږ ترلاسه کوو/,
-      ],
-      [
-        "sell",
-        "/app/inspection/transactions/new/fx/sell",
-        locale.code === "en"
-          ? /We give/
-          : locale.code === "fa-AF"
-            ? /ما می‌دهیم/
-            : /موږ ورکوو/,
-      ],
+    for (const [kind, route] of [
+      ["buy", "/app/inspection/transactions/new/fx/buy"],
+      ["sell", "/app/inspection/transactions/new/fx/sell"],
     ] as const) {
       await page.goto(route);
+      await page.getByRole("heading", { name: kind === "buy" ? locale.buy : locale.sell }).waitFor();
       await page
-        .locator(".financial-task-form")
-        .getByRole("textbox", { name: inputLabel })
+        .locator(".financial-task-form .exchange-money-card input:not([readonly])")
         .fill("1000");
       await page
         .locator(".financial-task-form")

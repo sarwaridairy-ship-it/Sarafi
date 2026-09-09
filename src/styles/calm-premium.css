@@ -526,12 +526,23 @@
 }
 
 .inline-rate-resolver { margin: 4px 0 18px; }
-.inline-rate-resolver .applied-rate-row > span,
 .inline-rate-context span { display: grid; gap: 3px; }
 .inline-rate-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
 .inline-rate-context span { padding: 10px 12px; border: 1px solid var(--line, #d8e1dd); border-radius: 8px; background: color-mix(in srgb, white 88%, var(--surface-soft, #f3f7f5)); }
 .inline-rate-context small,
 .inline-rate-resolver .applied-rate-row small { color: var(--muted, #62726f); }
+.inline-rate-bridge { align-items:stretch; display:grid; gap:8px; grid-template-columns:minmax(82px,.7fr) minmax(190px,1.6fr) auto minmax(82px,.7fr); }
+.inline-rate-currency { align-content:center; background:#fff; border:1px solid var(--line, #d8e1dd); border-radius:10px; display:grid; gap:4px; min-width:0; padding:11px; text-align:center; }
+.inline-rate-currency small { color:var(--muted, #62726f); }
+.inline-rate-currency b { color:var(--calm-emerald-strong, #0d5c4f); font-size:18px; }
+.inline-rate-values { background:#edf7f3; border:1px solid #afd0c1; border-radius:10px; display:grid; gap:6px; grid-template-columns:repeat(2,minmax(0,1fr)); padding:7px; }
+.inline-rate-values span { background:#fff; border-radius:7px; display:grid; gap:3px; padding:7px; text-align:center; }
+.inline-rate-values small { color:var(--muted, #62726f); font-size:10px; }
+.inline-rate-values b { color:#0c5d52; font-size:16px; }
+.inline-rate-arrow { align-self:center; color:var(--calm-emerald, #176b5b); font-size:20px; font-weight:900; }
+.inline-rate-details { border-top:1px solid var(--line, #d8e1dd); padding-top:8px; }
+.inline-rate-details > summary { color:var(--muted, #62726f); cursor:pointer; font-size:11px; font-weight:750; }
+.inline-rate-details .inline-rate-context { margin-top:8px; }
 .inline-rate-resolver fieldset { margin: 0; padding: 12px; border: 1px solid var(--line, #d8e1dd); border-radius: 8px; }
 .approval-draft-status { align-items: center; background: var(--calm-surface); border: 1px solid var(--calm-line); border-radius: var(--calm-radius); display: flex; gap: 16px; justify-content: space-between; margin-block-end: 16px; padding: 18px; }
 .approval-draft-status h2,
@@ -539,6 +550,12 @@
 .exchange-rate-governance { display: grid; gap: 12px; }
 
 @media (max-width: 700px) {
+  .inline-rate-bridge { gap:5px; grid-template-columns:minmax(62px,.65fr) minmax(138px,1.5fr) auto minmax(62px,.65fr); }
+  .inline-rate-currency { padding:8px 5px; }
+  .inline-rate-currency b { font-size:14px; }
+  .inline-rate-values { gap:4px; padding:5px; }
+  .inline-rate-values span { padding:6px 3px; }
+  .inline-rate-values b { font-size:13px; }
   .transaction-inline-form {
     inset-block-start: 56px;
     inset-inline-start: 0;

@@ -11,9 +11,9 @@ type LoadedRateContext = {
 
 const copy = {
   en: {
-    title: "Accounting rate",
+    title: "Rate for this transaction",
     loading: "Checking the approved shop rate…",
-    current: "Current approved rate",
+    current: "Rate is ready",
     stale: "This rate has expired. Refresh it here before saving.",
     missing: "No approved rate exists. Add it here before saving.",
     unavailable: "The rate could not be checked. Try again before saving.",
@@ -23,20 +23,26 @@ const copy = {
     effective: "Effective",
     expiry: "Expires",
     required: "Resolve the rate to continue",
+    foreign: "Currency",
+    local: "Afghani",
+    details: "Rate time details",
   },
   "fa-AF": {
-    title: "نرخ حسابداری",
-    loading: "بررسی نرخ تأییدشده صرافی…",
-    current: "نرخ تأییدشده فعلی",
-    stale: "اعتبار این نرخ تمام شده است. پیش از ثبت، همین‌جا آن را تازه کنید.",
-    missing: "نرخ تأییدشده موجود نیست. پیش از ثبت، همین‌جا آن را وارد کنید.",
-    unavailable: "نرخ بررسی نشد. پیش از ثبت دوباره کوشش کنید.",
-    restricted: "پیش از ثبت این معامله، مدیر باید نرخ را نشر کند. پیش‌نویس شما در همین صفحه می‌ماند.",
-    buy: "نرخ خرید صرافی",
-    sell: "نرخ فروش صرافی",
-    effective: "زمان اجرا",
-    expiry: "پایان اعتبار",
-    required: "برای ادامه نرخ را حل کنید",
+    title: "نرخ همین معامله",
+    loading: "نرخ صرافی را می‌بینیم…",
+    current: "نرخ آماده است",
+    stale: "این نرخ کهنه شده است. نرخ تازه را همین‌جا بنویسید.",
+    missing: "هنوز نرخ نیست. نرخ خرید و فروش را همین‌جا بنویسید.",
+    unavailable: "نرخ پیدا نشد. دوباره کوشش کنید.",
+    restricted: "مدیر باید نرخ را ثبت کند. فورم شما در همین صفحه می‌ماند.",
+    buy: "نرخ خرید",
+    sell: "نرخ فروش",
+    effective: "از این وقت",
+    expiry: "تا این وقت",
+    required: "نرخ خرید و فروش را بنویسید",
+    foreign: "اسعار",
+    local: "افغانی",
+    details: "وقت و جزئیات نرخ",
   },
   "ps-AF": {
     title: "حسابي نرخ",
@@ -51,6 +57,9 @@ const copy = {
     effective: "د پلي کېدو وخت",
     expiry: "د پای وخت",
     required: "د دوام لپاره نرخ حل کړئ",
+    foreign: "اسعار",
+    local: "افغانۍ",
+    details: "د نرخ وخت او جزیات",
   },
 } as const;
 
@@ -149,18 +158,32 @@ export function InlineRateResolver({
   return (
     <section className={`rate-governance inline-rate-resolver ${needsResolution ? "needs-attention" : ""}`} aria-label={text.title}>
       <div className="applied-rate-row">
-        <span><strong>{text.title}</strong><small dir="ltr">{normalizedCurrency} → AFN</small></span>
+        <strong>{text.title}</strong>
         {!loading && !needsResolution ? <b className="positive">✓ {text.current}</b> : null}
       </div>
       {loading ? <p role="status">{text.loading}</p> : null}
       {!loading && error ? <p role="alert">{text.unavailable}</p> : null}
       {!loading && !error && context ? (
-        <div className="inline-rate-context">
-          <span><small>{text.buy}</small><b dir="ltr">{context.buy_rate ?? "—"}</b></span>
-          <span><small>{text.sell}</small><b dir="ltr">{context.sell_rate ?? "—"}</b></span>
-          {context.effective_from ? <span><small>{text.effective}</small><b>{new Date(context.effective_from).toLocaleString(language)}</b></span> : null}
-          {context.expires_at ? <span><small>{text.expiry}</small><b>{new Date(context.expires_at).toLocaleString(language)}</b></span> : null}
-        </div>
+        <>
+          <div className="inline-rate-bridge" dir="ltr">
+            <span className="inline-rate-currency"><small dir={language === "en" ? "ltr" : "rtl"}>{text.foreign}</small><b>{normalizedCurrency}</b></span>
+            <div className="inline-rate-values">
+              <span><small dir={language === "en" ? "ltr" : "rtl"}>{text.buy}</small><b>{context.buy_rate ?? "—"}</b></span>
+              <span><small dir={language === "en" ? "ltr" : "rtl"}>{text.sell}</small><b>{context.sell_rate ?? "—"}</b></span>
+            </div>
+            <span className="inline-rate-arrow" aria-hidden="true">→</span>
+            <span className="inline-rate-currency"><small dir={language === "en" ? "ltr" : "rtl"}>{text.local}</small><b>AFN</b></span>
+          </div>
+          {context.effective_from || context.expires_at ? (
+            <details className="inline-rate-details">
+              <summary>{text.details}</summary>
+              <div className="inline-rate-context">
+                {context.effective_from ? <span><small>{text.effective}</small><b>{new Date(context.effective_from).toLocaleString(language)}</b></span> : null}
+                {context.expires_at ? <span><small>{text.expiry}</small><b>{new Date(context.expires_at).toLocaleString(language)}</b></span> : null}
+              </div>
+            </details>
+          ) : null}
+        </>
       ) : null}
       {!loading && needsResolution ? <p role="alert">{context?.stale ? text.stale : context?.missing ? text.missing : text.unavailable}</p> : null}
       {!loading && needsResolution && !canPublish ? <p className="calm-empty">{text.restricted}</p> : null}

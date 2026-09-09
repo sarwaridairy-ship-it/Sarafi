@@ -5,7 +5,7 @@ import { buildDailyReportHtml, buildThermalReceiptHtml, buildXlsxReport } from "
 describe("Excel report rendering", () => {
   it("creates a real Open XML workbook with localized headers and escaped values", () => {
     const workbook = buildXlsxReport({
-      rows: [{ entryId: "A<&>1", occurredAt: "2026-09-03", type: "خرید ارز", branchId: "شعبه مرکزی", status: "posted", realizedProfit: "250.00" }],
+      rows: [{ entryId: "A<&>1", occurredAt: "2026-09-03", type: "خرید اسعار", branchId: "شعبه مرکزی", status: "posted", realizedProfit: "250.00" }],
       businessName: "صرافی کابل",
       reportName: "گزارش روزانه",
       generatedAt: "2026-09-03T12:00:00.000Z",
@@ -77,7 +77,7 @@ describe("thermal receipt rendering", () => {
       {
         businessName: "صرافی <آزمایشی>",
         reference: "TEST-1000",
-        type: "خرید ارز",
+        type: "خرید اسعار",
         amount: "70250.00",
         currency: "AFN",
         rate: "70.25",

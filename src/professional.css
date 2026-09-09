@@ -2561,6 +2561,7 @@ td {
 
 .transaction-inline-form { display:grid; justify-content:center; width:100%; padding:0 0 28px; background:transparent; }
 .transaction-page-form { width:min(720px,100%); max-height:none; margin:0 auto; border:0; border-radius:0; box-shadow:none; }
+.transaction-page-form.trade-entry-form { width:min(900px,100%); max-width:900px; }
 .transaction-inline-form .close { display:none; }
 .transaction-back { max-width: 230px; text-align: end; }
 .transaction-detail-page { display:grid; gap:24px; }
@@ -2612,6 +2613,24 @@ td {
 .trade-mode-switch { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin:0 0 16px; padding:4px; border:1px solid #d8e1dd; border-radius:11px; background:#f3f5f2; }
 .trade-mode-switch button { min-height:39px; padding:7px; border:0; border-radius:8px; color:#586b70; background:transparent; font:750 11px var(--font-sans); cursor:pointer; }
 .trade-mode-switch button.active { color:#fff; background:#0d756c; box-shadow:0 4px 12px rgba(13,117,108,.16); }
+.exchange-entry-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(210px,.9fr) minmax(0,1fr); align-items:stretch; gap:10px; margin-bottom:14px; }
+.financial-task-form .exchange-money-card,
+.financial-task-form .exchange-rate-card { min-width:0; min-height:168px; margin:0; padding:14px; border:1px solid #d6e1dc; border-radius:13px; background:#fff; box-shadow:0 6px 18px rgba(16,52,49,.04); }
+.financial-task-form .exchange-money-card { grid-template-rows:auto 1fr auto; }
+.exchange-money-card input { width:100%; border:0; border-bottom:1px solid #d6e1dc; border-radius:0; padding:2px 0; color:#103f3a; background:transparent; font-size:clamp(20px,2.4vw,28px); font-weight:800; text-align:center; }
+.exchange-money-card select { width:100%; min-height:38px; border-color:#d9e2de; background:#f5f8f6; font-weight:800; text-align:center; }
+.exchange-card-label { color:#526b69; font-size:12px; font-weight:800; }
+.financial-task-form .exchange-rate-card { display:grid; align-content:start; gap:9px; color:#163d3b; background:#edf7f3; }
+.financial-task-form .rate-input-shell { display:grid; grid-template-columns:auto minmax(64px,1fr) auto; align-items:center; gap:6px; margin:0; padding:7px; border:1px solid #9fc8b7; border-radius:10px; background:#fff; }
+.rate-input-shell small { color:#496763; font-size:10px; font-weight:800; white-space:nowrap; }
+.rate-input-shell input { width:100%; min-height:42px; padding:0 5px; border:0; color:#0c5d52; background:transparent; font-size:20px; font-weight:850; text-align:center; }
+.exchange-rate-card > small { min-height:30px; color:#2e6b5e; font-size:10px; line-height:1.4; text-align:center; }
+.exchange-rate-card > .rate-warning { color:#9a5a17; }
+.exchange-rate-card .text-button { justify-self:center; min-height:30px; padding:3px 7px; font-size:10px; }
+.trade-quick-fields { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(170px,.65fr); gap:10px; }
+.transaction-plain-direction { margin:0 0 16px; padding:12px 14px; border-inline-start:4px solid #247f68; border-radius:9px; color:#17483f; background:#eef8f4; font-weight:800; }
+.transaction-plain-direction.money-out { border-inline-start-color:#b0782c; color:#714b19; background:#fff8e9; }
+.debt-direction-help { margin:-6px 0 18px; color:#526b69; font-size:13px; }
 .trade-optional-fields { margin:-2px 0 4px; border:1px solid #dde5e1; border-radius:10px; background:#fafbf9; }
 .trade-optional-fields > summary { padding:10px 12px; color:#50656a; font-size:10px; font-weight:750; cursor:pointer; }
 .trade-optional-fields[open] > summary { border-bottom:1px solid #e1e7e4; }
@@ -2620,9 +2639,11 @@ td {
 .trade-account-flow { margin-bottom:14px; }
 .rate-box { border-radius:9px; }
 .rate-box .rate-warning { margin-inline-start:auto; color:#9a5a17; font-weight:800; }
-.rate-governance { display:grid; gap:12px; margin:-8px 0 20px; padding:15px; border:1px solid #d8e1dd; border-radius:10px; background:#fbfcfa; }
+.rate-box.exchange-rate-card .rate-warning { margin-inline-start:0; }
+.rate-governance { display:grid; gap:12px; margin:0 0 20px; padding:15px; border:1px solid #d8e1dd; border-radius:10px; background:#fbfcfa; }
 .rate-governance.needs-attention { border-color:#dfb879; background:#fffaf0; }
 .rate-governance > small,.rate-governance > p { margin:0; color:#62726f; font-size:11px; line-height:1.55; }
+.exchange-rate-governance > summary { min-height:36px; color:#315e57; cursor:pointer; font-size:12px; font-weight:800; }
 .rate-governance .choice-row { display:flex; flex-direction:row; align-items:center; gap:10px; margin:0; color:#263e43; font-weight:750; }
 .rate-governance .choice-row input { flex:0 0 auto; width:18px; min-height:18px; margin:0; }
 .rate-governance textarea { min-height:74px; resize:vertical; }
@@ -2645,6 +2666,21 @@ td {
 .auth-language-switcher button { min-height:34px; }
 
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline:3px solid rgba(200,154,72,.45); outline-offset:2px; }
+
+@media (max-width:700px) {
+  .exchange-entry-row { grid-template-columns:minmax(0,1fr) minmax(116px,1.12fr) minmax(0,1fr); gap:6px; }
+  .financial-task-form .exchange-money-card,
+  .financial-task-form .exchange-rate-card { min-height:150px; padding:9px 7px; }
+  .exchange-money-card input { font-size:18px; }
+  .exchange-money-card select { min-height:36px; padding-inline:4px; font-size:11px; }
+  .exchange-card-label { font-size:10px; }
+  .financial-task-form .rate-input-shell { grid-template-columns:auto minmax(36px,1fr) auto; gap:2px; padding:5px 3px; }
+  .rate-input-shell small { font-size:8px; }
+  .rate-input-shell input { min-height:38px; padding:0 2px; font-size:16px; }
+  .financial-task-form .exchange-rate-card .rate-input-shell { grid-template-columns:minmax(0,1fr); padding-inline:5px; }
+  .financial-task-form .exchange-rate-card .rate-input-shell small { display:none; }
+  .trade-quick-fields { grid-template-columns:1fr; gap:0; }
+}
 
 @media (max-width:1050px) {
   .dashboard-welcome { grid-template-columns:1fr; }

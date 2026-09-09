@@ -200,8 +200,8 @@ const helpGuides = {
     ["آغاز کار صرافی", "مالک صرافی را می‌سازد، نام شعبه و صندوق اصلی را می‌نویسد، اسعار را انتخاب و سپس پول موجود آغاز کار را ثبت می‌کند."],
     ["پول آغاز کار", "این بخش را تنها برای پولی استفاده کنید که پیش از سرافی در صرافی موجود بود. جای واقعی پول و مبلغ همان اسعار را بنویسید؛ این پول عاید یا مفاد نیست."],
     ["خرید، فروش یا تبادله", "نوع معامله، دو اسعار، مشتری، مبلغ، نرخ و صندوق را انتخاب کنید. پیش از ثبت، پول ورودی و خروجی را یک‌بار بررسی کنید."],
-    ["طلب، بدهی و پرداخت", "قرض را زیر نام شخص درست ثبت و مشخص کنید چه کسی بدهکار است. هر پرداخت مبلغ باقی‌مانده را کم می‌کند و در صورت‌حساب شخص می‌ماند."],
-    ["انتقال، عاید و مصرف", "همیشه حساب واقعی مبدأ و مقصد را انتخاب کنید. انتقال پول را داخل صرافی جابه‌جا می‌کند؛ عاید و مصرف دلیل تغییر پول را ثبت می‌کند."],
+    ["طلب، قرض و پول آن", "قرض را زیر نام شخص درست ثبت کنید و روشن بسازید مردم به ما قرضدار اند یا ما به مردم. هر پولی که می‌گیریم یا می‌دهیم، مبلغ باقی را کم می‌کند."],
+    ["انتقال، عاید و مصرف", "همیشه حساب واقعی آغاز و پایان را انتخاب کنید. انتقال، پول را داخل صرافی جابه‌جا می‌کند؛ عاید و مصرف دلیل تغییر پول را ثبت می‌کند."],
     ["بستن صندوق", "هر اسعار را بشمارید، با مبلغ سرافی مقایسه و دلیل هر تفاوت را بنویسید. مدیر یا مالک تفاوت را بررسی می‌کند."],
     ["اصلاح معامله", "در معاملات، ثبت اصلی را باز و با دلیل روشن درخواست برگشت بدهید. سرافی هر دو ثبت را برای بررسی نگه می‌دارد."],
     ["افزودن کارمند", "مالک دعوت‌نامه می‌سازد و وظیفه، شعبه و صندوق را تعیین می‌کند. کارمند لینک را باز و با حساب خودش وارد می‌شود."],
@@ -1474,7 +1474,7 @@ function App() {
       return;
     }
     if (operationCurrency !== "AFN" && !operationRateReady) {
-      setToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
+      setToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
       return;
     }
     const incoming = [
@@ -1628,7 +1628,7 @@ function App() {
       return;
     }
     if (openingCurrency !== "AFN" && !openingRateReady) {
-      setToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
+      setToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
       return;
     }
     const result = await recordOpeningBalance({
@@ -1841,6 +1841,16 @@ function App() {
       BANK_DEPOSIT: u("bankDeposit"),
       BANK_WITHDRAWAL: u("bankWithdrawal"),
     })[kind];
+  const operationReceivesMoney = Boolean(operationKind && [
+    "RECEIVE_MONEY",
+    "RECORD_INCOME",
+    "OWNER_INVESTMENT",
+  ].includes(operationKind));
+  const operationPaysMoney = Boolean(operationKind && [
+    "PAY_MONEY",
+    "RECORD_EXPENSE",
+    "OWNER_WITHDRAWAL",
+  ].includes(operationKind));
   const shopTradeRate = tradeSide === "BUY_FX" ? rate : sellRate;
   const exchangeSourceValuationRate =
     exchangeSourceRatePublication?.sell_rate || sellRate;
@@ -1876,10 +1886,15 @@ function App() {
         publish: "Publish this as the new shop rate",
         continueStale: "Continue with the current old rate",
         approval: "If this rate is outside the allowed difference, it will be sent for approval and your draft will stay open.",
+        custom: "Rate for this customer",
+        useShop: "Use shop rate",
+        feeAfn: "Commission (AFN)",
+        noteOptional: "Add a note (optional)",
+        exchangeBasis: "How this cross-rate is calculated",
       }
     : language === "fa-AF"
       ? {
-          noRate: "برای این ارز نرخ دکان نشر نشده است.",
+          noRate: "برای این اسعار نرخ صرافی ثبت نشده است.",
           stale: "این نرخ دکان بیشتر از ۲۴ ساعت قدیمی است.",
           current: "نرخ فعلی دکان",
           useDifferent: "برای این معامله نرخ متفاوت استفاده شود",
@@ -1889,6 +1904,11 @@ function App() {
           publish: "این نرخ به‌عنوان نرخ جدید دکان نشر شود",
           continueStale: "با نرخ فعلی قدیمی ادامه داده شود",
           approval: "اگر نرخ بیرون از تفاوت مجاز باشد، برای تأیید فرستاده می‌شود و پیش‌نویس باز می‌ماند.",
+          custom: "نرخ همین مشتری",
+          useShop: "گذاشتن نرخ صرافی",
+          feeAfn: "کمیشن (AFN)",
+          noteOptional: "یادداشت (اختیاری)",
+          exchangeBasis: "این نرخ چگونه حساب شده؟",
         }
       : {
           noRate: "د دې اسعارو لپاره د دوکان نرخ نه دی خپور شوی.",
@@ -1901,7 +1921,41 @@ function App() {
           publish: "دا د دوکان د نوي نرخ په توګه خپور کړئ",
           continueStale: "له اوسني زاړه نرخ سره دوام ورکړئ",
           approval: "که نرخ له اجازه شوې توپیر څخه بهر وي، د تایید لپاره لېږل کېږي او مسوده خلاصه پاتې کېږي.",
+          custom: "د همدې پېرېدونکي نرخ",
+          useShop: "د صرافۍ نرخ وکاروئ",
+          feeAfn: "کمېشن (AFN)",
+          noteOptional: "یادښت (اختیاري)",
+          exchangeBasis: "دا نرخ څنګه حساب شوی؟",
         };
+  const tradeRateTargetCurrency = tradeSide === "EXCHANGE_FX" ? tradeReceiveCurrency : "AFN";
+  const displayedTradeRate = tradeSide === "EXCHANGE_FX"
+    ? (rateOverrideEnabled ? tradeExchangeRate : impliedExchangeRate)
+    : (rateOverrideEnabled ? rateOverride : shopTradeRate);
+  const tradeRateMissing = rateContext.missing || (tradeSide === "EXCHANGE_FX" && tradeReceiveRateContext.missing);
+  const tradeRateStale = rateContext.stale || (tradeSide === "EXCHANGE_FX" && tradeReceiveRateContext.stale);
+  const tradeRateStatus = rateOverrideEnabled
+    ? rateWorkflowCopy.custom
+    : tradeRateMissing
+      ? rateWorkflowCopy.noRate
+      : tradeRateStale
+        ? rateWorkflowCopy.stale
+        : rateWorkflowCopy.current;
+  const changeDisplayedTradeRate = (next: string) => {
+    setRateOverrideEnabled(true);
+    if (tradeSide === "EXCHANGE_FX") setTradeExchangeRate(next);
+    else setRateOverride(next);
+    setAllowStaleRate(false);
+    setPublishRate(false);
+    setTradeReviewing(false);
+  };
+  const restoreApprovedTradeRate = () => {
+    setRateOverrideEnabled(false);
+    setRateOverride("");
+    setTradeExchangeRate("");
+    setRateOverrideReason("");
+    setPublishRate(false);
+    setTradeReviewing(false);
+  };
   let tradePreview: ReturnType<typeof deriveTradeAmounts> | null = null;
   try {
     if (amount && tradeSide === "EXCHANGE_FX" && effectiveTradeRate && exchangeSourceValuationRate && exchangeTargetValuationRate)
@@ -2392,7 +2446,7 @@ function App() {
             </section>
           ) : null}
           <form
-            className="financial-task-form transaction-page-form"
+            className="financial-task-form transaction-page-form trade-entry-form"
             onSubmit={addTrade}
             aria-labelledby="trade-dialog-title"
           >
@@ -2446,9 +2500,11 @@ function App() {
               className="trade-fields"
               disabled={tradeReviewing || tradeBusy}
             >
-              <div className="form-grid">
-                <label>
-                  {tradeSide === "BUY_FX" ? t("buyAmount") : t("sellAmount")}
+              <div className="exchange-entry-row" dir="ltr">
+                <label className="exchange-money-card">
+                  <span className="exchange-card-label" dir={isRtl(language) ? "rtl" : "ltr"}>
+                    {tradeSide === "BUY_FX" ? t("buyAmount") : t("sellAmount")}
+                  </span>
                   <input
                     required
                     min="0.01"
@@ -2457,9 +2513,11 @@ function App() {
                     value={amount}
                     onChange={(event) => setAmount(event.target.value)}
                     placeholder="0.00"
+                    aria-label={`${tradeSide === "BUY_FX" ? t("buyAmount") : t("sellAmount")} ${tradeCurrency}`}
                     autoFocus
                   />
                   <select
+                    aria-label={t("currency")}
                     value={tradeCurrency}
                     onChange={(event) => {
                       const nextCurrency = event.target.value;
@@ -2471,8 +2529,11 @@ function App() {
                       setSellRate("");
                       setTradeExchangeRate("");
                       setRateOverrideEnabled(false);
+                      setRateOverride("");
+                      setRateOverrideReason("");
                       setExchangeSourceRatePublication(undefined);
                       setExchangeTargetRatePublication(undefined);
+                      setTradeReviewing(false);
                     }}
                   >
                     {tradeCurrencies.map((currency) => (
@@ -2480,8 +2541,35 @@ function App() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  {tradeSide === "BUY_FX" ? t("sellAmount") : t("buyAmount")}
+
+                <div className="rate-box exchange-rate-card">
+                  <span className="exchange-card-label" dir={isRtl(language) ? "rtl" : "ltr"}>{t("exchangeRate")}</span>
+                  <label className="rate-input-shell">
+                    <small>1 {tradeCurrency} =</small>
+                    <input
+                      required
+                      min="0.000001"
+                      step="any"
+                      inputMode="decimal"
+                      value={displayedTradeRate}
+                      onChange={(event) => changeDisplayedTradeRate(event.target.value)}
+                      placeholder="0.00"
+                      aria-label={rateWorkflowCopy.newRate}
+                    />
+                    <small>{tradeRateTargetCurrency}</small>
+                  </label>
+                  <small className={!rateOverrideEnabled && (tradeRateMissing || tradeRateStale) ? "rate-warning" : "positive"} dir={isRtl(language) ? "rtl" : "ltr"}>
+                    {tradeRateStatus}
+                  </small>
+                  {rateOverrideEnabled && (shopTradeRate || impliedExchangeRate) ? (
+                    <button type="button" className="text-button" onClick={restoreApprovedTradeRate}>{rateWorkflowCopy.useShop}</button>
+                  ) : null}
+                </div>
+
+                <label className="exchange-money-card">
+                  <span className="exchange-card-label" dir={isRtl(language) ? "rtl" : "ltr"}>
+                    {tradeSide === "BUY_FX" ? t("sellAmount") : t("buyAmount")}
+                  </span>
                   <input
                     value={
                       tradeSide === "BUY_FX"
@@ -2494,14 +2582,17 @@ function App() {
                     }
                     readOnly
                     placeholder="0.00"
+                    aria-label={`${tradeSide === "BUY_FX" ? t("sellAmount") : t("buyAmount")} ${tradeRateTargetCurrency}`}
                   />
                   {tradeSide === "EXCHANGE_FX" ? (
                     <select
+                      aria-label={t("currency")}
                       value={tradeReceiveCurrency}
                       onChange={(event) => {
                         setTradeReceiveCurrency(event.target.value);
                         setTradeExchangeRate("");
                         setRateOverrideEnabled(false);
+                        setRateOverrideReason("");
                         setExchangeTargetRatePublication(undefined);
                         setTradeReviewing(false);
                       }}
@@ -2513,14 +2604,13 @@ function App() {
                         ))}
                     </select>
                   ) : (
-                    <select value="AFN" disabled>
+                    <select aria-label={t("currency")} value="AFN" disabled>
                       <option>AFN</option>
                     </select>
                   )}
                 </label>
               </div>
-              <details className="trade-optional-fields">
-                <summary>{t("customer")} · {t("fee")} · {t("note")}</summary>
+              <div className="trade-quick-fields">
                 <label>
                   {t("customer")}
                   <select
@@ -2535,45 +2625,36 @@ function App() {
                     ))}
                   </select>
                 </label>
-                <div className="form-grid">
-                  <label>
-                    {t("fee")}
-                    <input
-                      min="0"
-                      step="0.01"
-                      value={tradeFee}
-                      onChange={(event) => setTradeFee(event.target.value)}
-                      placeholder="0.00"
-                    />
-                  </label>
-                  <label>
-                    {t("note")}
-                    <input
-                      value={tradeNote}
-                      onChange={(event) => setTradeNote(event.target.value)}
-                      placeholder={t("optionalNote")}
-                    />
-                  </label>
-                </div>
+                <label>
+                  {rateWorkflowCopy.feeAfn}
+                  <input
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={tradeFee}
+                    onChange={(event) => setTradeFee(event.target.value)}
+                    placeholder="0.00"
+                  />
+                </label>
+              </div>
+              <details className="trade-optional-fields">
+                <summary>{rateWorkflowCopy.noteOptional}</summary>
+                <label>
+                  {t("note")}
+                  <input
+                    value={tradeNote}
+                    onChange={(event) => setTradeNote(event.target.value)}
+                    placeholder={t("optionalNote")}
+                  />
+                </label>
               </details>
             </fieldset>
-            <div className="rate-box">
-              <span>{t("exchangeRate")}</span>
-              {tradeSide === "EXCHANGE_FX" ? (
-                <b dir="ltr">1 {tradeCurrency} = {effectiveTradeRate || "—"} {tradeReceiveCurrency}</b>
-              ) : (
-                <>
-                  <b dir="ltr">
-                    1 {tradeCurrency} = {effectiveTradeRate || "—"} AFN
-                  </b>
-                  <span className={rateContext.missing || rateContext.stale ? "rate-warning" : "positive"}>
-                    {rateContext.missing ? rateWorkflowCopy.noRate : rateContext.stale ? rateWorkflowCopy.stale : rateWorkflowCopy.current}
-                  </span>
-                </>
-              )}
-            </div>
             {tradeSide === "EXCHANGE_FX" && (
-              <section className={`rate-governance exchange-rate-governance ${!exchangeSourceRateReady || !exchangeTargetRateReady ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
+              <details
+                className={`rate-governance exchange-rate-governance ${!exchangeSourceRateReady || !exchangeTargetRateReady ? "needs-attention" : ""}`}
+                open={!exchangeSourceRateReady || !exchangeTargetRateReady || rateOverrideEnabled}
+              >
+                <summary>{rateWorkflowCopy.exchangeBasis}</summary>
                 <InlineRateResolver
                   organizationId={organizationId}
                   branchId={branchId}
@@ -2594,33 +2675,8 @@ function App() {
                   onChange={(value) => { setExchangeTargetRatePublication(value); setTradeReviewing(false); }}
                   onReadyChange={setExchangeTargetRateReady}
                 />
-                {impliedExchangeRate ? (
-                  <div className="applied-rate-row">
-                    <span>{language === "en" ? "Implied cross-rate" : language === "fa-AF" ? "نرخ متقاطع محاسبه‌شده" : "محاسبه شوی متقابل نرخ"}</span>
-                    <b dir="ltr">1 {tradeCurrency} = {impliedExchangeRate} {tradeReceiveCurrency}</b>
-                  </div>
-                ) : null}
-                <label className="choice-row">
-                  <input
-                    type="checkbox"
-                    checked={rateOverrideEnabled}
-                    disabled={tradeReviewing || tradeBusy || !exchangeSourceRateReady || !exchangeTargetRateReady}
-                    onChange={(event) => {
-                      setRateOverrideEnabled(event.target.checked);
-                      setTradeExchangeRate(event.target.checked ? impliedExchangeRate : "");
-                      setRateOverrideReason("");
-                      setTradeReviewing(false);
-                    }}
-                  />
-                  <span>{rateWorkflowCopy.useDifferent}</span>
-                </label>
                 {rateOverrideEnabled ? (
                   <>
-                    <label className="cross-rate-input">
-                      <span dir="ltr">1 {tradeCurrency} =</span>
-                      <input required min="0.000001" step="any" inputMode="decimal" value={tradeExchangeRate} onChange={(event) => { setTradeExchangeRate(event.target.value); setTradeReviewing(false); }} placeholder={impliedExchangeRate || "0.00"} aria-label={t("exchangeRate")} />
-                      <b dir="ltr">{tradeReceiveCurrency}</b>
-                    </label>
                     <label>
                       {rateWorkflowCopy.reason}
                       <textarea required minLength={3} value={rateOverrideReason} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverrideReason(event.target.value); setTradeReviewing(false); }} placeholder={rateWorkflowCopy.reasonPlaceholder} />
@@ -2628,28 +2684,20 @@ function App() {
                     {capability("approval.request") && !capability("approval.decide") ? <p>{rateWorkflowCopy.approval}</p> : null}
                   </>
                 ) : null}
-              </section>
+              </details>
             )}
-            {tradeSide !== "EXCHANGE_FX" && (
+            {tradeSide !== "EXCHANGE_FX" && (rateContext.missing || rateContext.stale || rateOverrideEnabled || allowStaleRate) && (
               <section className={`rate-governance ${rateContext.missing || rateContext.stale ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
-                <div className="applied-rate-row">
-                  <small>{rateContext.effectiveFrom ? new Date(rateContext.effectiveFrom).toLocaleString(language) : (rateContext.missing ? rateWorkflowCopy.noRate : rateWorkflowCopy.current)}</small>
-                  {!rateOverrideEnabled && <button type="button" className="text-button" onClick={() => { setRateOverrideEnabled(true); setAllowStaleRate(false); setPublishRate(false); setTradeReviewing(false); }}>{language === "en" ? "Change" : language === "fa-AF" ? "تغییر" : "بدلول"}</button>}
-                </div>
+                {rateContext.effectiveFrom ? (
+                  <div className="applied-rate-row">
+                    <small>{new Date(rateContext.effectiveFrom).toLocaleString(language)}</small>
+                  </div>
+                ) : null}
                 {rateContext.stale && !rateContext.missing && (
                   <label className="choice-row">
                     <input type="checkbox" checked={allowStaleRate} disabled={tradeReviewing || tradeBusy || rateOverrideEnabled} onChange={(event) => { setAllowStaleRate(event.target.checked); setTradeReviewing(false); }} />
                     <span>{rateWorkflowCopy.continueStale}</span>
                   </label>
-                )}
-                {(rateOverrideEnabled || rateContext.missing) && (
-                  <>
-                    <label>
-                      {rateWorkflowCopy.newRate}
-                      <input required min="0.000001" step="any" inputMode="decimal" value={rateOverride} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverrideEnabled(true); setRateOverride(event.target.value); setTradeReviewing(false); }} placeholder="0.00" />
-                    </label>
-                    {!rateContext.missing && <button type="button" className="text-button" onClick={() => { setRateOverrideEnabled(false); setRateOverride(""); setRateOverrideReason(""); setPublishRate(false); }}>{language === "en" ? "Use shop rate" : language === "fa-AF" ? "استفاده نرخ صرافی" : "د صرافۍ نرخ وکاروئ"}</button>}
-                  </>
                 )}
                 {(rateOverrideEnabled || allowStaleRate) && (
                   <label>
@@ -2754,6 +2802,13 @@ function App() {
                 {language === "en" ? "Back to transaction types" : language === "fa-AF" ? "بازگشت به نوع معامله" : "د معاملې ډولونو ته ستنېدل"}
               </button>
             </div>
+            {operationReceivesMoney || operationPaysMoney ? (
+              <p className={`transaction-plain-direction ${operationReceivesMoney ? "money-in" : "money-out"}`}>
+                {operationReceivesMoney
+                  ? (language === "en" ? "We receive this money." : language === "fa-AF" ? "ما این پول را می‌گیریم." : "موږ دا پیسې اخلو.")
+                  : (language === "en" ? "We pay this money." : language === "fa-AF" ? "ما این پول را می‌دهیم." : "موږ دا پیسې ورکوو.")}
+              </p>
+            ) : null}
             <label>
               {t("amount")}
               <input
@@ -2928,7 +2983,11 @@ function App() {
               />
             </label>
             <button className="primary-action full" type="submit" disabled={operationCurrency !== "AFN" && !operationRateReady}>
-              {t("postOperation")} <span>→</span>
+              {operationReceivesMoney
+                ? (language === "en" ? "Save money received" : language === "fa-AF" ? "گرفتن پول را ثبت کنید" : "د پیسو اخیستل ثبت کړئ")
+                : operationPaysMoney
+                  ? (language === "en" ? "Save money paid" : language === "fa-AF" ? "دادن پول را ثبت کنید" : "د پیسو ورکول ثبت کړئ")
+                  : t("postOperation")} <span>→</span>
             </button>
             <p className="modal-note">{u("shopCheck")}</p>
           </form>
@@ -3729,7 +3788,7 @@ function TeamDevicesView({
   ];
 
   const assignableActions: Array<{ capability: Capability; label: string }> = [
-    { capability: "financial.post.fx", label: language === "en" ? "Currency exchange" : language === "fa-AF" ? "خرید و فروش ارز" : "د اسعارو راکړه ورکړه" },
+    { capability: "financial.post.fx", label: language === "en" ? "Currency exchange" : language === "fa-AF" ? "خرید و فروش اسعار" : "د اسعارو راکړه ورکړه" },
     { capability: "financial.post.money", label: language === "en" ? "Money in, out & movement" : language === "fa-AF" ? "ورود، خروج و انتقال پول" : "د پیسو ترلاسه کول، ورکول او لېږد" },
     { capability: "financial.post.debt", label: language === "en" ? "Debts & settlements" : language === "fa-AF" ? "قرض‌ها و تصفیه" : "پورونه او تصفیه" },
     { capability: "financial.post.hawala", label: language === "en" ? "Hawala operations" : language === "fa-AF" ? "عملیات حواله" : "د حوالې چارې" },
@@ -5888,7 +5947,7 @@ function RatesView({
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const advanced = ({
     en: { group: "Customer rate group", tolerance: "Allowed rate difference", newGroup: "Add rate group", groupName: "Group name", groupCode: "Short code", valuation: "Reporting valuation rates", valuationIntro: "Record one AFN value for each enabled currency. This changes reports only; it never changes cash or old trades.", valuationName: "Valuation name", saveValuation: "Save valuation set", latestValuations: "Saved valuation sets" },
-    "fa-AF": { group: "گروه نرخ مشتری", tolerance: "فاصله مجاز نرخ", newGroup: "افزودن گروه نرخ", groupName: "نام گروه", groupCode: "کود کوتاه", valuation: "نرخ‌های ارزش‌گذاری گزارش", valuationIntro: "برای هر ارز فعال یک ارزش افغانی ثبت کنید. این کار فقط گزارش را تغییر می‌دهد و پول یا معاملات گذشته را تغییر نمی‌دهد.", valuationName: "نام ارزش‌گذاری", saveValuation: "ذخیره نرخ‌های ارزش‌گذاری", latestValuations: "ارزش‌گذاری‌های ذخیره‌شده" },
+    "fa-AF": { group: "گروه نرخ مشتری", tolerance: "فاصله مجاز نرخ", newGroup: "افزودن گروه نرخ", groupName: "نام گروه", groupCode: "کود کوتاه", valuation: "نرخ‌های ارزش‌گذاری گزارش", valuationIntro: "برای هر اسعار فعال یک ارزش افغانی ثبت کنید. این کار فقط گزارش را تغییر می‌دهد و پول یا معاملات گذشته را تغییر نمی‌دهد.", valuationName: "نام ارزش‌گذاری", saveValuation: "ذخیره نرخ‌های ارزش‌گذاری", latestValuations: "ارزش‌گذاری‌های ذخیره‌شده" },
     "ps-AF": { group: "د پېرودونکي د نرخ ډله", tolerance: "د نرخ اجازه شوې فاصله", newGroup: "د نرخ ډله زیاتول", groupName: "د ډلې نوم", groupCode: "لنډ کوډ", valuation: "د راپور د ارزونې نرخونه", valuationIntro: "د هر فعال اسعار لپاره په افغانۍ ارزښت ولیکئ. دا یوازې راپور بدلوي؛ نغدې او پخوانۍ معاملې نه بدلوي.", valuationName: "د ارزونې نوم", saveValuation: "د ارزونې نرخونه ساتل", latestValuations: "ساتل شوې ارزونې" },
   } as const)[language];
   const [history, setHistory] = useState<RateHistoryRecord[]>([]);
@@ -6172,7 +6231,7 @@ function ReportsView({
     "fa-AF": {
       choose: "یک گزارش کامل را انتخاب کنید", rows: "ردیف گزارش", previous: "قبلی", next: "بعدی", empty: "در این گزارش و تاریخ، معلوماتی پیدا نشد.",
       reports: [
-        ["daily_transactions", "معاملات روزانه"], ["transaction_journal", "دفتر معاملات"], ["cash_movement", "رفت‌وآمد پول"], ["branch_balance", "موجودی شعبه‌ها"], ["currency_position", "موجودی ارزها"], ["fx_profit", "مفاد خرید و فروش ارز"], ["commission", "عاید کمیشن"], ["expenses", "مصارف"], ["profit_loss", "مفاد و ضرر"], ["balance_sheet", "دارایی و بدهی"], ["trial_balance", "تراز حساب‌ها"], ["receivables", "طلب‌های ما"], ["payables", "قرض‌های ما"], ["aging", "قرض‌های دیرشده"], ["counterparty_statement", "صورت‌حساب شخص"], ["owner_capital", "سرمایه مالک"], ["employee_activity", "کارهای کارمندان"], ["reversals", "معاملات برگشتی"], ["reconciliation", "بستن صندوق"], ["rate_history", "تاریخچه نرخ"], ["security_activity", "تاریخچه امنیت"], ["hawala", "حواله‌ها"],
+        ["daily_transactions", "معاملات روزانه"], ["transaction_journal", "دفتر معاملات"], ["cash_movement", "رفت‌وآمد پول"], ["branch_balance", "موجودی شعبه‌ها"], ["currency_position", "موجودی اسعار"], ["fx_profit", "مفاد خرید و فروش اسعار"], ["commission", "عاید کمیشن"], ["expenses", "مصارف"], ["profit_loss", "مفاد و ضرر"], ["balance_sheet", "دارایی و قرض"], ["trial_balance", "تراز حساب‌ها"], ["receivables", "طلب‌های ما"], ["payables", "قرض‌های ما"], ["aging", "قرض‌های دیرشده"], ["counterparty_statement", "صورت‌حساب شخص"], ["owner_capital", "سرمایه مالک"], ["employee_activity", "کارهای کارمندان"], ["reversals", "معاملات برگشتی"], ["reconciliation", "بستن صندوق"], ["rate_history", "تاریخچه نرخ"], ["security_activity", "تاریخچه امنیت"], ["hawala", "حواله‌ها"],
       ],
     },
     "ps-AF": {
@@ -6189,12 +6248,12 @@ function ReportsView({
   }[language]) as Record<string, string>;
   const reportTerms = ({
     en: { buy_fx: "Buy currency", sell_fx: "Sell currency", exchange_fx: "Exchange currencies", opening_balance: "Opening money", record_expense: "Expense", record_income: "Income", owner_investment: "Owner investment", owner_withdrawal: "Owner withdrawal", bank_deposit: "Bank deposit", bank_withdrawal: "Bank withdrawal", transfer_cash: "Transfer money", receive_money: "Receive money", pay_money: "Pay money", reversal: "Reversal", cash_variance_adjustment: "Cash difference adjustment", asset: "Asset", liability: "Liability", equity: "Owner capital", income: "Income", expense: "Expense", branch_balance: "Branch balance", carrying_value: "Carrying value in AFN", financial_actions: "Financial actions", overdue: "Overdue", receivable: "They owe us", payable: "We owe them", no_due_date: "No due date", organization_controls_updated: "Business settings changed", cashbox_close_approved: "Cashbox close approved" },
-    "fa-AF": { buy_fx: "خرید ارز", sell_fx: "فروش ارز", exchange_fx: "تبدیل دو ارز", opening_balance: "پول آغاز کار", record_expense: "مصرف", record_income: "عاید", owner_investment: "افزایش سرمایه مالک", owner_withdrawal: "برداشت مالک", bank_deposit: "واریز به بانک", bank_withdrawal: "برداشت از بانک", transfer_cash: "انتقال پول", receive_money: "دریافت پول", pay_money: "پرداخت پول", reversal: "معامله برگشتی", cash_variance_adjustment: "اصلاح تفاوت صندوق", asset: "دارایی", liability: "بدهی", equity: "سرمایه مالک", income: "عاید", expense: "مصرف", branch_balance: "موجودی شعبه", carrying_value: "ارزش ثبت‌شده به افغانی", financial_actions: "کارهای مالی", overdue: "وقت‌گذشته", receivable: "به ما بدهکار است", payable: "ما بدهکار استیم", no_due_date: "بدون تاریخ پرداخت", organization_controls_updated: "تنظیمات صرافی تغییر کرد", cashbox_close_approved: "بستن صندوق تأیید شد" },
+    "fa-AF": { buy_fx: "خرید اسعار", sell_fx: "فروش اسعار", exchange_fx: "تبدیل دو اسعار", opening_balance: "پول آغاز کار", record_expense: "مصرف", record_income: "عاید", owner_investment: "افزایش سرمایه مالک", owner_withdrawal: "برداشت مالک", bank_deposit: "گذاشتن پول در بانک", bank_withdrawal: "گرفتن پول از بانک", transfer_cash: "انتقال پول", receive_money: "پول گرفتن", pay_money: "پول دادن", reversal: "معامله برگشتی", cash_variance_adjustment: "اصلاح تفاوت صندوق", asset: "دارایی", liability: "قرض", equity: "سرمایه مالک", income: "عاید", expense: "مصرف", branch_balance: "موجودی شعبه", carrying_value: "ارزش ثبت‌شده به افغانی", financial_actions: "کارهای مالی", overdue: "وقت‌گذشته", receivable: "مردم به ما قرضدار اند", payable: "ما به مردم قرضدار استیم", no_due_date: "بدون تاریخ", organization_controls_updated: "تنظیمات صرافی تغییر کرد", cashbox_close_approved: "بستن صندوق تأیید شد" },
     "ps-AF": { buy_fx: "د اسعارو پېرل", sell_fx: "د اسعارو پلورل", exchange_fx: "د دوو اسعارو بدلول", opening_balance: "پیل پیسې", record_expense: "لګښت", record_income: "عاید", owner_investment: "د مالک پانګه زیاتول", owner_withdrawal: "د مالک ایستل", bank_deposit: "بانک ته جمع", bank_withdrawal: "له بانک څخه ایستل", transfer_cash: "د پیسو لېږد", receive_money: "پیسې اخیستل", pay_money: "پیسې ورکول", reversal: "بېرته ګرځول شوې معامله", cash_variance_adjustment: "د صندوق د توپیر سمون", asset: "شتمني", liability: "پور", equity: "د مالک پانګه", income: "عاید", expense: "لګښت", branch_balance: "د څانګې پیسې", carrying_value: "په افغانۍ ثبت شوی ارزښت", financial_actions: "مالي کارونه", overdue: "وخت تېر", receivable: "موږ ته پوروړی دی", payable: "موږ پوروړي یو", no_due_date: "د ورکړې نېټه نه لري", organization_controls_updated: "د صرافۍ امستنې بدلې شوې", cashbox_close_approved: "د صندوق تړل تایید شول" },
   }[language]) as Record<string, string>;
   const hawalaReportTerms = ({
     en: { hawala_outgoing_funded: "Outgoing Hawala funded", hawala_incoming_recorded: "Incoming Hawala recorded", hawala_beneficiary_paid: "Hawala beneficiary paid", hawala_partner_paid: "Hawala partner paid", hawala_partner_collected: "Hawala partner collection" },
-    "fa-AF": { hawala_outgoing_funded: "وجه حواله ارسالی دریافت شد", hawala_incoming_recorded: "حواله ورودی ثبت شد", hawala_beneficiary_paid: "حواله به مستفید پرداخت شد", hawala_partner_paid: "به همکار حواله پرداخت شد", hawala_partner_collected: "از همکار حواله دریافت شد" },
+    "fa-AF": { hawala_outgoing_funded: "پول حواله فرستادنی گرفته شد", hawala_incoming_recorded: "حواله آمدنی ثبت شد", hawala_beneficiary_paid: "پول حواله به گیرنده داده شد", hawala_partner_paid: "پول به همکار حواله داده شد", hawala_partner_collected: "پول از همکار حواله گرفته شد" },
     "ps-AF": { hawala_outgoing_funded: "د وتونکې حوالې پیسې واخیستل شوې", hawala_incoming_recorded: "راتلونکې حواله ثبت شوه", hawala_beneficiary_paid: "د حوالې ګټه اخیستونکي ته ورکړه وشوه", hawala_partner_paid: "د حوالې همکار ته ورکړه وشوه", hawala_partner_collected: "له حوالې همکار څخه پیسې واخیستل شوې" },
   }[language]) as Record<string, string>;
   const localReportTerm = (value: string) => hawalaReportTerms[value] ?? reportTerms[value] ?? value.replaceAll("_", " ");
@@ -6380,7 +6439,7 @@ function ReportsView({
     })();
   };
   const reportGroups = [
-    { title: language === "en" ? "Daily operations" : language === "fa-AF" ? "عملیات روزانه" : "ورځني کارونه", codes: ["daily_transactions", "transaction_journal", "cash_movement", "branch_balance", "currency_position"] },
+    { title: language === "en" ? "Daily operations" : language === "fa-AF" ? "کارهای روزانه" : "ورځني کارونه", codes: ["daily_transactions", "transaction_journal", "cash_movement", "branch_balance", "currency_position"] },
     { title: language === "en" ? "Finance & performance" : language === "fa-AF" ? "مالی و عملکرد" : "مالي او فعالیت", codes: ["fx_profit", "commission", "expenses", "profit_loss", "balance_sheet", "trial_balance", "owner_capital"] },
     { title: language === "en" ? "Customers, debt & Hawala" : language === "fa-AF" ? "مشتریان، قرض و حواله" : "پېرودونکي، پور او حواله", codes: ["receivables", "payables", "aging", "counterparty_statement", "hawala"] },
     { title: language === "en" ? "Control & audit" : language === "fa-AF" ? "کنترول و بررسی" : "کنټرول او پلټنه", codes: ["employee_activity", "reversals", "reconciliation", "rate_history", "security_activity"] },
@@ -6627,7 +6686,7 @@ function DebtsView({
       return;
     }
     if (currency !== "AFN" && !createRateReady) {
-      onToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
+      onToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
       return;
     }
     setBusy(true);
@@ -6663,8 +6722,8 @@ function DebtsView({
         rate: "—",
         occurredAt: new Date().toISOString(),
         typeLabel: direction === "receivable"
-          ? (language === "en" ? "Receivable debt" : language === "fa-AF" ? "طلب دریافتنی" : "اخیستونکی پور")
-          : (language === "en" ? "Payable debt" : language === "fa-AF" ? "بدهی پرداختنی" : "ورکول کېدونکی پور"),
+          ? (language === "en" ? "They owe us" : language === "fa-AF" ? "طلب ما از مردم" : "اخیستونکی پور")
+          : (language === "en" ? "We owe them" : language === "fa-AF" ? "قرض ما به مردم" : "ورکول کېدونکی پور"),
         repeatPath: pathname,
         flowRows: [
           { label: u("person"), value: people.find((person) => person.id === counterpartyId)?.display_name ?? "—" },
@@ -6684,7 +6743,7 @@ function DebtsView({
       return;
     }
     if (selectedDebt.currency_code !== "AFN" && !settlementRateReady) {
-      onToast(language === "en" ? "Resolve the accounting rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ حسابداری را در همین صفحه حل کنید." : "له ثبت مخکې حسابي نرخ په همدې پاڼه کې حل کړئ.");
+      onToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
       return;
     }
     setBusy(true);
@@ -6719,7 +6778,9 @@ function DebtsView({
         receivedCurrency: selectedDebt.currency_code,
         rate: "—",
         occurredAt: new Date().toISOString(),
-        typeLabel: language === "en" ? "Debt settlement" : language === "fa-AF" ? "تصفیه قرض" : "د پور تصفیه",
+        typeLabel: selectedDebt.direction === "receivable"
+          ? (language === "en" ? "Debt money received" : language === "fa-AF" ? "گرفتن پول طلب" : "د پور پیسې اخیستل")
+          : (language === "en" ? "Debt money paid" : language === "fa-AF" ? "دادن پول قرض" : "د پور پیسې ورکول"),
         repeatPath: pathname,
         flowRows: [
           { label: u("person"), value: selectedDebt.counterparty_name ?? people.find((person) => person.id === selectedDebt.counterparty_id)?.display_name ?? "—" },
@@ -6747,9 +6808,14 @@ function DebtsView({
           {u("backHome")} →
         </button>
       </div>
-      {!selectedDebt && journey === "settle" && <header className="family-heading"><AppIcon name="debt" /><div><h2>{language === "en" ? "Settle a debt" : language === "fa-AF" ? "تصفیه قرض" : "پور تصفیه کول"}</h2><p>{language === "en" ? "Choose an open debt to record its payment." : language === "fa-AF" ? "یک قرض باز را برای ثبت پرداخت انتخاب کنید." : "د ورکړې د ثبت لپاره یو پرانیستی پور وټاکئ."}</p></div></header>}
+      {!selectedDebt && journey === "settle" && <header className="family-heading"><AppIcon name="debt" /><div><h2>{language === "en" ? "Record debt money" : language === "fa-AF" ? "گرفتن یا دادن پول قرض" : "پور تصفیه کول"}</h2><p>{language === "en" ? "Choose an open debt, then record the money received or paid." : language === "fa-AF" ? "یک طلب یا قرض باقی را انتخاب کنید؛ بعد پولی را که گرفتید یا دادید ثبت کنید." : "د ورکړې د ثبت لپاره یو پرانیستی پور وټاکئ."}</p></div></header>}
       {(journey === "receivable" || journey === "payable") && <form className="financial-task-form" onSubmit={submit}>
         <h2 className="debt-direction-summary"><AppIcon name="debt" />{direction === "receivable" ? u("theyOweUs") : u("weOweThem")}</h2>
+        <p className="debt-direction-help">
+          {direction === "receivable"
+            ? (language === "en" ? "This person must pay this money to us." : language === "fa-AF" ? "این شخص باید این پول را به ما بدهد." : "دا کس باید دا پیسې موږ ته راکړي.")
+            : (language === "en" ? "We must pay this money to this person." : language === "fa-AF" ? "ما باید این پول را به این شخص بدهیم." : "موږ باید دا پیسې دې کس ته ورکړو.")}
+        </p>
         <label>
           {u("person")}
           <select
@@ -6818,7 +6884,11 @@ function DebtsView({
           <span><small>{u("destinationAccount")}</small><b>{direction === "payable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
         </div>
         <button className="primary-action full" type="submit" disabled={busy || (currency !== "AFN" && !createRateReady)}>
-          {busy ? u("posting") : u("postDebt")} <span>→</span>
+          {busy
+            ? u("posting")
+            : direction === "receivable"
+              ? (language === "en" ? "Save: they owe us" : language === "fa-AF" ? "ثبت: این شخص به ما قرضدار است" : "ثبت: دا کس موږ ته پوروړی دی")
+              : (language === "en" ? "Save: we owe them" : language === "fa-AF" ? "ثبت: ما به این شخص قرضدار استیم" : "ثبت: موږ دې کس ته پوروړي یو")} <span>→</span>
         </button>
       </form>}
       {!selectedDebt && (journey === "list" || journey === "settle") && <div className="balance-list debt-selection-list">
@@ -6866,7 +6936,11 @@ function DebtsView({
           <div className="modal-head">
             <div>
               <p className="kicker">{u("settleDebt")}</p>
-              <h2>{language === "en" ? "Settle a debt" : language === "fa-AF" ? "تصفیه قرض" : "پور تصفیه کول"}</h2>
+              <h2>
+                {selectedDebt.direction === "receivable"
+                  ? (language === "en" ? "Receive debt money" : language === "fa-AF" ? "گرفتن پول طلب" : "د پور پیسې اخیستل")
+                  : (language === "en" ? "Pay debt money" : language === "fa-AF" ? "دادن پول قرض" : "د پور پیسې ورکول")}
+              </h2>
             </div>
             <button
               type="button"
@@ -6886,7 +6960,9 @@ function DebtsView({
             {selectedDebt.currency_code}
           </p>
           <label>
-            {u("paymentAmount")}
+            {selectedDebt.direction === "receivable"
+              ? (language === "en" ? "Amount we received" : language === "fa-AF" ? "مبلغی که گرفتیم" : "هغه مبلغ چې مو واخیست")
+              : (language === "en" ? "Amount we paid" : language === "fa-AF" ? "مبلغی که دادیم" : "هغه مبلغ چې مو ورکړ")}
             <input
               required
               min="0.01"
@@ -6897,7 +6973,9 @@ function DebtsView({
             />
           </label>
           <label>
-            {selectedDebt.direction === "receivable" ? u("destinationAccount") : u("sourceAccount")}
+            {selectedDebt.direction === "receivable"
+              ? (language === "en" ? "Where did the money arrive?" : language === "fa-AF" ? "پول به کدام حساب آمد؟" : "پیسې کوم حساب ته راغلې؟")
+              : (language === "en" ? "Where did the money leave from?" : language === "fa-AF" ? "پول از کدام حساب رفت؟" : "پیسې له کوم حسابه ووتلې؟")}
             <select required value={settlementAccountId} onChange={(event) => setSettlementAccountId(event.target.value)}>
               <option value="">{u("chooseMoneyAccount")}</option>
               {accounts.map((account) => (
@@ -6916,7 +6994,11 @@ function DebtsView({
             onReadyChange={setSettlementRateReady}
           />
           <button className="primary-action full" type="submit" disabled={busy || (selectedDebt.currency_code !== "AFN" && !settlementRateReady)}>
-            {busy ? u("settling") : u("savePayment")} <span>→</span>
+            {busy
+              ? u("settling")
+              : selectedDebt.direction === "receivable"
+                ? (language === "en" ? "Save money received" : language === "fa-AF" ? "گرفتن پول را ثبت کنید" : "د پیسو اخیستل ثبت کړئ")
+                : (language === "en" ? "Save money paid" : language === "fa-AF" ? "دادن پول را ثبت کنید" : "د پیسو ورکول ثبت کړئ")} <span>→</span>
           </button>
         </form>
       )}
@@ -7313,7 +7395,7 @@ function HawalaView({
     if (!organizationId || !payoutMatch || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2) return;
     if (organizationId === "inspection") {
       const preview = { id: "inspection-incoming", beneficiary_name: payoutMatch.beneficiary_name, origin_location: "—", destination_location: payoutMatch.destination_location, currency_code: payoutMatch.currency_code, amount: payoutMatch.amount, fee: "0", reference_code: payoutMatch.reference_code, status: "paid", created_at: new Date().toISOString(), direction: "incoming" as const, payout_journal_entry_id: "inspection-payout-entry" };
-      await completeHawalaTransfer(preview, language === "en" ? "Hawala payout" : language === "fa-AF" ? "پرداخت حواله" : "د حوالې ورکړه", pathname, preview.payout_journal_entry_id);
+      await completeHawalaTransfer(preview, language === "en" ? "Hawala payout" : language === "fa-AF" ? "دادن پول حواله" : "د حوالې ورکړه", pathname, preview.payout_journal_entry_id);
       setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
       return;
     }
@@ -7335,18 +7417,18 @@ function HawalaView({
         const resumed = await resumeApprovedHawalaPayout(approval.data.id);
         setTransitionBusy(null);
         if (resumed.error) { onToast(localizedFinancialError(language, resumed.error, u("couldNotSave"))); return; }
-        if (resumed.data) await completeHawalaTransfer(resumed.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "پرداخت حواله" : "د حوالې ورکړه", pathname);
+        if (resumed.data) await completeHawalaTransfer(resumed.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "دادن پول حواله" : "د حوالې ورکړه", pathname);
         setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
         setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
         return;
       }
       setTransitionBusy(null);
-      onToast(approval.error ? localizedFinancialError(language, approval.error, u("couldNotSave")) : (language === "en" ? "Approval requested. The verified payout draft is preserved." : language === "fa-AF" ? "درخواست تأیید فرستاده شد و پیش‌نویس پرداخت محفوظ است." : "د تایید غوښتنه ولېږل شوه او د ورکړې مسوده خوندي ده."));
+      onToast(approval.error ? localizedFinancialError(language, approval.error, u("couldNotSave")) : (language === "en" ? "Approval requested. The verified payout draft is preserved." : language === "fa-AF" ? "درخواست تأیید فرستاده شد و فورم دادن پول محفوظ است." : "د تایید غوښتنه ولېږل شوه او د ورکړې مسوده خوندي ده."));
       return;
     }
     setTransitionBusy(null);
     if (result.error) { onToast(localizedFinancialError(language, result.error, u("couldNotSave"))); return; }
-    if (result.data) await completeHawalaTransfer(result.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "پرداخت حواله" : "د حوالې ورکړه", pathname);
+    if (result.data) await completeHawalaTransfer(result.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "دادن پول حواله" : "د حوالې ورکړه", pathname);
     setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
     setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
   };
@@ -7436,7 +7518,7 @@ function HawalaView({
           <label>{language === "en" ? "Partner" : language === "fa-AF" ? "همکار" : "همکار"}<select required disabled={!canSettle} value={settlementPartnerId} onChange={(event) => { const next = event.target.value; setSelectedSettlementPartnerId(next); if (next) onRoute(`${workspaceRoot(organizationId)}/hawala/partners/${next}/settle`); }}><option value="">{language === "en" ? "Search or choose a partner" : language === "fa-AF" ? "همکار را جستجو یا انتخاب کنید" : "همکار ولټوئ یا وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}</select></label>
           <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
           <div className="partner-statement-summary"><span>{language === "en" ? "Open statement lines" : language === "fa-AF" ? "اقلام باز صورت‌حساب" : "د حساب پرانیستي توکي"}</span><strong>{statement?.lines.filter((line) => line.status === "open" || line.status === "partial").length ?? 0}</strong></div>
-          {statement?.totals.map((total) => <div className="partner-statement-summary" key={total.currency_code}><span>{total.currency_code} · {language === "en" ? "Payable / Receivable / Net" : language === "fa-AF" ? "پرداختنی / دریافتنی / خالص" : "ورکول / اخیستل / خالص"}</span><strong dir="ltr">{total.payable} / {total.receivable} / {total.net_receivable}</strong></div>)}
+          {statement?.totals.map((total) => <div className="partner-statement-summary" key={total.currency_code}><span>{total.currency_code} · {language === "en" ? "Payable / Receivable / Net" : language === "fa-AF" ? "دادنی / گرفتنی / باقی" : "ورکول / اخیستل / خالص"}</span><strong dir="ltr">{total.payable} / {total.receivable} / {total.net_receivable}</strong></div>)}
           <div className="balance-list hawala-payout-list">
             {statement?.lines.filter((line) => line.status === "open" || line.status === "partial").map((line) => <article className="balance-row" key={line.id}><span className="balance-name"><b>{line.beneficiary_name}</b><small><bdi>{line.reference_code}</bdi> · {line.direction} · {line.currency_code}</small></span><input className="hawala-settlement-amount" aria-label={t("amount")} required min="0.01" max={line.remaining_amount} step="0.01" value={settlementAmounts[line.id] ?? ""} onChange={(event) => setSettlementAmounts((current) => ({ ...current, [line.id]: event.target.value }))} placeholder={line.remaining_amount} inputMode="decimal" /><button className="primary-action" type="button" disabled={!canSettle || transitionBusy === line.id || !settlementPartnerId || !moneyAccountId} onClick={() => void settleLine(line)}>{transitionBusy === line.id ? "…" : (language === "en" ? "Settle" : language === "fa-AF" ? "تصفیه" : "تصفیه")}</button></article>)}
             {settlementPartnerId && !statement?.lines.some((line) => line.status === "open" || line.status === "partial") ? <div className="empty-live">{u("noHawala")}</div> : null}
@@ -7456,7 +7538,7 @@ function HawalaView({
         </section>
       ) : hawalaMode === "payout" ? (
         <section className="financial-task-form hawala-payout-form" aria-labelledby="hawala-payout-title">
-          <h2 id="hawala-payout-title">{language === "en" ? "Pay by reference code" : language === "fa-AF" ? "پرداخت با رمز حواله" : "د حوالې په کوډ ورکړه"}</h2>
+          <h2 id="hawala-payout-title">{language === "en" ? "Pay by reference code" : language === "fa-AF" ? "دادن پول با رمز حواله" : "د حوالې په کوډ ورکړه"}</h2>
           <p>{language === "en" ? "Enter the customer’s code. SARAFI shows only the matching ready transfer." : language === "fa-AF" ? "رمز مشتری را وارد کنید. سرافی فقط حواله آماده و مطابق را نشان می‌دهد." : "د پېرېدونکي کوډ ولیکئ. سرافي یوازې برابره چمتو حواله ښيي."}</p>
           <form className="hawala-code-search" onSubmit={searchPayout}><label>{t("referenceCode")}<input autoFocus required dir="ltr" value={payoutCode} onChange={(event) => { setPayoutCode(event.target.value.trimStart()); setPayoutMatch(null); }} placeholder={u("uniqueReference")} /></label><button className="secondary-action" type="submit" disabled={searchBusy || payoutCode.trim().length < 4}>{searchBusy ? "…" : (language === "en" ? "Find transfer" : language === "fa-AF" ? "یافتن حواله" : "حواله ومومئ")}</button></form>
           <ReferenceScanner language={language} onDetected={(reference) => { setPayoutCode(reference); setPayoutMatch(null); }} />
@@ -7466,7 +7548,7 @@ function HawalaView({
             <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
             <label>{language === "en" ? "Checked identity reference" : language === "fa-AF" ? "مرجع هویت بررسی‌شده" : "کتل شوې پېژندپاڼې مرجع"}<input required value={identityReference} onChange={(event) => setIdentityReference(event.target.value)} placeholder={language === "en" ? "Document type and last digits" : language === "fa-AF" ? "نوع سند و رقم‌های آخر" : "د سند ډول او وروستۍ شمېرې"} /></label>
             <label className="inline-check"><input type="checkbox" checked={identityConfirmed} onChange={(event) => setIdentityConfirmed(event.target.checked)} />{language === "en" ? "I matched the recipient to the transfer beneficiary." : language === "fa-AF" ? "هویت گیرنده را با مستفید حواله مطابقت دادم." : "ما د اخیستونکي هویت د حوالې له ګټه اخیستونکي سره برابر کړ."}</label>
-            <button className="primary-action full" type="button" disabled={transitionBusy === payoutMatch.reference_code || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2} onClick={() => void confirmPayout()}>{transitionBusy === payoutMatch.reference_code ? "…" : (language === "en" ? "Confirm payout" : language === "fa-AF" ? "تأیید پرداخت" : "ورکړه تایید کړئ")}</button>
+            <button className="primary-action full" type="button" disabled={transitionBusy === payoutMatch.reference_code || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2} onClick={() => void confirmPayout()}>{transitionBusy === payoutMatch.reference_code ? "…" : (language === "en" ? "Confirm payout" : language === "fa-AF" ? "دادن پول را تأیید کنید" : "ورکړه تایید کړئ")}</button>
           </> : null}
         </section>
       ) : hawalaMode === "send" || hawalaMode === "incoming" ? (

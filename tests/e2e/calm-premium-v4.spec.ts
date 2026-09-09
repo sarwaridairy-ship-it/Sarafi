@@ -51,12 +51,12 @@ test.describe("calm premium v4 objective acceptance", () => {
     });
   }
 
-  test("normal FX keeps advanced rate fields hidden until Change", async ({ page }) => {
+  test("normal FX keeps the rate open and reveals governance only after editing", async ({ page }) => {
     await page.goto(`${workspace}/transactions/new/fx/buy?role=owner`);
     const form = page.locator(".financial-task-form");
     await expect(form).toBeVisible();
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
-    await form.getByRole("button", { name: "Change" }).click();
+    await form.getByRole("textbox", { name: "Transaction rate" }).fill("70.50");
     await expect(form.getByRole("textbox", { name: /reason/i })).toBeVisible();
   });
 
@@ -162,13 +162,16 @@ test.describe("calm premium v4 objective acceptance", () => {
       await page.addInitScript((value) => localStorage.setItem("sarafi-language", value), language);
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.goto(`${workspace}/home?role=owner`);
+      await page.locator(".calm-home").waitFor();
       await page.screenshot({ path: path.join(output, `${label}-desktop-owner-home.png`), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(`${workspace}/transactions/new?role=cashier`);
+      await page.locator(".transaction-family-grid").waitFor();
       await page.screenshot({ path: path.join(output, `${label}-mobile-390-transactions.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(`${workspace}/home?role=owner`);
+    await page.locator(".calm-home").waitFor();
     await page.screenshot({ path: path.join(output, "pashto-mobile-360-owner-home.png"), fullPage: true });
   });
 });

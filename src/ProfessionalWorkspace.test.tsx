@@ -35,7 +35,7 @@ describe("professional transaction receipt", () => {
   });
 
   it.each([
-    ["fa-AF", "معامله ثبت شد", "صرافی می‌پردازد"],
+    ["fa-AF", "معامله ثبت شد", "صرافی می‌دهد"],
     ["ps-AF", "معامله ثبت شوه", "صرافي ورکوي"],
   ] as const)("renders local receipt language for %s", (language, title, gives) => {
     const markup = renderToStaticMarkup(

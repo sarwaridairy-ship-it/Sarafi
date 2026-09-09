@@ -45,7 +45,7 @@ const locales = [
     home: "خانه",
     moneyNav: "پول من",
     moneyHeading: "پول من کجا است؟",
-    peopleNav: "مشتریان و قرض‌ها",
+    peopleNav: "مشتریان، طلب و قرض",
     peopleHeading: "مشتریان و صرافان",
     transactionsNav: "معاملات",
     transactionsHeading: "تاریخچه معاملات",
@@ -62,10 +62,10 @@ const locales = [
     importHeading: "مرکز انتقال معلومات",
     hawala: "حواله",
     manageHeading: "مدیریت سرافی",
-    buy: "خرید ارز",
-    buyHeading: /خرید ارز/,
+    buy: "خرید اسعار",
+    buyHeading: /خرید اسعار/,
     give: /ما می‌دهیم/,
-    receive: /ما دریافت می‌کنیم/,
+    receive: /ما می‌گیریم/,
   },
   {
     code: "ps-AF",
@@ -172,6 +172,35 @@ test("switching from Dari to Pashto replaces, rather than mixes, translated copy
   await expect(
     page.getByText("خلاصه صرافی شما", { exact: true }),
   ).not.toBeVisible();
+});
+
+test("Afghan Dari transaction forms use short shop wording", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("sarafi-language", "fa-AF"));
+
+  await page.goto("/app/inspection/transactions/new/fx/buy");
+  const exchangeRow = page.locator(".exchange-entry-row");
+  await expect(exchangeRow.getByRole("textbox", { name: "ما می‌گیریم USD" })).toBeVisible();
+  await expect(exchangeRow.getByRole("textbox", { name: "نرخ معامله" })).toHaveValue("70.25");
+  await expect(exchangeRow.getByRole("textbox", { name: "ما می‌دهیم AFN" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "کمیشن (AFN)" })).toBeVisible();
+
+  await page.goto("/app/inspection/transactions/new/money-in/receive");
+  await expect(page.getByRole("heading", { name: "پول گرفتن" })).toBeVisible();
+  await expect(page.getByText("ما این پول را می‌گیریم.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /گرفتن پول را ثبت کنید/ })).toBeVisible();
+
+  await page.goto("/app/inspection/transactions/new/money-out/pay");
+  await expect(page.getByRole("heading", { name: "پول دادن" })).toBeVisible();
+  await expect(page.getByText("ما این پول را می‌دهیم.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /دادن پول را ثبت کنید/ })).toBeVisible();
+
+  await page.goto("/app/inspection/transactions/new/debt/receivable");
+  await expect(page.getByRole("heading", { name: "مردم به ما قرضدار اند" })).toBeVisible();
+  await expect(page.getByText("این شخص باید این پول را به ما بدهد.", { exact: true })).toBeVisible();
+
+  await page.goto("/app/inspection/transactions/new/debt/payable");
+  await expect(page.getByRole("heading", { name: "ما به مردم قرضدار استیم" })).toBeVisible();
+  await expect(page.getByText("ما باید این پول را به این شخص بدهیم.", { exact: true })).toBeVisible();
 });
 
 for (const locale of [

@@ -12,6 +12,6 @@ describe('Afghanistan localization resources', () => {
     expect(isRtl('en')).toBe(false)
     expect(isRtl('fa-AF')).toBe(true)
     expect(isRtl('ps-AF')).toBe(true)
-    expect(translate('fa-AF', 'buy')).toBe('خرید ارز')
+    expect(translate('fa-AF', 'buy')).toBe('خرید اسعار')
   })
 })
