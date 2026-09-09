@@ -6,7 +6,9 @@ Branch: `codex/whole-web-v6`
 
 Starting commit: `1e50c13fc72a632447e279d8f9071d318e4d00c8`
 
-Decision: **source implementation complete for the locally controllable v6 scope; production promotion remains NO-SHIP until the independent evidence gates below pass.**
+Verified implementation commit: `e1964ad171199b891c7662f7ae01534d46ef31ff`
+
+Decision: **source implementation and the reviewed production-database forward migrations are complete for the controllable v6 scope; web production promotion remains NO-SHIP until the independent evidence gates below pass.**
 
 This record deliberately separates implementation evidence from production evidence. Inspection mode, static contract tests, screenshots, generated audit prose, and a successful local build are not substitutes for authenticated database tests, human acceptance, or an exact deployment attestation.
 
@@ -23,13 +25,18 @@ This record deliberately separates implementation evidence from production evide
 - Membership, device, approval, Hawala, compliance, and security-audit updates refresh an open workspace. Failed RPCs and route/render failures emit redacted release/route/code/correlation telemetry without copying transaction payloads or user-entered error details. The PWA has local icons, locale-aware manifests, and a non-interruptive update lifecycle.
 - CI retains browser/PDF/screenshot/trace evidence. Production promotion now requires all seven authenticated role fixtures, a zero-to-latest database reset/lint, a signed tag bound to the exact SHA, backup/restore evidence, Dari/Pashto UAT, physical printer acceptance, legal/provider approval, and an immutable deployment attestation.
 
-## Forward migrations
+## Forward migrations and linked database state
 
-1. `20260908104812_whole_web_v6_reporting_compliance_evidence.sql`
-2. `20260908110000_hawala_event_types_v6.sql`
-3. `20260908110100_hawala_evidence_v6.sql`
+1. `20260906190754_calm_premium_capabilities.sql`
+2. `20260907121336_whole_project_integrity_v5.sql`
+3. `20260908104812_whole_web_v6_reporting_compliance_evidence.sql`
+4. `20260908110000_hawala_event_types_v6.sql`
+5. `20260908110100_hawala_evidence_v6.sql`
+6. `20260908221542_repair_hawala_v6_function_lint.sql`
 
-The files parse as PostgreSQL and are forward-only. They have not been applied to a local or remote Supabase database in this environment because no Postgres/Docker/Podman runtime or linked Supabase credentials are available. Do not infer semantic migration success from parsing alone.
+All six forward migrations were transaction-preflighted against the linked schema and applied to linked Supabase project `vbvwuqzqtcorassvotke` on 2026-09-09. A post-apply forward repair corrects the two Hawala function findings reported by database lint without rewriting migration history. The linked migration list is current, a subsequent dry run reports no pending migration, and linked database lint reports no schema errors.
+
+Before application, a sanitized public-schema JSON recovery snapshot and exact ledger invariants were captured outside version control. Post-application reconciliation retained 12 organizations, 192 financial events, 192 journal entries, 439 journal lines, equal base debit and credit totals of `346214812.233108307506`, and ledger hash `49ca3d0e68b99117907acaa78080a0fc`. This is migration and reconciliation evidence, not a provider backup/PITR restore drill.
 
 ## Verification completed in this workspace
 
@@ -37,19 +44,23 @@ The files parse as PostgreSQL and are forward-only. They have not been applied t
 | --- | --- |
 | TypeScript | PASS |
 | Lint | PASS |
-| Unit/static contracts | PASS: 115 passed, 2 environment-dependent skipped |
-| PostgreSQL parse | PASS: all three v6 migrations |
+| Unit/static contracts | PASS: 116 passed, 2 environment-dependent skipped |
+| PostgreSQL transaction preflight | PASS: all six pending forward migrations against the linked schema |
+| Linked Supabase migration application | PASS: all six pending forward migrations applied; remote dry run is current |
+| Linked database lint | PASS: no schema errors after the Hawala repair migration |
+| Live ledger reconciliation | PASS: record counts, exact debit/credit totals and ledger hash unchanged |
 | Production build | PASS: 56.41 KB gzip initial shell + 96.78 KB gzip lazy application route; 23.42 KB gzip total CSS |
 | Repository bundle gate | PASS: 196.9 KB raw initial JavaScript against the 500 KB limit; exports remain lazy |
 | Interactive browser inspection | PASS: six-family entry, exact receivable route, direct Debt settlement, partner-bound Hawala settlement, Hawala scan control, and delegated Business Administrator FX route |
 | Focused Chromium objective bodies | All 17 reached completion with no reported assertion failure; Windows runner cleanup hung, so a clean suite exit is not claimed |
+| Vercel preview | PASS: commit `e1964ad` is Ready and Latest at `sarafi-git-codex-whole-web-v6-sarafi.vercel.app` |
 | Git whitespace validation | PASS |
 
 The immediate workspace JavaScript and CSS budgets remain below the v6 limits of 170 KB and 35 KB gzip. The application route and export implementation are separate lazy-loaded chunks.
 
 ## Evidence still required before any 100%, premium, complete, or production-ready claim
 
-1. Apply every migration from zero in an isolated Supabase project, run database lint, and execute test queries that prove trigger, RPC, RLS, journal, receipt, audit, concurrency, and rollback behavior.
+1. Apply every migration from zero in an isolated Supabase project, run database lint, and execute test queries that prove trigger, RPC, RLS, journal, receipt, audit, concurrency, and rollback behavior. Linked forward application and reconciliation are complete, but they do not replace this clean-room gate.
 2. Run the authenticated security and seven-role browser suites with real disposable Owner, Business Administrator, Manager, Cashier, Accountant, Compliance Officer, and Viewer fixtures. Retain the CI artifacts.
 3. Complete the recorded Afghan participant task study, including the >=90% first-time Buy/Sell selection target and <=25-second trained Cashier target.
 4. Obtain native Afghan Dari and Pashto sign-off for desktop, 390 px mobile, receipts, mixed-direction numbers, and A4 PDF output.
