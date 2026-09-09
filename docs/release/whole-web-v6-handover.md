@@ -53,7 +53,7 @@ Before application, a sanitized public-schema JSON recovery snapshot and exact l
 | Repository bundle gate | PASS: 196.9 KB raw initial JavaScript against the 500 KB limit; exports remain lazy |
 | Interactive browser inspection | PASS: six-family entry, exact receivable route, direct Debt settlement, partner-bound Hawala settlement, Hawala scan control, and delegated Business Administrator FX route |
 | Focused Chromium objective bodies | All 17 reached completion with no reported assertion failure; Windows runner cleanup hung, so a clean suite exit is not claimed |
-| Vercel preview | PASS: commit `e1964ad` is Ready and Latest at `sarafi-git-codex-whole-web-v6-sarafi.vercel.app` |
+| Vercel implementation preview | PASS: commit `e1964ad` is Ready at immutable deployment `sarafi-kq0lhry0g-sarafi.vercel.app` |
 | Git whitespace validation | PASS |
 
 The immediate workspace JavaScript and CSS budgets remain below the v6 limits of 170 KB and 35 KB gzip. The application route and export implementation are separate lazy-loaded chunks.
