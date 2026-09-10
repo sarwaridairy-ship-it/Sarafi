@@ -159,12 +159,25 @@ test.describe("calm premium v4 objective acceptance", () => {
   }
 
   for (const width of [390, 768]) {
-    test(`${width}px transaction form fits without horizontal page scrolling`, async ({ page }) => {
+    test(`${width}px transaction forms and compact tables fit without horizontal scrolling`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`${workspace}/transactions/new/fx/buy?role=owner`);
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      expect(overflow).toBeLessThanOrEqual(1);
-      await expect(page.locator(".exchange-entry-row")).toBeVisible();
+      for (const [path, selector] of [
+        ["/transactions/new/fx/buy?role=owner", ".exchange-entry-row"],
+        ["/transactions/new/money-in/receive?role=owner", ".operation-entry-form"],
+        ["/transactions/new/money-out/expense?role=owner", ".operation-entry-form"],
+        ["/money?role=owner", ".cashbox-only-panel"],
+        ["/control/rates?role=owner", ".market-rate-table"],
+        ["/control/business?role=owner", ".currency-settings-list"],
+      ] as const) {
+        await page.goto(`${workspace}${path}`);
+        await expect(page.locator(selector)).toBeVisible();
+        const layout = await page.evaluate(() => ({
+          documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+        }));
+        expect(layout.documentOverflow, path).toBeLessThanOrEqual(1);
+        expect(layout.bodyOverflow, path).toBeLessThanOrEqual(1);
+      }
     });
   }
 

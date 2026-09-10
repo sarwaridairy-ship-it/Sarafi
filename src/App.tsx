@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Outlet, useLocation, useMatch, useMatches, useNavigate, useParams } from "react-router-dom";
 import type { WorkspaceOutletContext, WorkspaceRouteHandle } from "./app/router";
 import Decimal from "decimal.js";
@@ -12,7 +12,10 @@ import type { InlineRatePublication } from "./domain/commands";
 import { buildCsvReport } from "./domain/reporting";
 import { isRtl, translate, type Language } from "./lib/i18n";
 import { ux } from "./lib/uxCopy";
+import { localCurrencyName } from "./lib/currencyNames";
+import { getMarketReferenceRateBoard } from "./lib/marketReferenceRates";
 import {
+  createOrganizationCashbox,
   getTransactionRateContext,
   getMyResumableApprovalDraft,
   getTransactionDetail,
@@ -352,6 +355,8 @@ type MarketRateRow = {
   buy: string;
   sell: string;
   quotedUnits: number;
+  updatedAt?: string | null;
+  changePercent?: string | null;
 };
 const inspectionCurrencies: CurrencyCatalogRecord[] = [
   ["AFN", "Afghan Afghani", "افغانی", "افغانۍ", "؋"],
@@ -374,11 +379,7 @@ const inspectionCurrencies: CurrencyCatalogRecord[] = [
 }));
 
 function currencyName(language: Language, currency: CurrencyCatalogRecord) {
-  return language === "fa-AF"
-    ? currency.name_dari
-    : language === "ps-AF"
-      ? currency.name_pashto
-      : currency.name_en;
+  return localCurrencyName(language, currency.code, currency);
 }
 
 function inspectionMoneyAccounts(language: Language): MoneyAccountRecord[] {
@@ -2758,7 +2759,7 @@ function App() {
       {routeAuthorized && operationKind && transactionFormActive && (
         <div className="transaction-inline-form">
           <form
-            className="financial-task-form transaction-page-form"
+            className="financial-task-form transaction-page-form operation-entry-form"
             onSubmit={submitOperation}
             aria-labelledby="operation-dialog-title"
           >
@@ -2785,37 +2786,39 @@ function App() {
                   : (language === "en" ? "This money leaves the shop." : language === "fa-AF" ? "این پول از صرافی بیرون می‌شود." : "دا پیسې له صرافۍ وځي.")}
               </p>
             ) : null}
-            <label>
-              {t("amount")}
-              <input
-                required
-                min="0.01"
-                step="0.01"
-                inputMode="decimal"
-                value={operationAmount}
-                onChange={(event) => setOperationAmount(event.target.value)}
-                placeholder="0.00"
-                autoFocus
-              />
-            </label>
-            <label>
-              {t("currency")}
-              <select
-                value={operationCurrency}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setOperationCurrency(next);
-                  setOperationRatePublication(undefined);
-                  setOperationRateReady(next === "AFN");
-                }}
-              >
-                {enabledCurrencies.map((currency) => (
-                  <option key={currency.code} value={currency.code}>
-                    {currency.code} · {currencyName(language, currency)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="operation-primary-grid">
+              <label>
+                {t("amount")}
+                <input
+                  required
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={operationAmount}
+                  onChange={(event) => setOperationAmount(event.target.value)}
+                  placeholder="0.00"
+                  autoFocus
+                />
+              </label>
+              <label>
+                {t("currency")}
+                <select
+                  value={operationCurrency}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setOperationCurrency(next);
+                    setOperationRatePublication(undefined);
+                    setOperationRateReady(next === "AFN");
+                  }}
+                >
+                  {enabledCurrencies.map((currency) => (
+                    <option key={currency.code} value={currency.code}>
+                      {currency.code} · {currencyName(language, currency)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             {operationCurrency !== "AFN" && (
               <p className="modal-note native-valuation-note">
                 {language === "en"
@@ -3287,6 +3290,8 @@ function WorkspaceView({
       <MoneyLocationView
         language={language}
         organizationId={organizationId}
+        branchId={branchId}
+        canManage={canManageMoney}
         activityRefresh={activityRefresh}
         onDashboard={onDashboard}
         onToast={onToast}
@@ -4678,22 +4683,30 @@ function TeamDevicesView({
 function MoneyLocationView({
   language,
   organizationId,
+  branchId,
+  canManage,
   activityRefresh,
   onDashboard,
   onToast,
 }: {
   language: Language;
   organizationId: string | null;
+  branchId: string | null;
+  canManage: boolean;
   activityRefresh: number;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const [loadedAccounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [inspectionAccounts, setInspectionAccounts] = useState<MoneyAccountRecord[]>([]);
   const [loading, setLoading] = useState(organizationId !== "inspection");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newCashboxName, setNewCashboxName] = useState("");
+  const [creating, setCreating] = useState(false);
   const { accountId: routeAccountId = null } = useParams<{ accountId: string }>();
   const accounts = organizationId === "inspection"
-    ? inspectionMoneyAccounts(language)
+    ? [...inspectionMoneyAccounts(language), ...inspectionAccounts]
     : loadedAccounts;
   const cashboxes = accounts.filter((account) => account.account_type === "cashbox");
   const copy = ({
@@ -4703,7 +4716,16 @@ function MoneyLocationView({
       balances: "Cashbox balances",
       balancesIntro: "One clear card for every cashbox.",
       cashbox: "Cashbox",
-      empty: "No cashbox is available yet. Add one in Manage SARAFI → Business & currencies.",
+      add: "Add cashbox",
+      addTitle: "New cashbox",
+      name: "Cashbox name",
+      namePlaceholder: "Example: Counter 2",
+      save: "Create cashbox",
+      cancel: "Cancel",
+      created: "Cashbox created.",
+      failed: "The cashbox could not be created.",
+      branchMissing: "Choose an active branch first.",
+      empty: "No cashbox is available yet. Create the first cashbox here.",
       noMoney: "No money recorded",
       loading: "Loading cashboxes…",
     },
@@ -4713,7 +4735,16 @@ function MoneyLocationView({
       balances: "موجودی صندوق‌ها",
       balancesIntro: "برای هر صندوق یک کارت ساده.",
       cashbox: "صندوق",
-      empty: "هنوز صندوقی موجود نیست. از مدیریت سرافی ← صرافی و اسعار، صندوق بسازید.",
+      add: "افزودن صندوق",
+      addTitle: "صندوق جدید",
+      name: "نام صندوق",
+      namePlaceholder: "مثلاً: صندوق شماره ۲",
+      save: "ساختن صندوق",
+      cancel: "انصراف",
+      created: "صندوق ساخته شد.",
+      failed: "صندوق ساخته نشد.",
+      branchMissing: "نخست یک شعبه فعال انتخاب کنید.",
+      empty: "هنوز صندوقی موجود نیست. نخستین صندوق را همین‌جا بسازید.",
       noMoney: "هنوز پول ثبت نشده",
       loading: "صندوق‌ها بار می‌شود…",
     },
@@ -4723,25 +4754,70 @@ function MoneyLocationView({
       balances: "د صندوقونو پیسې",
       balancesIntro: "د هر صندوق لپاره یو ساده کارت.",
       cashbox: "صندوق",
-      empty: "تر اوسه صندوق نشته. د سرافي اداره ← صرافي او اسعار کې صندوق جوړ کړئ.",
+      add: "صندوق زیاتول",
+      addTitle: "نوی صندوق",
+      name: "د صندوق نوم",
+      namePlaceholder: "بېلګه: دوهم صندوق",
+      save: "صندوق جوړول",
+      cancel: "لغوه",
+      created: "صندوق جوړ شو.",
+      failed: "صندوق جوړ نه شو.",
+      branchMissing: "لومړی فعاله څانګه وټاکئ.",
+      empty: "تر اوسه صندوق نشته. لومړی صندوق همدلته جوړ کړئ.",
       noMoney: "تر اوسه پیسې نه دي ثبت شوې",
       loading: "صندوقونه پورته کېږي…",
     },
   } as const)[language];
 
-  useEffect(() => {
+  const loadAccounts = useCallback(async () => {
     if (!organizationId || organizationId === "inspection") return;
+    const result = await listMoneyAccounts(organizationId);
+    if (result.data) setAccounts(result.data);
+    if (result.error) onToast(ux(language, "couldNotLoad"));
+    setLoading(false);
+  }, [language, onToast, organizationId]);
+
+  useEffect(() => {
     let active = true;
+    if (!organizationId || organizationId === "inspection") return;
     void listMoneyAccounts(organizationId).then((result) => {
       if (!active) return;
       if (result.data) setAccounts(result.data);
       if (result.error) onToast(ux(language, "couldNotLoad"));
       setLoading(false);
     });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [activityRefresh, language, onToast, organizationId]);
+
+  const addCashbox = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = newCashboxName.trim();
+    if (!organizationId || !canManage || name.length < 2) return;
+    if (!branchId && organizationId !== "inspection") {
+      onToast(copy.branchMissing);
+      return;
+    }
+    setCreating(true);
+    if (organizationId === "inspection") {
+      const id = `inspection-cashbox-${Date.now()}`;
+      setInspectionAccounts((current) => [...current, { id, name, account_type: "cashbox", branch_id: "inspection-branch", cashbox_id: id, reference_label: null, active: true, balances: [] }]);
+      setNewCashboxName("");
+      setShowCreate(false);
+      setCreating(false);
+      onToast(copy.created);
+      return;
+    }
+    const result = await createOrganizationCashbox({ organizationId, branchId: branchId!, name });
+    setCreating(false);
+    if (result.error) {
+      onToast(copy.failed);
+      return;
+    }
+    setNewCashboxName("");
+    setShowCreate(false);
+    onToast(copy.created);
+    await loadAccounts();
+  };
 
   return (
     <section className="panel money-workspace">
@@ -4761,7 +4837,13 @@ function MoneyLocationView({
             <h2 id="cashbox-balances-title">{copy.balances}</h2>
             <p>{copy.balancesIntro}</p>
           </div>
+          {canManage ? <button className="primary-action compact-action" type="button" onClick={() => setShowCreate((value) => !value)} aria-expanded={showCreate}>+ {copy.add}</button> : null}
         </div>
+        {canManage && showCreate ? <form className="cashbox-create-form" onSubmit={addCashbox}>
+          <div><b>{copy.addTitle}</b><small>{copy.name}</small></div>
+          <label><span>{copy.name}</span><input required minLength={2} value={newCashboxName} onChange={(event) => setNewCashboxName(event.target.value)} placeholder={copy.namePlaceholder} autoFocus /></label>
+          <div className="cashbox-create-actions"><button className="text-button" type="button" onClick={() => { setShowCreate(false); setNewCashboxName(""); }}>{copy.cancel}</button><button className="primary-action" disabled={creating}>{copy.save}</button></div>
+        </form> : null}
         {loading ? <div className="empty-live">{copy.loading}</div> : null}
         {!loading && cashboxes.length ? (
           <div className="account-card-grid">
@@ -5573,41 +5655,44 @@ function RatesView({
   const copy = ({
     en: {
       title: "Market rates",
-      board: "Shop buy and sell rates",
-      intro: "A simple buy and sell board for today.",
+      board: "Sarai Shahzada AFN rates",
+      intro: "Today’s compact market buy and sell board.",
       market: "Rate board",
-      shop: "My shop",
+      shop: "Sarai Shahzada",
       currency: "Currency",
       refresh: "Refresh",
-      updated: "Updated",
-      unavailable: "The shop rates are temporarily unavailable.",
-      empty: "No shop rate has been saved yet.",
+      updated: "Time",
+      change: "Change",
+      unavailable: "The market rates are temporarily unavailable.",
+      empty: "No market rate is available yet.",
       back: "Back to Home",
     },
     "fa-AF": {
       title: "نرخ‌های بازار",
-      board: "نرخ خرید و فروش صرافی",
-      intro: "جدول ساده خرید و فروش امروز.",
+      board: "نرخ اسعار سرای شهزاده به افغانی",
+      intro: "جدول فشرده خرید و فروش امروز بازار.",
       market: "جدول نرخ",
-      shop: "صرافی من",
+      shop: "سرای شهزاده",
       currency: "اسعار",
       refresh: "تازه‌سازی",
-      updated: "تازه‌شده",
-      unavailable: "نرخ‌های صرافی فعلاً در دسترس نیست.",
-      empty: "هنوز نرخی برای صرافی ذخیره نشده است.",
+      updated: "زمان",
+      change: "تغییر",
+      unavailable: "نرخ‌های بازار فعلاً در دسترس نیست.",
+      empty: "هنوز نرخ بازار موجود نیست.",
       back: "بازگشت به خانه",
     },
     "ps-AF": {
       title: "د بازار نرخونه",
-      board: "د صرافۍ د پېر او پلور نرخونه",
-      intro: "د نن ورځې د پېر او پلور ساده جدول.",
+      board: "په افغانۍ د سرای شهزاده نرخونه",
+      intro: "د نن بازار د پېر او پلور لنډ جدول.",
       market: "د نرخ جدول",
-      shop: "زما صرافي",
+      shop: "سرای شهزاده",
       currency: "اسعار",
       refresh: "تازه کول",
-      updated: "تازه شوی",
-      unavailable: "د صرافۍ نرخونه اوس نه موندل کېږي.",
-      empty: "تر اوسه د صرافۍ نرخ نه دی ساتل شوی.",
+      updated: "وخت",
+      change: "بدلون",
+      unavailable: "د بازار نرخونه اوس نه موندل کېږي.",
+      empty: "تر اوسه د بازار نرخ نشته.",
       back: "کور ته ستنېدل",
     },
   } as const)[language];
@@ -5621,35 +5706,48 @@ function RatesView({
     try {
       if (organizationId === "inspection") {
         setRates([
-          { currency: "USD", buy: "64.25", sell: "64.3", quotedUnits: 1 },
-          { currency: "EUR", buy: "74", sell: "74.2", quotedUnits: 1 },
-          { currency: "GBP", buy: "85.2", sell: "85.5", quotedUnits: 1 },
-          { currency: "IRR", buy: "0.00028", sell: "0.00029", quotedUnits: 1000 },
-          { currency: "PKR", buy: "0.226", sell: "0.227", quotedUnits: 1000 },
-          { currency: "SAR", buy: "17.11", sell: "17.12", quotedUnits: 1 },
-          { currency: "AED", buy: "17.49", sell: "17.51", quotedUnits: 1 },
-          { currency: "CNY", buy: "9.57", sell: "9.58", quotedUnits: 1 },
-          { currency: "KWD", buy: "208", sell: "208", quotedUnits: 1 },
+          { currency: "USD", buy: "64.25", sell: "64.3", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.16%" },
+          { currency: "EUR", buy: "74", sell: "74.2", quotedUnits: 1, updatedAt: "11:50 AM", changePercent: "-0.13%" },
+          { currency: "GBP", buy: "85.2", sell: "85.5", quotedUnits: 1, updatedAt: "12:07 PM", changePercent: "0.00%" },
+          { currency: "IRR", buy: "0.00028", sell: "0.00029", quotedUnits: 1000, updatedAt: "11:50 AM", changePercent: "0.00%" },
+          { currency: "PKR", buy: "0.226", sell: "0.227", quotedUnits: 1000, updatedAt: "11:51 AM", changePercent: "0.22%" },
+          { currency: "SAR", buy: "17.11", sell: "17.12", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.15%" },
+          { currency: "AED", buy: "17.49", sell: "17.51", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.16%" },
+          { currency: "CHF", buy: "79.4", sell: "79.46", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.23%" },
+          { currency: "AUD", buy: "46.36", sell: "46.4", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.22%" },
+          { currency: "CAD", buy: "46.62", sell: "46.66", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "0.09%" },
+          { currency: "RUB", buy: "0.75", sell: "0.75", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "0.85%" },
+          { currency: "DKK", buy: "10", sell: "10.01", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.10%" },
+          { currency: "SEK", buy: "6.7", sell: "6.71", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.05%" },
+          { currency: "NOK", buy: "6.98", sell: "6.99", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "0.51%" },
+          { currency: "TRY", buy: "1.33", sell: "1.33", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.25%" },
+          { currency: "CNY", buy: "9.57", sell: "9.58", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.14%" },
+          { currency: "KWD", buy: "208", sell: "208", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.10%" },
+          { currency: "QAR", buy: "17.66", sell: "17.67", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "0.29%" },
+          { currency: "BHD", buy: "171", sell: "171", quotedUnits: 1, updatedAt: "03:40 PM", changePercent: "-0.04%" },
+          { currency: "JPY", buy: "0.419", sell: "0.419", quotedUnits: 1000, updatedAt: "03:40 PM", changePercent: "0.57%" },
         ]);
         setFetchedAt(new Date().toISOString());
         return;
       }
-      if (!organizationId) throw new Error("Missing organization");
-      const result = await listRateHistory(organizationId);
-      if (result.error) throw new Error(result.error);
-      const seen = new Set<string>();
-      const latest = (result.data ?? []).filter((rate) => {
-        if (rate.to_currency !== "AFN" || rate.from_currency === "AFN" || seen.has(rate.from_currency)) return false;
-        seen.add(rate.from_currency);
-        return true;
-      });
-      setRates(latest.map((rate) => ({
-        currency: rate.from_currency,
-        buy: rate.buy_rate,
-        sell: rate.sell_rate,
-        quotedUnits: 1,
-      })));
-      setFetchedAt(latest[0]?.effective_from ?? new Date().toISOString());
+      try {
+        const board = await getMarketReferenceRateBoard();
+        if (!board.rates.length) throw new Error("Empty market board");
+        setRates(board.rates);
+        setFetchedAt(board.fetchedAt);
+      } catch {
+        if (!organizationId) throw new Error("Missing organization");
+        const result = await listRateHistory(organizationId);
+        if (result.error) throw new Error(result.error);
+        const seen = new Set<string>();
+        const latest = (result.data ?? []).filter((rate) => {
+          if (rate.to_currency !== "AFN" || rate.from_currency === "AFN" || seen.has(rate.from_currency)) return false;
+          seen.add(rate.from_currency);
+          return true;
+        });
+        setRates(latest.map((rate) => ({ currency: rate.from_currency, buy: rate.buy_rate, sell: rate.sell_rate, quotedUnits: 1, updatedAt: null, changePercent: null })));
+        setFetchedAt(latest[0]?.effective_from ?? new Date().toISOString());
+      }
     } catch {
       setError(copy.unavailable);
     } finally {
@@ -5672,6 +5770,10 @@ function RatesView({
   const boardTime = fetchedAt
     ? new Date(fetchedAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })
     : "—";
+  const changeTone = (value?: string | null) => {
+    const number = Number.parseFloat(value ?? "0");
+    return number > 0 ? "positive" : number < 0 ? "negative" : "neutral";
+  };
 
   return (
     <section className="panel rates-market-only">
@@ -5702,16 +5804,18 @@ function RatesView({
               <span role="columnheader">{t("buyRate")}</span>
               <span role="columnheader">{t("sellRate")}</span>
               <span role="columnheader">{copy.updated}</span>
+              <span role="columnheader">{copy.change}</span>
             </div>
             {rates.map((item) => (
               <div className="market-rate-row" role="row" key={item.currency}>
-                <strong role="cell">
+                <span className="market-currency-cell" role="cell">
                   <span className="market-currency-mark" aria-hidden="true">{currencySymbols[item.currency] ?? item.currency.slice(0, 1)}</span>
-                  {item.currency}{item.quotedUnits > 1 ? " 1K" : ""}
-                </strong>
+                  <span><strong>{item.currency}{item.quotedUnits > 1 ? " 1K" : ""}</strong><small>{localCurrencyName(language, item.currency)}</small></span>
+                </span>
                 <bdi role="cell">{displayedRate(item.buy, item.quotedUnits)}</bdi>
                 <bdi role="cell">{displayedRate(item.sell, item.quotedUnits)}</bdi>
-                <time role="cell" dateTime={fetchedAt || undefined}>{boardTime}</time>
+                <time role="cell" dateTime={fetchedAt || undefined}>{item.updatedAt ?? boardTime}</time>
+                <bdi className={`market-change ${changeTone(item.changePercent)}`} role="cell">{item.changePercent ?? "—"}</bdi>
               </div>
             ))}
           </div>

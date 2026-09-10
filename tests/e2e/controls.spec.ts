@@ -146,8 +146,11 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/control/rates?role=owner");
     await expect(page.getByRole("heading", { name: "Market rates" })).toBeVisible();
     await expect(page.getByRole("table", { name: "Market rates" })).toContainText("USD");
+    await expect(page.getByRole("table", { name: "Market rates" })).toContainText("United States Dollar");
     await expect(page.getByRole("table", { name: "Market rates" })).toContainText("64.25");
+    await expect(page.getByRole("columnheader", { name: "Change" })).toBeVisible();
     await expect(page.locator('.rates-market-only a[href*="sarafi.af"]')).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText(/sarafi\.af/i);
     await expect(page.getByRole("heading", { name: "Set shop rate" })).toHaveCount(0);
   });
 
@@ -676,13 +679,19 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/money");
     await expect(page.getByRole("heading", { name: "Cashboxes" })).toBeVisible();
     await expect(page.locator(".account-card")).toHaveCount(1);
+    await page.getByRole("button", { name: "Add cashbox" }).click();
+    await page.getByRole("textbox", { name: "Cashbox name" }).fill("Counter 2");
+    await page.getByRole("button", { name: "Create cashbox" }).click();
+    await expect(page.locator(".account-card")).toHaveCount(2);
+    await expect(page.locator(".account-card").filter({ hasText: "Counter 2" })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Currency" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "By currency" })).toHaveCount(0);
     await page.goto("/app/inspection/control/business?role=owner");
     await expect(page.getByRole("heading", { name: "Currencies used by this shop" })).toBeVisible();
     await page.getByRole("searchbox", { name: "Find a currency" }).fill("CNY");
-    await expect(page.locator(".currency-setting")).toHaveCount(1);
-    await expect(page.locator(".currency-setting")).toContainText("Chinese Yuan");
+    await expect(page.locator(".currency-setting:not(.currency-setting-head)")).toHaveCount(1);
+    await expect(page.locator(".currency-setting:not(.currency-setting-head)")).toContainText("Chinese Yuan");
+    await expect(page.locator(".currency-setting:not(.currency-setting-head) .currency-symbol")).toHaveText("¥");
   });
 
   test("People supports search and statement views", async ({ page }) => {

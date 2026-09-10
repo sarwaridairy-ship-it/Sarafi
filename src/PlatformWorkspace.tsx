@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Language } from './lib/i18n'
+import { enrollTotp, getMfaReadiness, verifyTotp, type MfaReadiness, type TotpEnrollment } from './lib/auth'
 import {
   createSubscriptionPaymentRequest,
   decideSubscriptionPayment,
@@ -41,7 +42,7 @@ const copy: Record<Language, Copy> = {
     approve: 'Approve and activate', reject: 'Reject', adminNote: 'Administrator note', noPayments: 'No payment is waiting for review.',
     providerControl: 'Payment method control', live: 'Active', disabled: 'Disabled', configuration_required: 'Needs secure setup',
     manualSafe: 'Manual payment review is ready. Online gateways remain locked until merchant credentials and signed webhooks are configured.',
-    mfaNote: 'Approvals, suspensions, and payment changes require the administrator’s verification code.', saved: 'Saved successfully.', failed: 'This action could not be completed.',
+    mfaNote: 'Approvals, suspensions, support access, and payment changes require the administrator’s verification code.', securityTitle: 'Administrator security', securityIntro: 'Connect an authenticator app, then enter its six-digit code before sensitive work.', securityReady: 'Security verified for this session.', setupAuthenticator: 'Set up authenticator', authenticatorInstructions: 'Scan this QR code with your authenticator app. Keep the secret private.', authenticatorSecret: 'Manual setup secret', verificationCode: 'Six-digit verification code', verifySecurity: 'Verify security', verifyingSecurity: 'Verifying…', securityVerified: 'Administrator security verified.', mfaSetupFailed: 'Authenticator setup could not be started.', mfaVerificationFailed: 'That verification code was not accepted.', saved: 'Saved successfully.', failed: 'This action could not be completed.',
     billing: 'Plan and payment', billingIntro: 'See your current plan and request activation. Your shop records stay available even when payment is being reviewed.',
     currentPlan: 'Current plan', validUntil: 'Valid until', trial: 'Trial', active: 'Active', pending: 'Pending', approved: 'Approved', rejected: 'Rejected', revoked: 'Ended', pending_payment: 'Payment under review', past_due: 'Payment due', suspended: 'Suspended', expired: 'Expired', cancelled: 'Cancelled',
     choosePlan: 'Choose a plan', perMonth: 'per month', employees: 'employees', branches: 'branches', choosePayment: 'Payment method', chooseTerm: 'Choose subscription length', months: 'months', totalPrice: 'Total price',
@@ -67,7 +68,7 @@ const copy: Record<Language, Copy> = {
     approve: 'تأیید و فعال کردن', reject: 'رد کردن', adminNote: 'یادداشت مدیر', noPayments: 'هیچ پرداختی منتظر بررسی نیست.',
     providerControl: 'کنترول روش پرداخت', live: 'فعال', disabled: 'غیرفعال', configuration_required: 'تنظیم مصئون لازم است',
     manualSafe: 'بررسی دستی پرداخت آماده است. درگاه آنلاین تا زمان تنظیم حساب تجارتی و پیام تأیید مصئون، قفل می‌ماند.',
-    mfaNote: 'تأیید پرداخت، توقف کاربر و تغییر روش پرداخت به کود امنیتی مدیر نیاز دارد.', saved: 'با موفقیت ذخیره شد.', failed: 'این کار انجام نشد.',
+    mfaNote: 'تأیید پرداخت، توقف کاربر، دسترسی پشتیبانی و تغییر روش پرداخت به کود امنیتی مدیر نیاز دارد.', securityTitle: 'امنیت مدیر', securityIntro: 'برنامه رمزساز را وصل کنید و پیش از کارهای حساس کود شش‌رقمی را وارد نمایید.', securityReady: 'امنیت این نشست تأیید شده است.', setupAuthenticator: 'تنظیم برنامه رمزساز', authenticatorInstructions: 'این QR را با برنامه رمزساز اسکن کنید. رمز دستی را محرمانه نگه دارید.', authenticatorSecret: 'رمز تنظیم دستی', verificationCode: 'کود شش‌رقمی', verifySecurity: 'تأیید امنیت', verifyingSecurity: 'در حال تأیید…', securityVerified: 'امنیت مدیر تأیید شد.', mfaSetupFailed: 'تنظیم برنامه رمزساز آغاز نشد.', mfaVerificationFailed: 'این کود پذیرفته نشد.', saved: 'با موفقیت ذخیره شد.', failed: 'این کار انجام نشد.',
     billing: 'بسته و پرداخت', billingIntro: 'بسته فعلی را ببینید و درخواست فعال‌سازی بفرستید. معلومات صرافی هنگام بررسی پرداخت از بین نمی‌رود.',
     currentPlan: 'بسته فعلی', validUntil: 'اعتبار تا', trial: 'آزمایشی', active: 'فعال', pending: 'منتظر', approved: 'تأییدشده', rejected: 'ردشده', revoked: 'پایان‌یافته', pending_payment: 'پرداخت زیر بررسی', past_due: 'پرداخت مانده', suspended: 'متوقف', expired: 'ختم شده', cancelled: 'لغو شده',
     choosePlan: 'انتخاب بسته', perMonth: 'در ماه', employees: 'کارمند', branches: 'شعبه', choosePayment: 'روش پرداخت', chooseTerm: 'مدت بسته را انتخاب کنید', months: 'ماه', totalPrice: 'قیمت مجموعی',
@@ -93,7 +94,7 @@ const copy: Record<Language, Copy> = {
     approve: 'تایید او فعالول', reject: 'ردول', adminNote: 'د مدیر یادښت', noPayments: 'د کتنې لپاره تادیه نشته.',
     providerControl: 'د تادیې د لارې کنترول', live: 'فعاله', disabled: 'غیرفعاله', configuration_required: 'خوندي تنظیم غواړي',
     manualSafe: 'د لاسي تادیې کتنه چمتو ده. انلاین دروازه تر سوداګریز حساب او خوندي تایید پورې تړلې پاتې کېږي.',
-    mfaNote: 'د تادیې تایید، د کاروونکي درول او د تادیې بدلون د مدیر امنیتي کوډ غواړي.', saved: 'په بریالیتوب وساتل شو.', failed: 'دا کار ترسره نه شو.',
+    mfaNote: 'د تادیې تایید، د کاروونکي درول، د مرستې لاسرسی او د تادیې بدلون د مدیر امنیتي کوډ غواړي.', securityTitle: 'د مدیر امنیت', securityIntro: 'د رمزساز پروګرام ونښلوئ او له حساسو کارونو مخکې شپږ رقمي کوډ ولیکئ.', securityReady: 'د دې ناستې امنیت تایید شوی.', setupAuthenticator: 'د رمزساز برابرول', authenticatorInstructions: 'دا QR په خپل رمزساز پروګرام کې سکین کړئ. لاسي رمز پټ وساتئ.', authenticatorSecret: 'د لاسي برابرولو رمز', verificationCode: 'شپږ رقمي کوډ', verifySecurity: 'امنیت تاییدول', verifyingSecurity: 'تاییدېږي…', securityVerified: 'د مدیر امنیت تایید شو.', mfaSetupFailed: 'د رمزساز برابرول پیل نه شول.', mfaVerificationFailed: 'دا کوډ ونه منل شو.', saved: 'په بریالیتوب وساتل شو.', failed: 'دا کار ترسره نه شو.',
     billing: 'بسته او تادیه', billingIntro: 'اوسنۍ بسته وګورئ او د فعالولو غوښتنه واستوئ. د تادیې د کتنې پر مهال د صرافۍ معلومات نه ورکېږي.',
     currentPlan: 'اوسنۍ بسته', validUntil: 'تر دې نېټې', trial: 'ازمایښتي', active: 'فعاله', pending: 'منتظر', approved: 'تایید شوې', rejected: 'رد شوې', revoked: 'پای ته رسېدلې', pending_payment: 'تادیه تر کتنې لاندې', past_due: 'تادیه پاتې ده', suspended: 'درول شوې', expired: 'پای ته رسېدلې', cancelled: 'لغوه شوې',
     choosePlan: 'بسته وټاکئ', perMonth: 'په میاشت', employees: 'کارکوونکي', branches: 'څانګې', choosePayment: 'د تادیې لاره', chooseTerm: 'د بستې موده وټاکئ', months: 'میاشتې', totalPrice: 'ټوله بیه',
@@ -291,6 +292,10 @@ export function PlatformAdminConsole({
   const [noticeDari, setNoticeDari] = useState('')
   const [noticePashto, setNoticePashto] = useState('')
   const [noticeActive, setNoticeActive] = useState(false)
+  const [mfa, setMfa] = useState<MfaReadiness>({ aal: inspection ? 'aal2' : null, verified: inspection, factors: [], error: null })
+  const [mfaEnrollment, setMfaEnrollment] = useState<TotpEnrollment | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaBusy, setMfaBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -322,6 +327,12 @@ export function PlatformAdminConsole({
   }, [inspection])
   // oxlint-disable-next-line react/set-state-in-effect -- Fetching the external administrator record is the purpose of this effect.
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (inspection) return
+    let active = true
+    void getMfaReadiness().then((readiness) => { if (active) setMfa(readiness) })
+    return () => { active = false }
+  }, [inspection])
   // oxlint-disable-next-line react/set-state-in-effect -- User rows are external data keyed by the selected organization.
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- Clearing stale external rows when no organization is selected.
@@ -333,6 +344,27 @@ export function PlatformAdminConsole({
   }, [c.failed, selectedOrganization])
 
   const organizations = useMemo(() => (data?.organizations ?? []).filter((item) => item.display_name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [data, query])
+  const beginAuthenticatorSetup = async () => {
+    setMfaBusy(true)
+    const result = await enrollTotp('SARAFI platform administration')
+    setMfaBusy(false)
+    if (result.error || !result.factor) { setToast(c.mfaSetupFailed); return }
+    setMfaEnrollment(result.factor)
+  }
+  const confirmMfa = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const factorId = mfaEnrollment?.id ?? mfa.factors[0]?.id
+    if (!factorId || !/^\d{6}$/.test(mfaCode)) { setToast(c.mfaVerificationFailed); return }
+    setMfaBusy(true)
+    const verificationError = await verifyTotp(factorId, mfaCode)
+    const readiness = verificationError ? null : await getMfaReadiness()
+    setMfaBusy(false)
+    if (verificationError || !readiness?.verified) { setToast(c.mfaVerificationFailed); return }
+    setMfa(readiness)
+    setMfaEnrollment(null)
+    setMfaCode('')
+    setToast(c.securityVerified)
+  }
   const act = async (promise: Promise<{ error: string | null }>) => {
     const result = await promise
     setToast(result.error ? `${c.failed} ${result.error.includes('AAL2') ? c.mfaNote : ''}` : c.saved)
@@ -370,6 +402,14 @@ export function PlatformAdminConsole({
     <nav className="platform-tabs"><button className={tab === 'businesses' ? 'active' : ''} onClick={() => setTab('businesses')}>{c.businesses}</button><button className={tab === 'payments' ? 'active' : ''} onClick={() => setTab('payments')}>{c.payments}</button><button className={tab === 'providers' ? 'active' : ''} onClick={() => setTab('providers')}>{c.providers}</button><button className={tab === 'plans' ? 'active' : ''} onClick={() => setTab('plans')}>{c.plans}</button><button className={tab === 'operations' ? 'active' : ''} onClick={() => setTab('operations')}>{c.operations}</button><button className={tab === 'support' ? 'active' : ''} onClick={() => setTab('support')}>{c.support}</button><button className={tab === 'announcements' ? 'active' : ''} onClick={() => setTab('announcements')}>{c.announcements}</button><button className={tab === 'audit' ? 'active' : ''} onClick={() => setTab('audit')}>{c.audit}</button></nav>
     {toast && <div className="notice" role="status">{toast}<button onClick={() => setToast('')}>×</button></div>}
     <p className="platform-security-note">{c.mfaNote}</p>
+    {!inspection && <section className={`platform-mfa-card ${mfa.verified ? 'verified' : ''}`} aria-labelledby="platform-security-title">
+      <div><h2 id="platform-security-title">{c.securityTitle}</h2><p>{mfa.verified ? c.securityReady : c.securityIntro}</p></div>
+      {mfa.verified ? <strong aria-label={c.securityReady}>✓</strong> : !mfa.factors.length && !mfaEnrollment ? <button className="primary-action" type="button" disabled={mfaBusy} onClick={() => void beginAuthenticatorSetup()}>{c.setupAuthenticator}</button> : <form className="platform-mfa-form" onSubmit={confirmMfa}>
+        {mfaEnrollment && <div className="platform-mfa-enrollment"><img src={mfaEnrollment.qrCode} alt={c.setupAuthenticator} /><div><p>{c.authenticatorInstructions}</p><label>{c.authenticatorSecret}<input readOnly value={mfaEnrollment.secret} dir="ltr" /></label></div></div>}
+        <label>{c.verificationCode}<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
+        <button className="primary-action" disabled={mfaBusy}>{mfaBusy ? c.verifyingSecurity : c.verifySecurity}</button>
+      </form>}
+    </section>}
     {tab === 'businesses' && <section className="platform-grid"><div className="platform-list"><label>{c.findBusiness}<input value={query} onChange={(event) => setQuery(event.target.value)} /></label>{organizations.map((organization) => <button className={selectedOrganization === organization.id ? 'platform-business active' : 'platform-business'} key={organization.id} onClick={() => setSelectedOrganization(organization.id)}><span><b>{organization.display_name}</b><small>{organization.business_reference ? organization.business_reference + ' · ' : ''}{organization.member_count} {c.members} · {data.plans.find((plan) => plan.code === organization.plan_code) ? localized(language, data.plans.find((plan) => plan.code === organization.plan_code)!, 'name') : '—'}</small></span><strong>{statusText(language, organization.subscription_status ?? 'trial')}</strong></button>)}</div><div className="platform-detail">{selectedOrganization ? <><h2>{c.subscriptionControl}</h2><label>{c.reason}<input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={c.reasonPlaceholder} /></label><div className="inline-actions"><button onClick={() => void act(setSubscriptionStatus({ organizationId: selectedOrganization, status: 'active', reason: reason || c.restore }))}>{c.restore}</button><button className="danger" onClick={() => void act(setSubscriptionStatus({ organizationId: selectedOrganization, status: 'suspended', reason }))}>{c.suspend}</button></div><h2>{c.userAccess}</h2>{users.map((user) => <div className="platform-user" key={user.user_id}><span><b>{user.display_name}</b><small>{user.user_reference ? user.user_reference + ' · ' : ''}{user.email} · {roleText(language, user.role_code)}</small></span><strong>{statusText(language, user.platform_status)}</strong><button onClick={() => void act(setPlatformUserAccess({ userId: user.user_id, status: user.platform_status === 'active' ? 'suspended' : 'active', reason }))}>{user.platform_status === 'active' ? c.suspend : c.restore}</button></div>)}</> : <div className="empty-live">{c.open}</div>}</div></section>}
     {tab === 'payments' && <section className="platform-panel"><h1>{c.paymentQueue}</h1><label>{c.adminNote}<input value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder={c.reasonPlaceholder} /></label>{data.payment_requests.length ? data.payment_requests.map((request) => <article className="payment-review-card" key={request.id}><div><h2>{request.organization_name}</h2><p>{request.plan_name} · {request.term_months} {c.months} · {request.amount_afn} AFN</p><small>{c.receipt}: {request.payer_reference || '—'} · {new Date(request.requested_at).toLocaleString(language)}</small></div><div><button className="primary-action" onClick={() => void act(decideSubscriptionPayment({ requestId: request.id, decision: 'approved', note: adminNote }))}>{c.approve}</button><button className="danger" onClick={() => void act(decideSubscriptionPayment({ requestId: request.id, decision: 'rejected', note: adminNote }))}>{c.reject}</button></div></article>) : <div className="empty-live">{c.noPayments}</div>}</section>}
     {tab === 'providers' && <section className="platform-panel"><h1>{c.providerControl}</h1><p>{c.manualSafe}</p>{data.providers.map((provider) => <article className="provider-card" key={provider.code}><div><h2>{localized(language, provider, 'name')}</h2><p>{localized(language, provider, 'instructions')}</p></div><select value={provider.state} disabled={provider.provider_mode === 'hosted_gateway' && !provider.public_checkout_url} onChange={(event) => void act(setPaymentProviderState({ providerCode: provider.code, state: event.target.value as PaymentProvider['state'] }))}><option value="live">{c.live}</option><option value="disabled">{c.disabled}</option><option value="configuration_required">{c.configuration_required}</option></select></article>)}</section>}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Language } from "./lib/i18n";
+import { localCurrencyName } from "./lib/currencyNames";
 import {
   createOrganizationBranch,
   createOrganizationCashbox,
@@ -412,7 +413,7 @@ const controlCopy: Record<Language, Record<string, string>> = {
     branchesCashboxes: "Branches and cashboxes", addBranch: "Add branch", branchName: "Branch name", addCashbox: "Add cashbox", cashboxName: "Cashbox name", active: "Active", inactive: "Inactive", deactivate: "Deactivate", activate: "Activate", reasonPrompt: "Write the reason for this change",
     workingRules: "Daily working rules", dateStyle: "Date shown", gregorian: "Gregorian", solarHijri: "Afghan Solar Hijri", bothDates: "Show both", digitStyle: "Number style", westernDigits: "Western digits", localDigits: "Local digits", approvalLimit: "Approval threshold in AFN", offlineLimit: "Offline limit (deferred; kept at zero)", hideCashierProfit: "Hide owner profit from cashiers", rateMaxAge: "Maximum rate age (minutes)", rateTolerance: "Allowed rate difference (basis points)",
     categories: "Expense categories", addCategory: "Add category", categoryName: "Category name", services: "Optional services", dataExport: "Business data export", exportHelp: "Download the organization’s authorized ledger and operating records as JSON.", downloadData: "Download business data", securityHistory: "Security history", supportRequests: "Support access requests", approveSupport: "Approve temporarily", rejectSupport: "Reject", revokeSupport: "Revoke now", noSupport: "No support request is waiting.", ownerApproval: "Owner approval and verification code are required.",
-    currencies: "Currencies used by this shop", currenciesIntro: "Choose the currencies shown when staff make a transaction. AFN always stays on.", searchCurrency: "Find a currency", baseCurrency: "Main currency", usedCurrency: "Used in shop",
+    currencies: "Currencies used by this shop", currenciesIntro: "Choose the currencies shown when staff make a transaction. AFN always stays on.", searchCurrency: "Find a currency", baseCurrency: "Main currency", usedCurrency: "Used in shop", currencySymbol: "Symbol", currencyName: "Currency", currencyStatus: "Use",
     saved: "Saved successfully.", failed: "This action could not be completed.", mfaNeeded: "Enter your authenticator code in Team & Devices, then try again.", pending: "Pending", approved: "Approved", rejected: "Rejected", revoked: "Revoked", hours: "hours", scope: "Access", noSecurityEvents: "No security event has been recorded.",
   },
   "fa-AF": {
@@ -420,7 +421,7 @@ const controlCopy: Record<Language, Record<string, string>> = {
     branchesCashboxes: "شعبه‌ها و صندوق‌ها", addBranch: "افزودن شعبه", branchName: "نام شعبه", addCashbox: "افزودن صندوق", cashboxName: "نام صندوق", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعال کردن", activate: "فعال کردن", reasonPrompt: "دلیل این تغییر را بنویسید",
     workingRules: "قواعد کار روزانه", dateStyle: "نمایش تاریخ", gregorian: "میلادی", solarHijri: "هجری شمسی افغانستان", bothDates: "هر دو تاریخ", digitStyle: "شکل اعداد", westernDigits: "اعداد انگلیسی", localDigits: "اعداد محلی", approvalLimit: "حد تأیید به افغانی", offlineLimit: "حد کار آفلاین (فعلاً صفر)", hideCashierProfit: "مفاد مالک از صندوق‌دار پنهان باشد", rateMaxAge: "بیشترین عمر نرخ (دقیقه)", rateTolerance: "تفاوت مجاز نرخ (نقطه پایه)",
     categories: "بخش‌های مصرف", addCategory: "افزودن بخش", categoryName: "نام بخش مصرف", services: "خدمات اختیاری", dataExport: "دانلود معلومات صرافی", exportHelp: "دفتر معاملات و معلومات کاری صرافی را با اجازه مالک به شکل JSON دانلود کنید.", downloadData: "دانلود معلومات", securityHistory: "تاریخچه امنیت", supportRequests: "درخواست دسترسی پشتیبانی", approveSupport: "تأیید موقت", rejectSupport: "رد کردن", revokeSupport: "قطع دسترسی", noSupport: "هیچ درخواست پشتیبانی منتظر نیست.", ownerApproval: "تأیید مالک و کود امنیتی لازم است.",
-    currencies: "اسعار مورد استفاده صرافی", currenciesIntro: "اسعاری را انتخاب کنید که هنگام معامله به کارمندان نشان داده شود. افغانی همیشه فعال است.", searchCurrency: "جستجوی اسعار", baseCurrency: "اسعار اصلی", usedCurrency: "در صرافی استفاده می‌شود",
+    currencies: "اسعار مورد استفاده صرافی", currenciesIntro: "اسعاری را انتخاب کنید که هنگام معامله به کارمندان نشان داده شود. افغانی همیشه فعال است.", searchCurrency: "جستجوی اسعار", baseCurrency: "اسعار اصلی", usedCurrency: "در صرافی استفاده می‌شود", currencySymbol: "نشان", currencyName: "نام اسعار", currencyStatus: "استفاده",
     saved: "با موفقیت ذخیره شد.", failed: "این کار انجام نشد.", mfaNeeded: "در بخش کارمندان و دستگاه‌ها کود امنیتی را تأیید کنید و دوباره کوشش کنید.", pending: "منتظر", approved: "تأیید", rejected: "رد", revoked: "قطع شده", hours: "ساعت", scope: "دسترسی", noSecurityEvents: "هنوز رویداد امنیتی ثبت نشده است.",
   },
   "ps-AF": {
@@ -428,7 +429,7 @@ const controlCopy: Record<Language, Record<string, string>> = {
     branchesCashboxes: "څانګې او صندوقونه", addBranch: "څانګه زیاتول", branchName: "د څانګې نوم", addCashbox: "صندوق زیاتول", cashboxName: "د صندوق نوم", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعالول", activate: "فعالول", reasonPrompt: "د دې بدلون لامل ولیکئ",
     workingRules: "د ورځني کار اصول", dateStyle: "د نېټې ښودل", gregorian: "میلادي", solarHijri: "افغان لمریز هجري", bothDates: "دواړه نېټې", digitStyle: "د شمېرو بڼه", westernDigits: "انګلیسي شمېرې", localDigits: "سیمه‌ییزې شمېرې", approvalLimit: "د تایید حد په افغانۍ", offlineLimit: "د افلاین کار حد (اوس صفر)", hideCashierProfit: "د مالک ګټه له صندوق‌دار پټه وي", rateMaxAge: "د نرخ تر ټولو زیات عمر (دقیقې)", rateTolerance: "د نرخ اجازه شوی توپیر (بنسټیز ټکي)",
     categories: "د لګښت برخې", addCategory: "برخه زیاتول", categoryName: "د لګښت د برخې نوم", services: "اختیاري خدمتونه", dataExport: "د صرافۍ معلومات ښکته کول", exportHelp: "د مالک په اجازه د صرافۍ دفتر او کاري معلومات د JSON په بڼه ښکته کړئ.", downloadData: "معلومات ښکته کول", securityHistory: "امنیتي تاریخ", supportRequests: "د مرستې د لاسرسي غوښتنې", approveSupport: "لنډمهاله تایید", rejectSupport: "ردول", revokeSupport: "لاس‌رسی بندول", noSupport: "د مرستې منتظره غوښتنه نشته.", ownerApproval: "د مالک تایید او امنیتي کوډ اړین دي.",
-    currencies: "د صرافۍ کارېدونکي اسعار", currenciesIntro: "هغه اسعار وټاکئ چې کارکوونکو ته د معاملې پر مهال ښکاري. افغانۍ تل فعاله ده.", searchCurrency: "اسعار ولټوئ", baseCurrency: "اصلي اسعار", usedCurrency: "په صرافۍ کې کارېږي",
+    currencies: "د صرافۍ کارېدونکي اسعار", currenciesIntro: "هغه اسعار وټاکئ چې کارکوونکو ته د معاملې پر مهال ښکاري. افغانۍ تل فعاله ده.", searchCurrency: "اسعار ولټوئ", baseCurrency: "اصلي اسعار", usedCurrency: "په صرافۍ کې کارېږي", currencySymbol: "نښه", currencyName: "د اسعارو نوم", currencyStatus: "کارول",
     saved: "په بریالیتوب وساتل شو.", failed: "دا کار ترسره نه شو.", mfaNeeded: "د کارکوونکو او وسیلو په برخه کې امنیتي کوډ تایید او بیا هڅه وکړئ.", pending: "منتظر", approved: "تایید", rejected: "رد", revoked: "بند شوی", hours: "ساعتونه", scope: "لاس‌رسی", noSecurityEvents: "تر اوسه امنیتي پېښه نه ده ثبت شوې.",
   },
 };
@@ -471,9 +472,22 @@ export function SettingsView({ language, organizationId, organizationName, branc
     ["AED", "UAE Dirham", "درهم امارات", "اماراتي درهم", "د.إ"],
     ["PKR", "Pakistani Rupee", "روپیه پاکستانی", "پاکستانۍ روپۍ", "₨"],
     ["GBP", "British Pound", "پوند انگلیس", "بریتانوي پونډ", "£"],
+    ["IRR", "Iranian Toman", "تومان ایران", "ایراني تومان", "﷼"],
     ["SAR", "Saudi Riyal", "ریال سعودی", "سعودي ریال", "﷼"],
     ["CNY", "Chinese Yuan", "یوان چین", "چینايي یوان", "¥"],
     ["INR", "Indian Rupee", "روپیه هندی", "هندي روپۍ", "₹"],
+    ["CHF", "Swiss Franc", "فرانک سویس", "سویسي فرانک", "Fr"],
+    ["AUD", "Australian Dollar", "دالر استرالیا", "اسټرالیايي ډالر", "A$"],
+    ["CAD", "Canadian Dollar", "دالر کانادا", "کاناډايي ډالر", "C$"],
+    ["RUB", "Russian Ruble", "روبل روسیه", "روسي روبل", "₽"],
+    ["DKK", "Danish Krone", "کرون دنمارک", "ډنمارکي کرون", "kr"],
+    ["SEK", "Swedish Krona", "کرون سویدن", "سویډني کرون", "kr"],
+    ["NOK", "Norwegian Krone", "کرون ناروی", "ناروېژي کرون", "kr"],
+    ["TRY", "Turkish Lira", "لیره ترکیه", "ترکي لیره", "₺"],
+    ["KWD", "Kuwaiti Dinar", "دینار کویت", "کویټي دینار", "د.ك"],
+    ["QAR", "Qatari Riyal", "ریال قطر", "قطري ریال", "ر.ق"],
+    ["BHD", "Bahraini Dinar", "دینار بحرین", "بحریني دینار", "د.ب"],
+    ["JPY", "Japanese Yen", "ین جاپان", "جاپاني ین", "¥"],
   ].map(([code, name_en, name_dari, name_pashto, symbol]) => ({ code, name_en, name_dari, name_pashto, symbol, minor_unit: 2, enabled: true })) : []);
   const [currencySearch, setCurrencySearch] = useState("");
   const reloadControls = async () => {
@@ -649,7 +663,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
     await finishControlAction(await revokeSupportAccess(requestId, reason));
   };
   const languageLabel = language === "en" ? "English" : language === "fa-AF" ? "دری" : "پښتو";
-  const currencyLabel = (currency: CurrencyCatalogRecord) => language === "fa-AF" ? currency.name_dari : language === "ps-AF" ? currency.name_pashto : currency.name_en;
+  const currencyLabel = (currency: CurrencyCatalogRecord) => localCurrencyName(language, currency.code, currency);
   const visibleCurrencies = currencies.filter((currency) => {
     const query = currencySearch.trim().toLocaleLowerCase();
     return !query || currency.code.toLocaleLowerCase().includes(query) || currencyLabel(currency).toLocaleLowerCase().includes(query);
@@ -719,11 +733,14 @@ export function SettingsView({ language, organizationId, organizationName, branc
         <article className="settings-card settings-card-wide currency-settings-card">
           <div className="settings-card-title"><AppIcon name="rates" /><div><h2>{c.currencies}</h2><p>{c.currenciesIntro}</p></div></div>
           <label className="currency-settings-search">{c.searchCurrency}<input type="search" value={currencySearch} onChange={(event) => setCurrencySearch(event.target.value)} /></label>
-          <div className="currency-settings-grid">
-            {visibleCurrencies.map((currency) => <label className={`currency-setting ${currency.enabled ? "enabled" : ""}`} key={currency.code}>
-              <span className="currency-symbol">{currency.symbol}</span>
-              <span><b>{currency.code}</b><small>{currencyLabel(currency)}</small></span>
-              {currency.code === "AFN" ? <em>{c.baseCurrency}</em> : <input type="checkbox" checked={currency.enabled} disabled={!canManage || controlBusy === `currency-${currency.code}`} onChange={(event) => void changeCurrency(currency.code, event.target.checked)} aria-label={`${currency.code} · ${c.usedCurrency}`} />}
+          <div className="currency-settings-list" role="table" aria-label={c.currencies}>
+            <div className="currency-setting currency-setting-head" role="row">
+              <span role="columnheader">{c.currencySymbol}</span><span role="columnheader">{c.currencyName}</span><span role="columnheader">{c.currencyStatus}</span>
+            </div>
+            {visibleCurrencies.map((currency) => <label className={`currency-setting ${currency.enabled ? "enabled" : ""}`} key={currency.code} role="row">
+              <span className="currency-symbol" role="cell">{currency.symbol}</span>
+              <span className="currency-local-name" role="cell"><b>{currencyLabel(currency)}</b><small dir="ltr">{currency.code}</small></span>
+              <span className="currency-use-control" role="cell">{currency.code === "AFN" ? <em>{c.baseCurrency}</em> : <input type="checkbox" checked={currency.enabled} disabled={!canManage || controlBusy === `currency-${currency.code}`} onChange={(event) => void changeCurrency(currency.code, event.target.checked)} aria-label={`${currencyLabel(currency)} · ${c.usedCurrency}`} />}</span>
             </label>)}
           </div>
           {!canManage ? <p className="muted-copy">{p(language, "ownerSettingsOnly")}</p> : null}

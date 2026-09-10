@@ -897,34 +897,76 @@
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(120px, 1.4fr) repeat(2, minmax(76px, 1fr)) minmax(78px, .8fr);
+  grid-template-columns: minmax(180px, 1.7fr) repeat(2, minmax(72px, .8fr)) minmax(78px, .7fr) minmax(64px, .6fr);
   min-height: 46px;
   padding: 8px 18px;
 }
 .market-rate-row:nth-child(odd) { background: #f5f7f6; }
 .market-rate-row > * { min-width: 0; }
-.market-rate-row strong { align-items: center; display: flex; gap: 8px; }
+.market-currency-cell { align-items: center; display: flex; gap: 8px; }
+.market-currency-cell > span:last-child { display: grid; line-height: 1.15; min-width: 0; }
+.market-currency-cell strong { color: #253e3a; font-size: .84rem; }
+.market-currency-cell small { color: #73817c; font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .market-currency-mark { align-items: center; background: #e9f3ef; border-radius: 6px; color: #176b5b; display: inline-flex; font-size: .68rem; height: 24px; justify-content: center; min-width: 28px; padding-inline: 4px; }
 .market-rate-row bdi { color: #344e47; font-weight: 780; }
 .market-rate-row time { color: #73817c; font-size: .78rem; }
+.market-change { font-size: .76rem; text-align: end; }
+.market-change.positive { color: #287b4c; }
+.market-change.negative { color: #b33a53; }
+.market-change.neutral { color: #977c18; }
 .market-rate-heading { background: #17394b !important; color: #fff; font-size: .78rem; font-weight: 750; min-height: 42px; }
 
 .money-workspace .account-control-panel { border: 0; padding: 0; }
 .money-workspace .account-card-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .money-workspace .account-card { min-height: 150px; }
+.cashbox-create-form { align-items: end; background: #f4f8f6; border: 1px solid #d4e2dc; border-radius: 12px; display: grid; gap: 12px; grid-template-columns: minmax(130px, .65fr) minmax(210px, 1.35fr) auto; margin-bottom: 16px; padding: 14px; }
+.cashbox-create-form > div:first-child { display: grid; gap: 3px; }
+.cashbox-create-form > div:first-child small { color: var(--calm-muted, #61736c); }
+.cashbox-create-form label { display: grid; font-size: .78rem; font-weight: 750; gap: 5px; margin: 0; min-width: 0; }
+.cashbox-create-form input { box-sizing: border-box; min-height: 42px; width: 100%; }
+.cashbox-create-actions { align-items: center; display: flex; gap: 8px; }
+.cashbox-create-actions button { white-space: nowrap; }
 
 .currency-settings-search { display: grid; gap: 6px; margin: 16px 0; max-width: 360px; }
 .currency-settings-search input { min-height: 42px; }
-.currency-settings-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-.currency-setting { align-items: center; background: #f7f9f8; border: 1px solid #dce4e0; border-radius: 11px; display: grid; gap: 10px; grid-template-columns: 38px minmax(0, 1fr) auto; min-height: 66px; padding: 10px 12px; }
-.currency-setting.enabled { background: #eff8f4; border-color: #aed0c3; }
-.currency-setting > span:nth-child(2) { display: grid; min-width: 0; }
-.currency-setting small { color: var(--calm-muted, #61736c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.currency-settings-list { border: 1px solid #d8e2dd; border-radius: 12px; overflow: hidden; }
+.currency-setting { align-items: center; background: #fff; border-bottom: 1px solid #e2e8e5; cursor: pointer; display: grid; gap: 12px; grid-template-columns: 52px minmax(0, 1fr) minmax(90px, auto); min-height: 54px; padding: 8px 14px; }
+.currency-setting:last-child { border-bottom: 0; }
+.currency-setting:nth-child(odd):not(.currency-setting-head) { background: #f7f9f8; }
+.currency-setting.enabled { box-shadow: inset 3px 0 #4b9b7e; }
+.currency-setting-head { background: #17394b; color: #fff; cursor: default; font-size: .72rem; font-weight: 800; min-height: 38px; }
+.currency-setting-head span:last-child { text-align: end; }
+.currency-local-name { display: grid; line-height: 1.2; min-width: 0; }
+.currency-local-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.currency-setting small { color: var(--calm-muted, #61736c); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .currency-setting em { color: #176b5b; font-size: .72rem; font-style: normal; font-weight: 800; }
 .currency-setting input { height: 20px; width: 20px; }
+.currency-use-control { align-items: center; display: flex; justify-content: flex-end; min-width: 0; }
+
+.operation-primary-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.25fr) minmax(180px, .75fr); }
+.operation-entry-form,
+.operation-entry-form > *,
+.operation-entry-form .form-grid,
+.operation-entry-form label,
+.operation-entry-form select,
+.operation-entry-form input { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.operation-entry-form .money-flow-summary > span { box-sizing: border-box; width: 100%; }
 
 .daily-pdf-action { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
 .daily-pdf-action .export-button { min-height: 44px; }
+
+.platform-mfa-card { align-items: center; background: #fff; border: 1px solid #d8e3de; border-inline-start: 4px solid #c4933e; border-radius: 12px; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) auto; margin: 12px 0 18px; padding: 16px 18px; }
+.platform-mfa-card.verified { border-inline-start-color: #238060; background: #f2f8f5; }
+.platform-mfa-card h2 { color: #153e38; font-size: 1rem; margin: 0 0 4px; }
+.platform-mfa-card p { color: #5f716b; margin: 0; }
+.platform-mfa-card > strong { align-items: center; background: #dff2e9; border-radius: 999px; color: #176b50; display: flex; font-size: 1.1rem; height: 34px; justify-content: center; width: 34px; }
+.platform-mfa-form { align-items: end; display: grid; gap: 12px; grid-column: 1 / -1; grid-template-columns: minmax(180px, 1fr) auto; }
+.platform-mfa-form > label,
+.platform-mfa-enrollment label { display: grid; font-size: .78rem; font-weight: 750; gap: 5px; margin: 0; }
+.platform-mfa-form input { box-sizing: border-box; min-height: 42px; width: 100%; }
+.platform-mfa-enrollment { align-items: center; background: #f7f9f8; border: 1px solid #dce5e1; border-radius: 10px; display: grid; gap: 14px; grid-column: 1 / -1; grid-template-columns: 140px minmax(0, 1fr); padding: 12px; }
+.platform-mfa-enrollment img { background: #fff; border-radius: 8px; height: 140px; width: 140px; }
+.platform-mfa-enrollment > div { display: grid; gap: 10px; min-width: 0; }
 
 .transaction-receipt { max-width: 720px; }
 .transaction-receipt { width: 100%; }
@@ -949,22 +991,49 @@
   .rates-market-only .online-rate-board-head { align-items: stretch; display: grid; padding: 14px; }
   .market-rate-actions { align-items: stretch; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .market-rate-actions select { min-width: 0; width: 100%; }
-  .market-rate-row { gap: 4px; grid-template-columns: minmax(82px, 1.25fr) repeat(2, minmax(54px, .8fr)) minmax(48px, .65fr); min-height: 43px; padding: 7px 9px; }
-  .market-rate-row strong { gap: 4px; font-size: .76rem; }
+  .market-rate-row { gap: 4px; grid-template-columns: minmax(104px, 1.45fr) repeat(2, minmax(46px, .65fr)) minmax(45px, .58fr) minmax(44px, .58fr); min-height: 43px; padding: 7px 9px; }
+  .market-currency-cell { gap: 4px; }
+  .market-currency-cell strong { font-size: .72rem; }
+  .market-currency-cell small { font-size: .58rem; }
   .market-rate-row bdi { font-size: .74rem; }
   .market-rate-row time { font-size: .64rem; }
+  .market-change { font-size: .62rem !important; }
   .market-rate-heading { font-size: .66rem; }
   .transaction-receipt .transaction-detail-grid { grid-template-columns: 1fr 1fr; padding: 10px; }
   .transaction-receipt .transaction-detail-grid article { min-height: 64px; padding: 9px; }
   .receipt-flow { padding: 11px; }
-  .currency-settings-grid { grid-template-columns: 1fr; }
+  .cashbox-create-form { align-items: stretch; grid-template-columns: 1fr; }
+  .cashbox-create-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .cashbox-create-actions button { justify-content: center; width: 100%; }
+  .currency-setting { gap: 8px; grid-template-columns: 42px minmax(0, 1fr) minmax(68px, auto); padding: 7px 9px; }
 }
 
 @media (max-width: 420px) {
   .receipt-flow { grid-template-columns: 1fr; }
   .receipt-flow > b { transform: rotate(90deg); width: min-content; }
+  .rates-market-only { padding-inline: 8px; }
+  .market-rate-row { grid-template-columns: minmax(94px, 1.45fr) repeat(2, minmax(42px, .65fr)) minmax(38px, .52fr) minmax(40px, .54fr); padding-inline: 7px; }
+  .market-currency-mark { font-size: .58rem; height: 21px; min-width: 22px; }
+  .operation-primary-grid { grid-template-columns: 1fr; gap: 0; }
 }
 
 @media (max-width: 960px) {
   .rates-market-only .online-rate-board-head { align-items: stretch; display: grid; }
+}
+
+@media (max-width: 560px) {
+  .transaction-page-form { overflow: hidden; padding: 16px; width: 100%; }
+  .transaction-page-form .modal-head { align-items: start; display: grid; grid-template-columns: 1fr; gap: 7px; }
+  .transaction-page-form .modal-head h2 { margin-bottom: 0; }
+  .transaction-page-form .transaction-back { justify-self: start; max-width: 100%; text-align: start; }
+  .transaction-page-form .form-grid { grid-template-columns: 1fr; }
+  .operation-entry-form .money-flow-summary { grid-template-columns: 1fr; }
+  .operation-entry-form .money-flow-summary > strong { justify-self: center; transform: rotate(90deg); }
+  .platform-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; width: 100%; }
+  .platform-tabs button { min-width: 0; padding-inline: 7px; }
+  .platform-mfa-card { align-items: stretch; grid-template-columns: 1fr; padding: 14px; }
+  .platform-mfa-card > strong { justify-self: start; }
+  .platform-mfa-form { grid-template-columns: 1fr; }
+  .platform-mfa-enrollment { grid-template-columns: 1fr; }
+  .platform-mfa-enrollment img { height: auto; justify-self: center; max-width: 180px; width: 100%; }
 }
