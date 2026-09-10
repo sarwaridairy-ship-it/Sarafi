@@ -49,7 +49,7 @@ export type CashboxBalanceRecord = { currency_code: string; expected_amount: str
 export type CounterpartyStatementRecord = { id: string; occurred_at: string; event_type: string; reference: string; status: string; memo: string | null; direction: 'receivable' | 'payable' | null; currency_code: string | null; amount: string | null }
 export type RateHistoryRecord = { id: string; from_currency: string; to_currency: string; buy_rate: string; sell_rate: string; effective_from: string; group_name: string; branch_id: string | null }
 export type OperationRateContext = { rate_id?: string; rate_group_id?: string; context_id?: string; from_currency: string; to_currency: string; buy_rate?: string; sell_rate?: string; spread_tolerance?: string; tolerance_bps?: string; effective_from?: string; expires_at?: string; age_seconds?: number; max_age_minutes?: number; branch_id?: string | null; source?: string; stale: boolean; missing: boolean; approval_required?: boolean }
-export type CurrencyCatalogRecord = { code: string; name_en: string; name_dari: string; name_pashto: string; symbol: string; minor_unit: number; enabled: boolean }
+export type CurrencyCatalogRecord = { code: string; name_en: string; name_dari: string; name_pashto: string; symbol: string; minor_unit: number; enabled: boolean; display_order?: number }
 export type MoneyAccountRecord = { id: string; name: string; account_type: 'cashbox' | 'safe' | 'bank' | 'mobile_money' | 'partner' | 'other'; branch_id: string | null; cashbox_id: string | null; reference_label: string | null; active: boolean; balances: Array<{ currency: string; amount: string }> }
 export type TeamScopeRecord = { id: string; name: string; branch_id?: string }
 export type TeamMemberRecord = { id: string; display_name: string; email: string; role_code: string; active: boolean; mfa_required: boolean; joined_at: string; is_current_user: boolean; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
@@ -97,6 +97,7 @@ export type WorkerJoinRequestRecord = { id: string; display_name: string; email:
 export type MembershipCapabilityMatrixRecord = { membership_id: string; role_code: string; effective_capabilities: string[]; overrides: Array<{ capability: string; allowed: boolean; branch_ids: string[]; cashbox_ids: string[]; limits: Record<string, unknown> }> }
 export type PrivateDocumentRecord = { id: string; organization_id: string; entity_id: string; entity_type: string; storage_path: string; content_type: string; size_bytes: number; sha256: string; uploaded_by: string; created_at: string }
 export type ReceiptRecord = { id: string; journal_entry_id: string; receipt_number: string; language_code: string; created_at: string }
+export type DocumentTemplateRecord = { template_code: string; document_kind: 'transaction_receipt' | 'report'; title_en: string; title_dari: string; title_pashto: string; body_en: string; body_dari: string; body_pashto: string }
 export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; date_display?: 'gregorian' | 'solar_hijri' | 'both'; digit_display?: 'western' | 'localized'; default_cost_basis?: 'weighted_average'; approval_threshold_base?: string; offline_limit_base?: string; cashier_profit_hidden?: boolean; receipt_number_pattern?: string; rate_max_age_minutes?: number; rate_tolerance_bps?: string; features: Array<{ feature_code: string; enabled: boolean }> }
 export type NotificationRecord = { id: string; notification_type: string; subject_id: string; message: string; status: 'unread' | 'read' | 'dismissed'; created_at: string }
 export type NotificationPreferenceRecord = { id: string; notification_type: string; in_app: boolean; push: boolean; threshold_base: string | null }
@@ -476,13 +477,23 @@ export async function listCurrencyCatalog(organizationId?: string | null): Promi
   const currencies = await client.from('currencies').select('code,name_en,name_dari,name_pashto,symbol,minor_unit').eq('active', true).order('code')
   if (currencies.error) return { data: null, error: currencies.error.message }
   let enabled = new Set<string>()
+  const displayOrder = new Map<string, number>()
   if (organizationId && organizationId !== 'inspection') {
-    const selected = await client.from('organization_currencies').select('currency_code').eq('organization_id', organizationId).eq('enabled', true)
+    const selected = await client.from('organization_currencies').select('currency_code,display_order').eq('organization_id', organizationId).eq('enabled', true)
     if (selected.error) return { data: null, error: selected.error.message }
     enabled = new Set((selected.data ?? []).map((row) => row.currency_code))
+    for (const row of selected.data ?? []) displayOrder.set(row.currency_code, row.display_order)
   }
   return {
-    data: (currencies.data ?? []).map((row) => ({ ...row, enabled: organizationId === 'inspection' ? ['AFN', 'USD', 'EUR', 'AED', 'PKR'].includes(row.code) : enabled.has(row.code) })) as CurrencyCatalogRecord[],
+    data: (currencies.data ?? [])
+      .map((row) => ({
+        ...row,
+        enabled: organizationId === 'inspection' ? ['AFN', 'USD', 'EUR', 'AED', 'PKR'].includes(row.code) : enabled.has(row.code),
+        display_order: organizationId === 'inspection'
+          ? ({ AFN: 0, USD: 1, EUR: 2, AED: 3, PKR: 4 } as Record<string, number>)[row.code] ?? 999
+          : displayOrder.get(row.code) ?? 999,
+      }))
+      .sort((left, right) => (left.display_order - right.display_order) || left.code.localeCompare(right.code)) as CurrencyCatalogRecord[],
     error: null,
   }
 }
@@ -492,6 +503,25 @@ export async function setOrganizationCurrency(organizationId: string, currencyCo
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.rpc('set_organization_currency', { target_org: organizationId, target_currency: currencyCode, enabled_input: enabled })
   return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
+}
+
+export async function setOrganizationRateCurrencies(organizationId: string, currencyCodes: string[]): Promise<RpcResult<{ currencies: string[] }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_organization_rate_currencies', {
+    target_org: organizationId,
+    target_currencies: currencyCodes,
+  })
+  return { data: result.data as { currencies: string[] } | null, error: result.error?.message ?? null }
+}
+
+export async function listDocumentTemplates(documentKind?: DocumentTemplateRecord['document_kind']): Promise<RpcResult<DocumentTemplateRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  let query = client.from('document_templates').select('template_code,document_kind,title_en,title_dari,title_pashto,body_en,body_dari,body_pashto').eq('active', true)
+  if (documentKind) query = query.eq('document_kind', documentKind)
+  const result = await query.order('template_code')
+  return { data: result.data as DocumentTemplateRecord[] | null, error: result.error?.message ?? null }
 }
 
 export async function listMoneyAccounts(organizationId: string): Promise<RpcResult<MoneyAccountRecord[]>> {

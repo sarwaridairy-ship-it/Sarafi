@@ -127,6 +127,7 @@ export type DailyReportInput = {
   preparedBy?: string;
   generatedAt?: string;
   snapshotHash?: string;
+  narrative?: { title: string; body: string };
 };
 
 const dailyReportCopy = {
@@ -154,10 +155,11 @@ export function buildDailyReportHtml(input: DailyReportInput): string {
   return `<article class="sarafi-daily-pdf" lang="${input.language}" dir="${direction}">
     <style>
       .sarafi-daily-pdf{position:relative;box-sizing:border-box;width:794px;min-height:1123px;padding:52px 58px;color:#11252e;background:#fff;font-family:Tahoma,"Segoe UI",Arial,sans-serif;font-size:13px;line-height:1.45}
-      .sarafi-daily-pdf *{box-sizing:border-box}.pdf-head{display:flex;align-items:flex-start;justify-content:space-between;gap:28px;padding-bottom:20px;border-bottom:3px solid #0d7169}.pdf-brand{display:flex;align-items:center;gap:13px}.pdf-mark{display:grid;width:46px;height:46px;place-items:center;border-radius:13px;color:#f4d58a;background:#102a36;font-size:24px;font-weight:900}.pdf-head h1{margin:0;color:#102a36;font-size:25px}.pdf-head p,.pdf-meta{margin:4px 0 0;color:#607078}.pdf-meta{text-align:${direction === "rtl" ? "left" : "right"};font-size:11px}.pdf-section{margin-top:22px}.pdf-section h2{margin:0 0 11px;color:#173541;font-size:15px}.pdf-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.pdf-stat{min-height:75px;padding:11px;border:1px solid #d9e2df;border-radius:10px;background:#f7f8f5}.pdf-stat span{display:block;min-height:30px;color:#607078;font-size:10px}.pdf-stat strong{display:block;color:#102a36;font-size:15px}.pdf-money{direction:ltr;unicode-bidi:isolate;display:inline-block;font-weight:800}.pdf-table{width:100%;border-collapse:collapse;font-size:10px}.pdf-table tr{break-inside:avoid}.pdf-table th{padding:8px 9px;color:#fff;background:#102a36;text-align:start}.pdf-table td{padding:8px 9px;border-bottom:1px solid #e4e9e6}.pdf-empty{padding:22px;border:1px dashed #ccd7d2;border-radius:10px;color:#68767b;text-align:center}.pdf-foot{display:flex;justify-content:space-between;margin-top:28px;padding-top:12px;border-top:1px solid #d9e2df;color:#6d797e;font-size:10px}
+      .sarafi-daily-pdf *{box-sizing:border-box}.pdf-head{display:flex;align-items:flex-start;justify-content:space-between;gap:28px;padding-bottom:20px;border-bottom:3px solid #0d7169}.pdf-brand{display:flex;align-items:center;gap:13px}.pdf-mark{display:grid;width:46px;height:46px;place-items:center;border-radius:13px;color:#f4d58a;background:#102a36;font-size:24px;font-weight:900}.pdf-head h1{margin:0;color:#102a36;font-size:25px}.pdf-head p,.pdf-meta{margin:4px 0 0;color:#607078}.pdf-meta{text-align:${direction === "rtl" ? "left" : "right"};font-size:11px}.pdf-section{margin-top:22px}.pdf-section h2{margin:0 0 11px;color:#173541;font-size:15px}.pdf-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.pdf-stat{min-height:75px;padding:11px;border:1px solid #d9e2df;border-radius:10px;background:#f7f8f5}.pdf-stat span{display:block;min-height:30px;color:#607078;font-size:10px}.pdf-stat strong{display:block;color:#102a36;font-size:15px}.pdf-narrative{margin-top:18px;padding:14px 16px;border-inline-start:4px solid #0d7169;border-radius:8px;background:#f3f8f6}.pdf-narrative h2{margin:0 0 6px;font-size:14px}.pdf-narrative p{margin:0;color:#465b62}.pdf-money{direction:ltr;unicode-bidi:isolate;display:inline-block;font-weight:800}.pdf-table{width:100%;border-collapse:collapse;font-size:10px}.pdf-table tr{break-inside:avoid}.pdf-table th{padding:8px 9px;color:#fff;background:#102a36;text-align:start}.pdf-table td{padding:8px 9px;border-bottom:1px solid #e4e9e6}.pdf-empty{padding:22px;border:1px dashed #ccd7d2;border-radius:10px;color:#68767b;text-align:center}.pdf-foot{display:flex;justify-content:space-between;margin-top:28px;padding-top:12px;border-top:1px solid #d9e2df;color:#6d797e;font-size:10px}
     </style>
     <header class="pdf-head"><div class="pdf-brand"><span class="pdf-mark">S</span><div><h1>${escapeHtml(input.businessName)}</h1><p>${labels.title}</p></div></div><div class="pdf-meta">${labels.date}: <bdi>${escapeHtml(input.businessDate)}</bdi><br>${labels.branch}: ${escapeHtml(input.branchName)}<br>${labels.cashbox}: ${escapeHtml(input.cashboxName ?? "—")}</div></header>
     <section class="pdf-section"><h2>${labels.summary}</h2><div class="pdf-summary"><div class="pdf-stat"><span>${labels.count}</span><strong>${snapshot?.transaction_count ?? input.rows.length}</strong></div><div class="pdf-stat"><span>${labels.volume}</span><strong>${money(snapshot?.volume_base ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.profit}</span><strong>${money(snapshot?.realized_profit ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.expenses}</span><strong>${money(snapshot?.expenses ?? "0")}</strong></div></div></section>
+    ${input.narrative ? `<section class="pdf-narrative"><h2>${escapeHtml(input.narrative.title)}</h2><p>${escapeHtml(input.narrative.body)}</p></section>` : ""}
     <section class="pdf-section"><h2>${labels.activity}</h2>${activities ? `<table class="pdf-table"><tbody>${activities}</tbody></table>` : `<div class="pdf-empty">${labels.empty}</div>`}</section>
     <footer class="pdf-foot"><span>SARAFI · ${labels.title}</span><span>${labels.made}: <bdi>${escapeHtml(prepared)}</bdi></span></footer>
   </article>`;
@@ -203,6 +205,7 @@ export async function downloadPdf(input: DailyReportInput): Promise<void> {
     `${labels.profit}: ${snapshot?.realized_profit ?? "0"} AFN`,
     `${labels.expenses}: ${snapshot?.expenses ?? "0"} AFN`,
     "",
+    ...(input.narrative ? [input.narrative.title, input.narrative.body, ""] : []),
     labels.activity,
   ];
   pdf.setFont(reportFont, "normal");

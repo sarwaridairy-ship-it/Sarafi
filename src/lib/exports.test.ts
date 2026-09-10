@@ -64,11 +64,17 @@ describe("daily report rendering", () => {
       language: "ps-AF",
       businessDate: "2026-09-03",
       snapshot: null,
+      narrative: {
+        title: 'د دې راپور په اړه',
+        body: 'دا راپور یوازې ساتل شوي معلومات ښيي.',
+      },
     });
 
     expect(html).toContain("د نن لنډیز");
     expect(html).toContain("د ورځې معاملې او کارونه");
     expect(html).toContain("کومه معامله نه ده ثبت شوې");
+    expect(html).toContain("د دې راپور په اړه");
+    expect(html).toContain("دا راپور یوازې ساتل شوي معلومات ښيي.");
   });
 });
 

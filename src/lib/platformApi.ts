@@ -17,7 +17,7 @@ export type SubscriptionPlan = {
   status: 'draft' | 'published' | 'retired'
   sort_order: number
   features: Record<string, boolean>
-  term_prices: Array<{ term_months: 1 | 3 | 6 | 12; price_afn: string }>
+  term_prices: Array<{ term_months: 1 | 3 | 6 | 12; price_afn: string; active?: boolean }>
 }
 
 export type PaymentProvider = {
@@ -59,6 +59,10 @@ export type PaymentRequest = {
   status: string
   requested_at: string
   review_note?: string | null
+  receipt_storage_path?: string | null
+  receipt_file_name?: string | null
+  receipt_mime_type?: string | null
+  receipt_uploaded_at?: string | null
 }
 
 export type BillingPortal = {
@@ -135,18 +139,44 @@ export async function createSubscriptionPaymentRequest(input: {
   termMonths: 1 | 3 | 6 | 12
   reference: string
   note?: string
+  receipt: File
 }): Promise<RpcResult<{ request: PaymentRequest; checkout_url: string | null }>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.rpc('create_subscription_payment_request', {
+  if (!['application/pdf', 'image/jpeg', 'image/png'].includes(input.receipt.type)) {
+    return { data: null, error: 'Upload a PDF, JPG, or PNG payment receipt' }
+  }
+  if (input.receipt.size > 6 * 1024 * 1024) return { data: null, error: 'Payment receipt must be 6 MB or smaller' }
+  const user = await client.auth.getUser()
+  if (!user.data.user) return { data: null, error: user.error?.message ?? 'Authentication required' }
+  const extension = input.receipt.type === 'application/pdf' ? 'pdf' : input.receipt.type === 'image/png' ? 'png' : 'jpg'
+  const receiptPath = `${input.organizationId}/${user.data.user.id}/${crypto.randomUUID()}.${extension}`
+  const uploaded = await client.storage.from('subscription-payment-receipts').upload(receiptPath, input.receipt, {
+    cacheControl: '3600',
+    contentType: input.receipt.type,
+    upsert: false,
+  })
+  if (uploaded.error) return { data: null, error: uploaded.error.message }
+  const result = await client.rpc('create_subscription_payment_request_v2', {
     target_org: input.organizationId,
     target_plan: input.planId,
     target_provider: input.providerCode,
     term_months_input: input.termMonths,
     payer_reference_input: input.reference.trim(),
     payer_note_input: input.note?.trim() || null,
+    receipt_path_input: receiptPath,
+    receipt_file_name_input: input.receipt.name,
+    receipt_mime_type_input: input.receipt.type,
   })
+  if (result.error) await client.storage.from('subscription-payment-receipts').remove([receiptPath])
   return { data: result.data as { request: PaymentRequest; checkout_url: string | null } | null, error: result.error?.message ?? null }
+}
+
+export async function getSubscriptionPaymentReceiptUrl(receiptPath: string): Promise<RpcResult<string>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.storage.from('subscription-payment-receipts').createSignedUrl(receiptPath, 300)
+  return { data: result.data?.signedUrl ?? null, error: result.error?.message ?? null }
 }
 
 export async function getPlatformAdminConsole(): Promise<RpcResult<PlatformConsole>> {
@@ -206,6 +236,26 @@ export async function setSubscriptionStatus(input: {
     reason_input: input.reason.trim(),
   })
   return { data: result.data as SubscriptionSummary | null, error: result.error?.message ?? null }
+}
+
+export async function setSubscriptionPlanPrice(input: {
+  planId: string
+  termMonths: 1 | 3 | 6 | 12
+  priceAfn: string
+  active: boolean
+}): Promise<RpcResult<{ plan_id: string; term_months: number; price_afn: string; active: boolean }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('set_subscription_plan_price', {
+    target_plan: input.planId,
+    term_months_input: input.termMonths,
+    price_afn_input: input.priceAfn,
+    active_input: input.active,
+  })
+  return {
+    data: result.data as { plan_id: string; term_months: number; price_afn: string; active: boolean } | null,
+    error: result.error?.message ?? null,
+  }
 }
 
 export async function setPaymentProviderState(input: {

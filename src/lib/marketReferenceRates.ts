@@ -8,9 +8,16 @@ export type MarketReferenceRate = {
 }
 
 export type MarketReferenceRateBoard = {
-  market: 'Sarai Shahzada'
+  market: 'Sarai Shahzada' | 'Khorasan Market'
+  marketCode: 'sarai-shahzada' | 'khorasan-market'
+  quoteCurrency: 'AFN' | 'IRR'
   fetchedAt: string
   rates: MarketReferenceRate[]
+}
+
+export type MarketReferenceRateResponse = {
+  fetchedAt: string
+  markets: MarketReferenceRateBoard[]
 }
 
 const plainText = (value: string) => value
@@ -38,11 +45,17 @@ const normalizeQuotedRate = (value: string, quotedUnits: number) => {
   return (parsed / quotedUnits).toFixed(9).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
 }
 
-export function parseMarketReferenceRates(html: string): MarketReferenceRate[] {
+export function parseMarketReferenceRates(
+  html: string,
+  marketCode: MarketReferenceRateBoard['marketCode'] = 'sarai-shahzada',
+  quoteCurrency: MarketReferenceRateBoard['quoteCurrency'] = 'AFN',
+): MarketReferenceRate[] {
   const rates: MarketReferenceRate[] = []
   const seen = new Set<string>()
+  const marketPattern = marketCode.replaceAll('-', '\\-')
+  const currencyPattern = new RegExp(`/exchange-rates/${marketPattern}/([A-Z]{3})-${quoteCurrency}`, 'i')
   for (const row of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
-    const currency = row[1].match(/\/exchange-rates\/sarai-shahzada\/([A-Z]{3})-AFN/i)?.[1]?.toUpperCase()
+    const currency = row[1].match(currencyPattern)?.[1]?.toUpperCase()
     const buyQuoted = rateValue(row[1], 'buyRate')
     const sellQuoted = rateValue(row[1], 'sellRate')
     if (!currency || !buyQuoted || !sellQuoted || seen.has(currency)) continue
@@ -65,8 +78,8 @@ export function parseMarketReferenceRates(html: string): MarketReferenceRate[] {
   return rates
 }
 
-export async function getMarketReferenceRateBoard(): Promise<MarketReferenceRateBoard> {
+export async function getMarketReferenceRateBoards(): Promise<MarketReferenceRateResponse> {
   const response = await fetch('/api/market-rates', { headers: { accept: 'application/json' } })
   if (!response.ok) throw new Error('Market reference rates are temporarily unavailable')
-  return response.json() as Promise<MarketReferenceRateBoard>
+  return response.json() as Promise<MarketReferenceRateResponse>
 }

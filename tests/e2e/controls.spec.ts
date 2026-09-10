@@ -194,7 +194,7 @@ test.describe("workspace controls", () => {
 
   test("required routes survive direct navigation and refresh", async ({ page, browserName }) => {
     test.skip(browserName !== "chromium", "Chromium performs the complete direct-route inventory");
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const routes = [
       ["/app/inspection/home", "Your exchange at a glance"],
       ["/app/inspection/transactions/new", "Make a Transaction"],

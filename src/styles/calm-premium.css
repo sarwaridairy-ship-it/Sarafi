@@ -915,6 +915,19 @@
 .market-change.negative { color: #b33a53; }
 .market-change.neutral { color: #977c18; }
 .market-rate-heading { background: #17394b !important; color: #fff; font-size: .78rem; font-weight: 750; min-height: 42px; }
+.rate-currency-picker { border-top: 1px solid #dce5e1; padding: 0 18px 16px; }
+.rate-currency-picker > summary { color: #164f45; cursor: pointer; font-weight: 800; padding: 14px 0; }
+.rate-currency-picker > p { color: var(--calm-muted, #61736c); margin: 0 0 12px; }
+.rate-currency-choice-list { display: grid; gap: 7px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 12px; }
+.rate-currency-choice-list article { align-items: center; border: 1px solid #d9e3df; border-radius: 10px; display: flex; gap: 8px; justify-content: space-between; min-width: 0; padding: 8px 10px; }
+.rate-currency-choice-list article.selected { background: #eef8f3; border-color: #72a995; }
+.rate-currency-choice-list label { align-items: center; cursor: pointer; display: flex; gap: 8px; min-width: 0; }
+.rate-currency-choice-list label > span { display: grid; min-width: 0; }
+.rate-currency-choice-list label b { overflow-wrap: anywhere; }
+.rate-currency-choice-list label small { color: var(--calm-muted, #61736c); }
+.rate-currency-choice-list input { flex: 0 0 auto; height: 18px; width: 18px; }
+.currency-order-actions { display: flex; flex: 0 0 auto; gap: 4px; }
+.currency-order-actions button { background: #fff; border: 1px solid #cddbd5; border-radius: 7px; height: 30px; width: 30px; }
 
 .money-workspace .account-control-panel { border: 0; padding: 0; }
 .money-workspace .account-card-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
@@ -979,6 +992,45 @@
 .receipt-flow small { color: var(--calm-muted, #61736c); }
 .receipt-flow strong { overflow-wrap: anywhere; }
 .receipt-flow > b { color: #176b5b; }
+.receipt-narrative,
+.report-narrative { background: #f2f8f5; border-inline-start: 4px solid #227b66; margin: 14px 18px 0; padding: 13px 15px; }
+.receipt-narrative h2,
+.report-narrative h3 { color: #153f38; font-size: .95rem; margin: 0 0 5px; }
+.receipt-narrative p,
+.report-narrative p { color: #526a64; line-height: 1.55; margin: 0; overflow-wrap: anywhere; }
+.report-narrative { border-radius: 10px; margin: 14px 0 0; }
+
+.customer-selector { display: grid; gap: 7px; min-width: 0; }
+.customer-selector-label { font-size: .78rem; font-weight: 800; }
+.customer-search-row { display: grid; gap: 7px; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; }
+.customer-search-row input,
+.customer-selector select { box-sizing: border-box; max-width: 100%; min-width: 0; width: 100%; }
+.customer-search-row .text-button { min-height: 42px; white-space: nowrap; }
+.quick-customer-dialog { display: grid; gap: 14px; width: min(460px, 100%); }
+.quick-customer-dialog label { display: grid; font-weight: 750; gap: 6px; }
+.quick-customer-dialog input { box-sizing: border-box; min-height: 44px; min-width: 0; width: 100%; }
+
+.panel,
+.panel > *,
+.balance-row > *,
+.named-report-table,
+.named-report-table article,
+.named-report-table article > *,
+.platform-panel,
+.platform-panel > * { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.balance-row > *,
+.named-report-table article > * { overflow-wrap: anywhere; }
+.payment-receipt-field input[type="file"] { max-width: 100%; padding: 7px; }
+.payment-receipt-field small { color: var(--calm-muted, #61736c); font-weight: 500; }
+.payment-history-actions { align-items: end; display: grid; gap: 4px; justify-items: end; }
+.plan-term-editor { display: grid; gap: 8px; margin-block: 10px; }
+.platform-plan-editor { padding: 17px !important; }
+.platform-plan-editor .plan-term-editor form { align-items: center; background: #f5f8f6; border: 1px solid #dce5e1; border-radius: 10px; display: grid; gap: 8px; grid-template-columns: 72px minmax(120px, 1fr) minmax(150px, 1fr) auto; padding: 9px; }
+.platform-plan-editor .plan-term-editor form > b { font-size: .86rem; }
+.platform-plan-editor .plan-term-editor label { align-items: center; display: flex; gap: 6px; min-width: 0; }
+.platform-plan-editor .plan-term-editor input { inset: auto; min-height: 36px; position: static; top: auto; width: 100%; }
+.platform-plan-editor .plan-term-editor input[type="checkbox"] { flex: 0 0 auto; height: 18px; min-height: 18px; width: 18px; }
+.platform-plan-editor .plan-term-editor .text-button { min-height: 36px; white-space: nowrap; }
 
 @media (max-width: 720px) {
   .mobile-nav button { font-size: clamp(7px, 2.15vw, 9px); line-height: 1.08; padding-inline: 1px; white-space: normal; }
@@ -1006,6 +1058,11 @@
   .cashbox-create-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .cashbox-create-actions button { justify-content: center; width: 100%; }
   .currency-setting { gap: 8px; grid-template-columns: 42px minmax(0, 1fr) minmax(68px, auto); padding: 7px 9px; }
+  .rate-currency-picker { padding-inline: 12px; }
+  .rate-currency-choice-list { grid-template-columns: 1fr; }
+  .platform-plan-editor .plan-term-editor form { grid-template-columns: 1fr 1fr; }
+  .platform-plan-editor .plan-term-editor form > b,
+  .platform-plan-editor .plan-term-editor .text-button { align-self: center; }
 }
 
 @media (max-width: 420px) {
@@ -1015,6 +1072,12 @@
   .market-rate-row { grid-template-columns: minmax(94px, 1.45fr) repeat(2, minmax(42px, .65fr)) minmax(38px, .52fr) minmax(40px, .54fr); padding-inline: 7px; }
   .market-currency-mark { font-size: .58rem; height: 21px; min-width: 22px; }
   .operation-primary-grid { grid-template-columns: 1fr; gap: 0; }
+  .transaction-receipt .transaction-detail-grid { grid-template-columns: 1fr; }
+  .customer-search-row { grid-template-columns: 1fr; }
+  .customer-search-row .text-button { width: 100%; }
+  .payment-history .balance-row { grid-template-columns: auto minmax(0, 1fr); }
+  .payment-history-actions { grid-column: 2; justify-items: start; }
+  .platform-plan-editor .plan-term-editor form { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 960px) {
