@@ -128,14 +128,15 @@ test.describe("calm premium v4 objective acceptance", () => {
 
     await page.goto(`${workspace}/control?role=owner`);
     await expect(page.getByRole("heading", { name: "Manage SARAFI" })).toBeVisible();
-    await expect(page.locator(".control-center-card")).toHaveCount(4);
+    await expect(page.locator(".control-center-card")).toHaveCount(5);
 
     await page.goto(`${workspace}/reports?role=owner`);
     await expect(page.getByRole("heading", { name: "Exact report snapshot" })).toBeVisible();
     await expect(page.locator(".export-menu")).toHaveCount(0);
-    await page.getByRole("button", { name: "Generate today’s report" }).click();
+    await page.getByRole("button", { name: "Prepare today’s report" }).click();
     await expect(page.locator(".export-menu")).toHaveCount(1);
     await expect(page.locator(".export-menu > summary")).toHaveText("Export formats");
+    await expect(page.getByRole("button", { name: "Download simple daily PDF" })).toBeEnabled();
     await expect(page.locator(".report-evidence")).toContainText("Main branch");
     expect(await page.locator("select optgroup").count()).toBeGreaterThanOrEqual(4);
   });
@@ -152,6 +153,18 @@ test.describe("calm premium v4 objective acceptance", () => {
       expect(primaryBox).not.toBeNull();
       expect(navBox).not.toBeNull();
       expect(primaryBox!.y + primaryBox!.height).toBeLessThanOrEqual(navBox!.y + 2);
+      const navOverflow = await mobileNav.evaluate((element) => element.scrollWidth - element.clientWidth);
+      expect(navOverflow).toBeLessThanOrEqual(1);
+    });
+  }
+
+  for (const width of [390, 768]) {
+    test(`${width}px transaction form fits without horizontal page scrolling`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${workspace}/transactions/new/fx/buy?role=owner`);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(1);
+      await expect(page.locator(".exchange-entry-row")).toBeVisible();
     });
   }
 

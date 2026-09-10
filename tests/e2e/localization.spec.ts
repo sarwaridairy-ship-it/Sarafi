@@ -15,6 +15,8 @@ const allowedLatinWords = new Set([
   "SAR",
   "CNY",
   "INR",
+  "IRR",
+  "KWD",
   "CSV",
   "PDF",
   "WhatsApp",
@@ -44,7 +46,7 @@ const locales = [
     languageLabel: "Change language",
     home: "خانه",
     moneyNav: "پول من",
-    moneyHeading: "پول من کجا است؟",
+    moneyHeading: "صندوق‌ها",
     peopleNav: "مشتریان، طلب و قرض",
     peopleHeading: "مشتریان و صرافان",
     transactionsNav: "معاملات",
@@ -52,7 +54,7 @@ const locales = [
     reports: "گزارش‌ها",
     reportsHeading: "نسخه دقیق گزارش",
     rates: "نرخ‌ها",
-    ratesHeading: "نرخ‌های صرافی",
+    ratesHeading: "نرخ‌های بازار",
     cashbox: "بررسی صندوق",
     cashboxHeading: "بررسی صندوق",
     team: "کارمندان و دستگاه‌ها",
@@ -72,7 +74,7 @@ const locales = [
     languageLabel: "Change language",
     home: "کور",
     moneyNav: "زما پیسې",
-    moneyHeading: "زما پیسې چېرته دي؟",
+    moneyHeading: "صندوقونه",
     peopleNav: "پېرودونکي او پورونه",
     peopleHeading: "پېرودونکي او صرافان",
     transactionsNav: "معاملې",
@@ -80,7 +82,7 @@ const locales = [
     reports: "راپورونه",
     reportsHeading: "د راپور کره نسخه",
     rates: "نرخونه",
-    ratesHeading: "د صرافۍ نرخونه",
+    ratesHeading: "د بازار نرخونه",
     cashbox: "د صندوق کتنه",
     cashboxHeading: "صندوق کتل",
     team: "کارکوونکي او وسایل",
@@ -207,20 +209,16 @@ for (const locale of [
   {
     code: "fa-AF",
     money: "پول من",
-    accounts: "صندوق‌ها و حساب‌های پولی",
+    cashboxes: "صندوق‌ها",
     currencies: "اسعار مورد استفاده صرافی",
-    manage: "مدیریت اسعار",
-    search: "پیدا کردن اسعار",
-    addAccount: "افزودن حساب پولی",
+    search: "جستجوی اسعار",
   },
   {
     code: "ps-AF",
     money: "زما پیسې",
-    accounts: "د پیسو صندوقونه او حسابونه",
+    cashboxes: "صندوقونه",
     currencies: "د صرافۍ کارېدونکي اسعار",
-    manage: "اسعار اداره کړئ",
-    search: "اسعار پیدا کول",
-    addAccount: "د پیسو حساب زیاتول",
+    search: "اسعار ولټوئ",
   },
 ] as const) {
   test(`${locale.code} money controls use local wording`, async ({ page }) => {
@@ -230,12 +228,11 @@ for (const locale of [
       .getByRole("combobox", { name: "Change language" })
       .selectOption(locale.code);
     await page.goto("/app/inspection/money");
-    await page.locator(".money-place-manager > summary").click();
-    await expect(page.getByRole("heading", { name: locale.accounts })).toBeVisible();
-    await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();
-    await page.locator(".currency-manager > summary").filter({ hasText: locale.manage }).click();
-    await expect(page.getByRole("textbox", { name: locale.search })).toBeVisible();
-    await expect(page.getByRole("button", { name: locale.addAccount })).toBeVisible();
+    await expect(page.getByRole("heading", { name: locale.cashboxes, exact: true })).toBeVisible();
+    await expect(page.locator(".account-card")).toHaveCount(1);
     await expectNoEnglishLeak(page, `${locale.code} money controls`);
+    await page.goto("/app/inspection/control/business?role=owner");
+    await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: locale.search })).toBeVisible();
   });
 }

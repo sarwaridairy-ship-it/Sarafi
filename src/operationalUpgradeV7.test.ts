@@ -5,7 +5,6 @@ import { parseDebtCreateCommand, parseDebtSettlementCommand } from './domain/com
 const migration = readFileSync(new URL('../supabase/migrations/20260909224920_human_ids_subscriptions_and_search.sql', import.meta.url), 'utf8')
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
 const exportsSource = readFileSync(new URL('./lib/exports.ts', import.meta.url), 'utf8')
-const rateApi = readFileSync(new URL('../api/sarafi-rates.ts', import.meta.url), 'utf8')
 
 describe('operational upgrade v7 contracts', () => {
   it('keeps UUID keys internal while exposing stable numeric references', () => {
@@ -52,9 +51,9 @@ describe('operational upgrade v7 contracts', () => {
     }).cashbox_id).toBe(common.cashbox_id)
   })
 
-  it('uses only the fixed SARAFI.AF endpoint for online reference rates', () => {
-    expect(rateApi).toContain("const SOURCE = 'https://sarafi.af/en/exchange-rates' as const")
-    expect(rateApi).not.toContain('request.query')
+  it('uses the shop ledger for its rate board without an external source', () => {
+    expect(app).toContain('listRateHistory(organizationId)')
+    expect(app).not.toContain('getSarafiAfRateBoard')
   })
 
   it('does not truncate daily PDF rows', () => {

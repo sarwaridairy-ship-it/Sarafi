@@ -16,7 +16,6 @@ import {
   getTransactionRateContext,
   getMyResumableApprovalDraft,
   getTransactionDetail,
-  getOrganizationControlPlane,
   createFinancialReportSnapshot,
   getReconciliationWorkspace,
   listCurrencyCatalog,
@@ -36,8 +35,6 @@ import {
   cancelTeamInvitation,
   createTeamInvitation,
   createCounterparty,
-  createRateGroup,
-  createValuationRateSet,
   decideApproval,
   getPrivateCounterpartyDocuments,
   getPrivateDocumentUrl,
@@ -52,7 +49,6 @@ import {
   findHawalaPayout,
   getHawalaPartnerStatement,
   searchJournalEntries,
-  listLocationEvidence,
   listRateHistory,
   listReportExports,
   postFxTrade,
@@ -70,10 +66,6 @@ import {
   settleHawalaPartner,
   recordOpeningBalance,
   recordOperation,
-  createMoneyAccount,
-  setOrganizationCurrency,
-  setExchangeRate,
-  setRateGroupExchangeRate,
   recordReportExport,
   registerBrowserDevice,
   revokeTeamDevice,
@@ -91,8 +83,6 @@ import {
   type HawalaPayoutMatch,
   type HawalaPartnerStatement,
   type JournalRecord,
-  type LocationEvidenceRecord,
-  type RateHistoryRecord,
   type CurrencyCatalogRecord,
   type MoneyAccountRecord,
   type TeamMemberRecord,
@@ -109,7 +99,6 @@ import {
   type PrivateDocumentRecord,
   type NotificationRecord,
   type NamedReportRow,
-  type OrganizationControlPlane,
   type ReconciliationCloseRecord,
   type ReportExportRecord,
   type FinancialReportSnapshot,
@@ -154,7 +143,6 @@ import {
 import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot, workspaceSectionPath } from "./app/routes";
 import type { InlineRateResolverProps } from "./features/rates/InlineRateResolver";
 import { ReferenceScanner } from "./features/hawala/ReferenceScanner";
-import { getSarafiAfRateBoard, type SarafiAfRate } from "./lib/sarafiAfRates";
 
 const loadExports = () => import("./lib/exports");
 const ImportWorkspace = lazy(() => import("./ImportWorkspace").then((module) => ({ default: module.ImportWorkspace })));
@@ -359,6 +347,12 @@ type OperationKind =
   | "OWNER_WITHDRAWAL"
   | "BANK_DEPOSIT"
   | "BANK_WITHDRAWAL";
+type MarketRateRow = {
+  currency: string;
+  buy: string;
+  sell: string;
+  quotedUnits: number;
+};
 const inspectionCurrencies: CurrencyCatalogRecord[] = [
   ["AFN", "Afghan Afghani", "افغانی", "افغانۍ", "؋"],
   ["USD", "United States Dollar", "دالر امریکایی", "امریکايي ډالر", "$"],
@@ -621,6 +615,16 @@ function App() {
     businessDateInTimeZone(new Date(), "Asia/Kabul"),
   );
   const [toast, setToast] = useState("");
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+  useEffect(() => {
+    if (!inspectionMode || inspectionRateScenario !== "stale") return;
+    const timer = window.setTimeout(() => setToast(language === "en" ? "The approved rate is older than one day; review it before posting." : language === "fa-AF" ? "نرخ تأییدشده بیشتر از یک روز قدیمی است؛ پیش از ثبت آن را بررسی کنید." : "تایید شوی نرخ له یوې ورځې زوړ دی؛ له ثبت مخکې یې وګورئ."), 0);
+    return () => window.clearTimeout(timer);
+  }, [inspectionMode, inspectionRateScenario, language]);
   const [platformStatus, setPlatformStatus] = useState<PublicPlatformStatus | null>(null);
   useEffect(() => {
     if (!supabaseConfigured || inspectionMode) return;
@@ -1564,6 +1568,7 @@ function App() {
   const actOnNotification = async (notice: NotificationRecord, dismiss = false) => {
     if (organizationId !== "inspection") await markNotificationState(notice.id, dismiss ? "dismissed" : "read");
     setNotifications((current) => dismiss ? current.filter((item) => item.id !== notice.id) : current.map((item) => item.id === notice.id ? { ...item, status: "read" } : item));
+    setShowNotifications(false);
     if (!dismiss) {
       const root = workspaceRoot(organizationId);
       const subject = encodeURIComponent(notice.subject_id);
@@ -1579,7 +1584,6 @@ function App() {
                 ? `${root}/hawala/${subject}`
                 : `${root}/transactions/${subject}`;
       navigate(destination);
-      setShowNotifications(false);
     }
   };
 
@@ -2255,7 +2259,11 @@ function App() {
           </span>
         </div>
       </aside>
-      <nav className="mobile-nav" aria-label={t("workspace")}>
+      <nav
+        className="mobile-nav"
+        aria-label={t("workspace")}
+        style={{ gridTemplateColumns: `repeat(${primaryNavigation.length}, minmax(0, 1fr))` }}
+      >
         {primaryNavigation.map(([item, label, icon]) => (
           <button
             className={activeSection === item || (item === "Trade" && location.pathname.includes("/transactions/new/")) ? "active" : ""}
@@ -2390,9 +2398,6 @@ function App() {
                   onNavigate={openSection}
                   onRoute={(path) => navigate(path)}
                   onToast={setToast}
-                  onMoneyContextChanged={() =>
-                    setMoneyContextRefresh((value) => value + 1)
-                  }
                   onFinancialCompleted={setCompletedTrade}
                   onCounterpartyChanged={(person) => {
                     if (person) setTradeCounterparties((current) => current.some((item) => item.id === person.id) ? current : [...current, person]);
@@ -3190,7 +3195,6 @@ function WorkspaceView({
   onNavigate,
   onRoute,
   onToast,
-  onMoneyContextChanged,
   onFinancialCompleted,
   onCounterpartyChanged,
 }: {
@@ -3221,7 +3225,6 @@ function WorkspaceView({
   onNavigate: (section: string) => void;
   onRoute: (path: string) => void;
   onToast: (message: string) => void;
-  onMoneyContextChanged: () => void;
   onFinancialCompleted: (transaction: CompletedTrade) => void;
   onCounterpartyChanged: (person?: CounterpartyRecord) => void;
 }) {
@@ -3241,6 +3244,7 @@ function WorkspaceView({
         roleLabel={roleLabel}
         canManageTeam={canManageTeam}
         canManageMoney={canManageMoney}
+        canManageBilling={hasCapability(capabilities, "billing.manage")}
         onNavigate={onNavigate}
       />
     );
@@ -3283,12 +3287,9 @@ function WorkspaceView({
       <MoneyLocationView
         language={language}
         organizationId={organizationId}
-        branchId={branchId}
         activityRefresh={activityRefresh}
-        canManage={canManageMoney}
         onDashboard={onDashboard}
         onToast={onToast}
-        onMoneyContextChanged={onMoneyContextChanged}
       />
     );
   if (section === "People")
@@ -3311,10 +3312,7 @@ function WorkspaceView({
       <RatesView
         language={language}
         organizationId={organizationId}
-        branchId={branchId}
-        canManage={canManageMoney}
         onDashboard={onDashboard}
-        onToast={onToast}
       />
     );
   if (section === "Reports")
@@ -4680,563 +4678,113 @@ function TeamDevicesView({
 function MoneyLocationView({
   language,
   organizationId,
-  branchId,
   activityRefresh,
-  canManage,
   onDashboard,
   onToast,
-  onMoneyContextChanged,
 }: {
   language: Language;
   organizationId: string | null;
-  branchId: string | null;
   activityRefresh: number;
-  canManage: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
-  onMoneyContextChanged: () => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
-  const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
-  const [evidence, setEvidence] = useState<LocationEvidenceRecord[]>([]);
-  const [view, setView] = useState<"currency" | "location">("currency");
-  const [currency, setCurrency] = useState("ALL");
-  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const { accountId: routeAccountId = null } = useParams<{ accountId: string }>();
   const [loadedAccounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
-  const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
+  const [loading, setLoading] = useState(organizationId !== "inspection");
+  const { accountId: routeAccountId = null } = useParams<{ accountId: string }>();
   const accounts = organizationId === "inspection"
     ? inspectionMoneyAccounts(language)
     : loadedAccounts;
-  const catalog = organizationId === "inspection"
-    ? inspectionCurrencies
-    : loadedCatalog;
-  const [showAccountForm, setShowAccountForm] = useState(false);
-  const [accountName, setAccountName] = useState("");
-  const [accountType, setAccountType] = useState<
-    Exclude<MoneyAccountRecord["account_type"], "cashbox">
-  >("safe");
-  const [accountReference, setAccountReference] = useState("");
-  const [accountBusy, setAccountBusy] = useState(false);
-  const [currencySearch, setCurrencySearch] = useState("");
-  const [loading, setLoading] = useState(organizationId !== "inspection");
-  const inspection = organizationId === "inspection";
-  const previewSnapshot: DashboardSnapshot = {
-    transaction_count: 3,
-    buy_count: 1,
-    sell_count: 1,
-    exchange_count: 1,
-    volume_base: "255000",
-    realized_profit: "4200",
-    commission_income: "500",
-    expenses: "1200",
-    net_result: "3500",
-    net_position_base: "750000",
-    reconciliation_differences: "0",
-    pending_approvals: 0,
-    fresh_at: new Date().toISOString(),
-    positions: [
-      { currency: "AFN", quantity: "750000", carrying_base_value: "750000" },
-      { currency: "USD", quantity: "1800", carrying_base_value: "126450" },
-    ],
-    locations: [
-      {
-        location_id: "inspection-cashbox-id",
-        location_type: "cashbox",
-        location_name: ux(language, "previewCashboxName"),
-        currency: "AFN",
-        quantity: "125000",
-      },
-      {
-        location_id: "inspection-safe",
-        location_type: "account",
-        location_name: ux(language, "previewSafeName"),
-        currency: "AFN",
-        quantity: "325000",
-      },
-      {
-        location_id: "inspection-bank",
-        location_type: "bank",
-        location_name: ux(language, "previewBankName"),
-        currency: "AFN",
-        quantity: "300000",
-      },
-      {
-        location_id: "inspection-cashbox-id",
-        location_type: "cashbox",
-        location_name: ux(language, "previewCashboxName"),
-        currency: "USD",
-        quantity: "1800",
-      },
-    ],
-    receivables: [{ currency: "AFN", amount: "18000" }],
-    payables: [{ currency: "USD", amount: "250" }],
-    activity: [],
-  };
-  const previewEvidence: LocationEvidenceRecord[] = [
-    {
-      id: "inspection-evidence-afn",
-      journal_entry_id: "inspection-journal-afn",
-      currency_code: "AFN",
-      native_debit: "125000",
-      native_credit: "0",
-      occurred_at: new Date().toISOString(),
-      memo: ux(language, "recordedTransaction"),
-      location_id: "inspection-cashbox-id",
-      location_type: "cashbox",
-      location_name: ux(language, "previewCashboxName"),
+  const cashboxes = accounts.filter((account) => account.account_type === "cashbox");
+  const copy = ({
+    en: {
+      title: "Cashboxes",
+      intro: "See the money currently held in each cashbox.",
+      balances: "Cashbox balances",
+      balancesIntro: "One clear card for every cashbox.",
+      cashbox: "Cashbox",
+      empty: "No cashbox is available yet. Add one in Manage SARAFI → Business & currencies.",
+      noMoney: "No money recorded",
+      loading: "Loading cashboxes…",
     },
-    {
-      id: "inspection-evidence-usd",
-      journal_entry_id: "inspection-journal-usd",
-      currency_code: "USD",
-      native_debit: "1800",
-      native_credit: "0",
-      occurred_at: new Date().toISOString(),
-      memo: ux(language, "recordedTransaction"),
-      location_id: "inspection-cashbox-id",
-      location_type: "cashbox",
-      location_name: ux(language, "previewCashboxName"),
+    "fa-AF": {
+      title: "صندوق‌ها",
+      intro: "پول موجود در هر صندوق را ساده و روشن ببینید.",
+      balances: "موجودی صندوق‌ها",
+      balancesIntro: "برای هر صندوق یک کارت ساده.",
+      cashbox: "صندوق",
+      empty: "هنوز صندوقی موجود نیست. از مدیریت سرافی ← صرافی و اسعار، صندوق بسازید.",
+      noMoney: "هنوز پول ثبت نشده",
+      loading: "صندوق‌ها بار می‌شود…",
     },
-  ];
-  const visibleSnapshot = inspection ? previewSnapshot : snapshot;
-  const visibleEvidence = inspection ? previewEvidence : evidence;
+    "ps-AF": {
+      title: "صندوقونه",
+      intro: "په هر صندوق کې موجودې پیسې په ساده ډول وګورئ.",
+      balances: "د صندوقونو پیسې",
+      balancesIntro: "د هر صندوق لپاره یو ساده کارت.",
+      cashbox: "صندوق",
+      empty: "تر اوسه صندوق نشته. د سرافي اداره ← صرافي او اسعار کې صندوق جوړ کړئ.",
+      noMoney: "تر اوسه پیسې نه دي ثبت شوې",
+      loading: "صندوقونه پورته کېږي…",
+    },
+  } as const)[language];
+
   useEffect(() => {
-    if (!routeAccountId) return;
-    // oxlint-disable-next-line react/set-state-in-effect -- The route is the source of truth for an exact money-account deep link.
-    setView("location");
-    // oxlint-disable-next-line react/set-state-in-effect -- The route is the source of truth for an exact money-account deep link.
-    setSelectedLocation(routeAccountId);
-  }, [routeAccountId]);
-  useEffect(() => {
-    if (!organizationId) return;
-    if (organizationId === "inspection") return;
-    void Promise.all([
-      getOwnerDashboard(organizationId),
-      listLocationEvidence(organizationId),
-      listMoneyAccounts(organizationId),
-      listCurrencyCatalog(organizationId),
-    ]).then(([dashboardResult, evidenceResult, accountResult, currencyResult]) => {
-      if (dashboardResult.data) setSnapshot(dashboardResult.data);
-      if (evidenceResult.data) setEvidence(evidenceResult.data);
-      if (accountResult.data) setAccounts(accountResult.data);
-      if (currencyResult.data) setCatalog(currencyResult.data);
-      if (dashboardResult.error || evidenceResult.error || accountResult.error || currencyResult.error)
-        onToast(ux(language, "couldNotLoad"));
+    if (!organizationId || organizationId === "inspection") return;
+    let active = true;
+    void listMoneyAccounts(organizationId).then((result) => {
+      if (!active) return;
+      if (result.data) setAccounts(result.data);
+      if (result.error) onToast(ux(language, "couldNotLoad"));
       setLoading(false);
     });
+    return () => {
+      active = false;
+    };
   }, [activityRefresh, language, onToast, organizationId]);
 
-  const refreshControls = async () => {
-    if (!organizationId || organizationId === "inspection") return;
-    const [accountResult, currencyResult] = await Promise.all([
-      listMoneyAccounts(organizationId),
-      listCurrencyCatalog(organizationId),
-    ]);
-    if (accountResult.data) setAccounts(accountResult.data);
-    if (currencyResult.data) setCatalog(currencyResult.data);
-    onMoneyContextChanged();
-  };
-  const submitAccount = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!organizationId) return;
-    setAccountBusy(true);
-    const result = await createMoneyAccount({
-      organizationId,
-      name: accountName,
-      accountType,
-      branchId,
-      reference: accountReference,
-    });
-    setAccountBusy(false);
-    if (result.error) {
-      onToast(u("accountCreateFailed"));
-      return;
-    }
-    setAccountName("");
-    setAccountReference("");
-    setShowAccountForm(false);
-    onToast(u("accountCreated"));
-    await refreshControls();
-  };
-  const toggleOrganizationCurrency = async (
-    currencyCode: string,
-    enabled: boolean,
-  ) => {
-    if (!organizationId) return;
-    const result = await setOrganizationCurrency(
-      organizationId,
-      currencyCode,
-      enabled,
-    );
-    if (result.error) {
-      onToast(u("currencyUpdateFailed"));
-      return;
-    }
-    onToast(u("currencyUpdated"));
-    await refreshControls();
-  };
-
-  const currencies = Array.from(
-    new Set([
-      ...(visibleSnapshot?.positions ?? []).map((item) => item.currency),
-      ...visibleEvidence.map((item) => item.currency_code),
-    ]),
-  ).sort();
-  const visibleLocations = (visibleSnapshot?.locations ?? []).filter(
-    (item) => currency === "ALL" || item.currency === currency,
-  );
-  const filteredEvidence = visibleEvidence.filter(
-    (item) =>
-      Boolean(selectedLocation) &&
-      (currency === "ALL" || item.currency_code === currency) &&
-      (!selectedLocation || item.location_id === selectedLocation),
-  );
-  const exposure = (direction: "receivable" | "payable") => {
-    const balances =
-      direction === "receivable"
-        ? (visibleSnapshot?.receivables ?? [])
-        : (visibleSnapshot?.payables ?? []);
-    const visible = balances.filter(
-      (item) => currency === "ALL" || item.currency === currency,
-    );
-    if (!visible.length) return currency === "ALL" ? "0" : `0.00 ${currency}`;
-    return visible
-      .map((item) => `${new Decimal(item.amount).toFixed(2)} ${item.currency}`)
-      .join(" · ");
-  };
-  const selectedLocationName =
-    visibleSnapshot?.locations.find((item) => item.location_id === selectedLocation)
-      ?.location_name ??
-    visibleEvidence.find((item) => item.location_id === selectedLocation)
-      ?.location_name ??
-    "";
-  const rows =
-    view === "currency"
-      ? currencies.map((item) => ({
-          key: item,
-          selectionKey: null,
-          label: item,
-          amount:
-            visibleSnapshot?.positions.find((position) => position.currency === item)
-              ?.quantity ?? "0",
-          currency: item,
-        }))
-      : visibleLocations.map((item) => ({
-          key: `${item.location_id}:${item.currency}`,
-          selectionKey: item.location_id,
-          label: item.location_name,
-          amount: item.quantity,
-          currency: item.currency,
-        }));
-  const visibleCatalog = catalog.filter((item) => {
-    const query = currencySearch.trim().toLowerCase();
-    return (
-      !query ||
-      item.code.toLowerCase().includes(query) ||
-      currencyName(language, item).toLowerCase().includes(query)
-    );
-  });
-  const enabledCatalog = catalog.filter((item) => item.enabled);
-  const accountTypeLabel = (type: MoneyAccountRecord["account_type"]) =>
-    u(`accountType_${type}` as Parameters<typeof ux>[1]);
   return (
     <section className="panel money-workspace">
       <div className="panel-header">
         <div>
           <p className="kicker">{t("myMoney")}</p>
-          <h1>{u("whereIsMoney")}</h1>
-          <p>{u("moneyIntro")}</p>
+          <h1>{copy.title}</h1>
+          <p>{copy.intro}</p>
         </div>
         <button className="text-button" onClick={onDashboard}>
-          {u("backHome")} →
+          {language === "en" ? "Back to Home" : language === "fa-AF" ? "بازگشت به خانه" : "کور ته ستنېدل"} →
         </button>
       </div>
-      <details className="money-place-manager" open={showAccountForm || undefined}>
-        <summary>
-          <span><AppIcon name="wallet" size={18} />{u("moneyAccountsTitle")}</span>
-          <small>{accounts.length} {u("moneyPlacesCount")}</small>
-        </summary>
-      <section className="account-control-panel">
+      <section className="account-control-panel cashbox-only-panel" aria-labelledby="cashbox-balances-title">
         <div className="panel-header compact-header">
           <div>
-            <h2>{u("moneyAccountsTitle")}</h2>
-            <p>{u("moneyAccountsIntro")}</p>
+            <h2 id="cashbox-balances-title">{copy.balances}</h2>
+            <p>{copy.balancesIntro}</p>
           </div>
-          {canManage && (
-            <button
-              className="primary-action"
-              onClick={() => setShowAccountForm((value) => !value)}
-            >
-              {showAccountForm ? u("cancelAction") : u("addMoneyAccount")}
-            </button>
-          )}
         </div>
-        <div className="account-card-grid">
-          {accounts.map((account) => (
-            <article className="account-card" key={account.id}>
-              <span className={`account-kind ${account.account_type}`}>
-                {accountTypeLabel(account.account_type)}
-              </span>
-              <h3>{account.name}</h3>
-              {account.reference_label && <p>{account.reference_label}</p>}
-              <div className="account-balances">
-                {account.balances.length ? (
-                  account.balances.map((balance) => (
+        {loading ? <div className="empty-live">{copy.loading}</div> : null}
+        {!loading && cashboxes.length ? (
+          <div className="account-card-grid">
+            {cashboxes.map((account) => (
+              <article
+                className={`account-card ${routeAccountId === account.id ? "deep-link-focus" : ""}`}
+                id={`money-account-${account.id}`}
+                key={account.id}
+              >
+                <span className="account-kind cashbox">{copy.cashbox}</span>
+                <h3>{account.name}</h3>
+                <div className="account-balances">
+                  {account.balances.length ? account.balances.map((balance) => (
                     <b key={`${account.id}-${balance.currency}`} dir="ltr">
                       {formatFinancialAmount(balance.amount)} {balance.currency}
                     </b>
-                  ))
-                ) : (
-                  <span>{u("noMoneyInAccount")}</span>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-        {!accounts.length && !loading && (
-          <div className="empty-live">{u("noMoneyAccounts")}</div>
-        )}
-        {!canManage && (
-          <p className="owner-control-note">{u("ownerOnlyAccounts")}</p>
-        )}
-        {canManage && showAccountForm && (
-          <form className="inline-management-form" onSubmit={submitAccount}>
-            <label>
-              {u("accountName")}
-              <input
-                required
-                minLength={2}
-                maxLength={80}
-                value={accountName}
-                onChange={(event) => setAccountName(event.target.value)}
-                placeholder={u("accountNamePlaceholder")}
-              />
-            </label>
-            <label>
-              {u("accountType")}
-              <select
-                value={accountType}
-                onChange={(event) =>
-                  setAccountType(event.target.value as typeof accountType)
-                }
-              >
-                {(["safe", "bank", "mobile_money", "partner", "other"] as const).map(
-                  (type) => (
-                    <option key={type} value={type}>
-                      {accountTypeLabel(type)}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
-            <label>
-              {u("accountReference")}
-              <input
-                maxLength={80}
-                value={accountReference}
-                onChange={(event) => setAccountReference(event.target.value)}
-                placeholder={u("accountReferencePlaceholder")}
-              />
-            </label>
-            <button className="primary-action" type="submit" disabled={accountBusy}>
-              {accountBusy ? u("posting") : u("saveMoneyAccount")}
-            </button>
-          </form>
-        )}
-      </section>
-      </details>
-      <div className="rate-strip">
-        <label>
-          {t("currency")}
-          <select
-            value={currency}
-            onChange={(event) => {
-              setCurrency(event.target.value);
-              setSelectedLocation(null);
-            }}
-          >
-            <option value="ALL">{u("allCurrencies")}</option>
-            {currencies.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-        <div className="segmented-control">
-          <button
-            className={view === "currency" ? "active" : ""}
-            onClick={() => setView("currency")}
-          >
-            {u("currencyFirst")}
-          </button>
-          <button
-            className={view === "location" ? "active" : ""}
-            onClick={() => setView("location")}
-          >
-            {u("locationFirst")}
-          </button>
-        </div>
-        <button className="export-button" onClick={() => window.print()}>
-          {u("printSnapshot")}
-        </button>
-      </div>
-      <div className="metric-grid">
-        <article className="metric-card">
-          <span>{u("theyOweUs")}</span>
-          <strong>{exposure("receivable")}</strong>
-        </article>
-        <article className="metric-card">
-          <span>{u("weOweThem")}</span>
-          <strong>{exposure("payable")}</strong>
-        </article>
-        <article className="metric-card">
-          <span>{u("postedRecords")}</span>
-          <strong>{visibleEvidence.length}</strong>
-        </article>
-      </div>
-      {loading ? (
-        <div className="empty-live">{u("loadingMoney")}</div>
-      ) : (
-        <div className="money-columns">
-          <div className="balance-list">
-            {rows.length ? (
-              rows.map((row) => (
-                <button
-                  className={`balance-row ${routeAccountId === row.selectionKey ? "deep-link-focus" : ""}`}
-                  id={row.selectionKey ? `money-account-${row.selectionKey}` : undefined}
-                  key={row.key}
-                  onClick={() =>
-                    setSelectedLocation(
-                      view === "location" ? row.selectionKey : null,
-                    )
-                  }
-                >
-                  <span className="currency-badge usd">{row.currency}</span>
-                  <span className="balance-name">
-                    <b>{row.label}</b>
-                    <small>
-                      {view === "currency"
-                        ? u("totalCurrency")
-                        : u("moneyAtPlace")}
-                    </small>
-                  </span>
-                  <strong>
-                    {formatFinancialAmount(row.amount)} {row.currency}
-                  </strong>
-                </button>
-              ))
-            ) : (
-              <div className="empty-live">{u("noMoney")}</div>
-            )}
-          </div>
-          <details className="panel evidence-panel" open={Boolean(selectedLocation)}>
-            <summary className="panel-header">
-              <div>
-                <h2>
-                  {selectedLocation
-                    ? `${u("amountSource")} · ${selectedLocationName}`
-                    : u("amountSource")}
-                </h2>
-                <p>{u("eachAmountSource")}</p>
-              </div>
-            </summary>
-            {filteredEvidence.length ? (
-              <div className="balance-list">
-                {filteredEvidence.slice(0, 80).map((line) => (
-                  <div className="balance-row" key={line.id}>
-                    <span className="currency-badge usd">
-                      {line.currency_code}
-                    </span>
-                    <span className="balance-name">
-                      <b>
-                        {line.memo ||
-                          line.location_name ||
-                          u("recordedTransaction")}
-                      </b>
-                      <small>
-                        {new Date(line.occurred_at).toLocaleString(language, { hour12: false })}
-                      </small>
-                    </span>
-                    <strong>
-                      {new Decimal(line.native_debit).minus(line.native_credit).gte(0) ? "+" : ""}
-                      {new Decimal(line.native_debit).minus(line.native_credit).toFixed(2)}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-live">{u("selectLocation")}</div>
-            )}
-          </details>
-        </div>
-      )}
-      <section className="currency-control-panel currency-summary-panel">
-        <div className="panel-header compact-header">
-          <div>
-            <p className="kicker">{u("enabledCurrencies")}</p>
-            <h2>{u("shopCurrenciesTitle")}</h2>
-            <p>{u("shopCurrenciesIntro")}</p>
-          </div>
-        </div>
-        <div className="enabled-currency-list" aria-label={u("enabledCurrencies")}>
-          {enabledCatalog.map((item) => (
-            <span className="enabled-currency" key={item.code}>
-              <b>{item.code}</b>
-              <small>{currencyName(language, item)}</small>
-            </span>
-          ))}
-        </div>
-        {canManage ? (
-          <details className="currency-manager">
-            <summary>
-              <span><AppIcon name="settings" size={18} />{u("manageCurrencies")}</span>
-              <small>{enabledCatalog.length} / {catalog.length}</small>
-            </summary>
-            <div className="currency-manager-body">
-              <div className="currency-manager-heading">
-                <div>
-                  <h3>{u("manageCurrencies")}</h3>
-                  <p>{u("manageCurrenciesIntro")}</p>
+                  )) : <span>{copy.noMoney}</span>}
                 </div>
-                <label className="currency-search">
-                  <span>{u("searchCurrency")}</span>
-                  <input
-                    value={currencySearch}
-                    onChange={(event) => setCurrencySearch(event.target.value)}
-                    placeholder={u("searchCurrencyPlaceholder")}
-                  />
-                </label>
-              </div>
-              <div className="currency-catalog-grid">
-                {visibleCatalog.map((item) => (
-                  <label className={`currency-catalog-item ${item.enabled ? "enabled" : ""}`} key={item.code}>
-                    <span className="currency-symbol">{item.symbol}</span>
-                    <span>
-                      <b>{item.code}</b>
-                      <small>{currencyName(language, item)}</small>
-                    </span>
-                    {item.code === "AFN" ? (
-                      <span className="base-currency-label">{u("baseCurrency")}</span>
-                    ) : (
-                      <input
-                        type="checkbox"
-                        checked={item.enabled}
-                        onChange={(event) =>
-                          void toggleOrganizationCurrency(item.code, event.target.checked)
-                        }
-                        aria-label={`${item.code} ${u("usedInShop")}`}
-                      />
-                    )}
-                  </label>
-                ))}
-              </div>
-              <p className="owner-control-note">{u("currencyOwnerHelp")}</p>
-            </div>
-          </details>
-        ) : (
-          <p className="owner-control-note">{u("ownerOnlyCurrencies")}</p>
-        )}
+              </article>
+            ))}
+          </div>
+        ) : null}
+        {!loading && !cashboxes.length ? <div className="empty-live">{copy.empty}</div> : null}
       </section>
     </section>
   );
@@ -5898,31 +5446,27 @@ function TransactionsView({
         </div>
         <article className="transaction-receipt">
           <header className="transaction-receipt-head">
-            <div><span className="brand-mark">S</span><strong>SARAFI</strong></div>
-            <div><small>{filterCopy.receipt}</small><b dir="ltr">{selected.transaction_reference ?? "—"}</b></div>
+            <div><span className="brand-mark">S</span><span><strong>{transactionName(selected)}</strong><small>{filterCopy.receipt}</small></span></div>
+            <div><b dir="ltr">{selected.receipt_number ?? selected.transaction_reference ?? "—"}</b><small dir="ltr">{selected.transaction_reference ?? selected.status}</small><small>{selected.status}</small></div>
           </header>
-          <div className="receipt-id-strip">
-            <span>{filterCopy.transactionId}</span><strong dir="ltr">{selected.transaction_reference ?? "—"}</strong>
-            <span>{filterCopy.receiptNo}</span><strong dir="ltr">{selected.receipt_number ?? "—"}</strong>
+          <div className="receipt-flow">
+            <span><small>{u("sourceAccount")}</small><strong>{flow.source}</strong></span>
+            <b aria-hidden="true">→</b>
+            <span><small>{u("destinationAccount")}</small><strong>{flow.destination}</strong></span>
           </div>
-        <div className="transaction-detail-grid">
-          <article><small>{language === "en" ? "Status" : language === "fa-AF" ? "وضعیت" : "حالت"}</small><strong>{selected.status}</strong></article>
+          <div className="transaction-detail-grid">
           <article><small>{u("businessDate")}</small><strong>{new Date(selected.occurred_at).toLocaleString(language, { hour12: false })}</strong></article>
-          <article><small>{u("sourceAccount")}</small><strong>{flow.source}</strong></article>
-          <article><small>{u("destinationAccount")}</small><strong>{flow.destination}</strong></article>
           <article><small>{u("customerLabel")}</small><strong>{selected.counterparty_name || t("walkInCustomer")}</strong></article>
-          {selected.customer_reference && <article><small>{filterCopy.customerId}</small><strong dir="ltr">{selected.customer_reference}</strong></article>}
-          <article><small>{u("employeeLabel")}</small><strong>{selected.employee_name || u("teamMember")}</strong></article>
           {selected.amount && selected.currency_code && <article><small>{t("amount")}</small><strong>{formatFinancialAmount(selected.amount)} {selected.currency_code}</strong></article>}
           {selected.given_amount && <article><small>{u("weGaveLabel")}</small><strong>{formatFinancialAmount(selected.given_amount)} {selected.given_currency}</strong></article>}
           {selected.received_amount && <article><small>{u("weReceivedLabel")}</small><strong>{formatFinancialAmount(selected.received_amount)} {selected.received_currency}</strong></article>}
           {selected.customer_rate && <article><small>{filterCopy.rate}</small><strong dir="ltr">{selected.customer_rate}</strong></article>}
           {selected.fee_amount && <article><small>{filterCopy.fee}</small><strong dir="ltr">{formatFinancialAmount(selected.fee_amount)} {selected.fee_currency ?? ""}</strong></article>}
-          <article><small>{t("note")}</small><strong>{selected.memo || "—"}</strong></article>
-        </div>
+          {selected.memo && <article><small>{t("note")}</small><strong>{selected.memo}</strong></article>}
+          </div>
           <footer className="transaction-receipt-foot">
             <span>{language === "en" ? "Recorded by" : language === "fa-AF" ? "ثبت توسط" : "ثبت کوونکی"}: {selected.employee_name || u("teamMember")}</span>
-            <details><summary>{filterCopy.technical}</summary><bdi>{selected.id}</bdi></details>
+            <details><summary>{filterCopy.technical}</summary><bdi>{selected.id}</bdi>{selected.customer_reference ? <><br /><bdi>{selected.customer_reference}</bdi></> : null}</details>
           </footer>
         </article>
         {canReverse && selected.status === "posted" && (
@@ -6019,334 +5563,163 @@ function TransactionsView({
 function RatesView({
   language,
   organizationId,
-  branchId,
-  canManage,
   onDashboard,
-  onToast,
 }: {
   language: Language;
   organizationId: string | null;
-  branchId: string | null;
-  canManage: boolean;
   onDashboard: () => void;
-  onToast: (message: string) => void;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
-  const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const advanced = ({
-    en: { group: "Customer rate group", tolerance: "Allowed rate difference", newGroup: "Add rate group", groupName: "Group name", groupCode: "Short code", valuation: "Reporting valuation rates", valuationIntro: "Record one AFN value for each enabled currency. This changes reports only; it never changes cash or old trades.", valuationName: "Valuation name", saveValuation: "Save valuation set", latestValuations: "Saved valuation sets" },
-    "fa-AF": { group: "گروه نرخ مشتری", tolerance: "فاصله مجاز نرخ", newGroup: "افزودن گروه نرخ", groupName: "نام گروه", groupCode: "کود کوتاه", valuation: "نرخ‌های ارزش‌گذاری گزارش", valuationIntro: "برای هر اسعار فعال یک ارزش افغانی ثبت کنید. این کار فقط گزارش را تغییر می‌دهد و پول یا معاملات گذشته را تغییر نمی‌دهد.", valuationName: "نام ارزش‌گذاری", saveValuation: "ذخیره نرخ‌های ارزش‌گذاری", latestValuations: "ارزش‌گذاری‌های ذخیره‌شده" },
-    "ps-AF": { group: "د پېرودونکي د نرخ ډله", tolerance: "د نرخ اجازه شوې فاصله", newGroup: "د نرخ ډله زیاتول", groupName: "د ډلې نوم", groupCode: "لنډ کوډ", valuation: "د راپور د ارزونې نرخونه", valuationIntro: "د هر فعال اسعار لپاره په افغانۍ ارزښت ولیکئ. دا یوازې راپور بدلوي؛ نغدې او پخوانۍ معاملې نه بدلوي.", valuationName: "د ارزونې نوم", saveValuation: "د ارزونې نرخونه ساتل", latestValuations: "ساتل شوې ارزونې" },
+  const copy = ({
+    en: {
+      title: "Market rates",
+      board: "Shop buy and sell rates",
+      intro: "A simple buy and sell board for today.",
+      market: "Rate board",
+      shop: "My shop",
+      currency: "Currency",
+      refresh: "Refresh",
+      updated: "Updated",
+      unavailable: "The shop rates are temporarily unavailable.",
+      empty: "No shop rate has been saved yet.",
+      back: "Back to Home",
+    },
+    "fa-AF": {
+      title: "نرخ‌های بازار",
+      board: "نرخ خرید و فروش صرافی",
+      intro: "جدول ساده خرید و فروش امروز.",
+      market: "جدول نرخ",
+      shop: "صرافی من",
+      currency: "اسعار",
+      refresh: "تازه‌سازی",
+      updated: "تازه‌شده",
+      unavailable: "نرخ‌های صرافی فعلاً در دسترس نیست.",
+      empty: "هنوز نرخی برای صرافی ذخیره نشده است.",
+      back: "بازگشت به خانه",
+    },
+    "ps-AF": {
+      title: "د بازار نرخونه",
+      board: "د صرافۍ د پېر او پلور نرخونه",
+      intro: "د نن ورځې د پېر او پلور ساده جدول.",
+      market: "د نرخ جدول",
+      shop: "زما صرافي",
+      currency: "اسعار",
+      refresh: "تازه کول",
+      updated: "تازه شوی",
+      unavailable: "د صرافۍ نرخونه اوس نه موندل کېږي.",
+      empty: "تر اوسه د صرافۍ نرخ نه دی ساتل شوی.",
+      back: "کور ته ستنېدل",
+    },
   } as const)[language];
-  const onlineCopy = ({
-    en: { title: "Live market reference", intro: "Rates come only from SARAFI.AF, Sarai Shahzada. Choose a row to copy it into the shop-rate form, then review and save it.", refresh: "Refresh", updated: "Updated", use: "Use this rate", unavailable: "The online reference is temporarily unavailable. Your saved shop rates are unchanged.", source: "Open SARAFI.AF" },
-    "fa-AF": { title: "نرخ زنده بازار", intro: "نرخ‌ها تنها از SARAFI.AF، سرای شهزاده گرفته می‌شود. یک ردیف را انتخاب کنید تا در فورم نرخ صرافی بیاید؛ بعد بررسی و ذخیره کنید.", refresh: "تازه‌سازی", updated: "تازه‌شده", use: "استفاده از این نرخ", unavailable: "نرخ آنلاین فعلاً در دسترس نیست. نرخ‌های ذخیره‌شده صرافی تغییر نکرده است.", source: "باز کردن SARAFI.AF" },
-    "ps-AF": { title: "د بازار ژوندی نرخ", intro: "نرخونه یوازې د SARAFI.AF د سرای شهزاده له پاڼې راځي. یو نرخ وټاکئ، بیا یې وګورئ او د صرافۍ د نرخ په توګه یې وساتئ.", refresh: "تازه کول", updated: "تازه شوی", use: "دا نرخ وکاروئ", unavailable: "انلاین نرخ اوس نه موندل کېږي. د صرافۍ ساتل شوي نرخونه نه دي بدل شوي.", source: "SARAFI.AF پرانیستل" },
-  } as const)[language];
-  const [history, setHistory] = useState<RateHistoryRecord[]>([]);
-  const [controls, setControls] = useState<OrganizationControlPlane | null>(null);
-  const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
-  const catalog = organizationId === "inspection"
-    ? inspectionCurrencies
-    : loadedCatalog;
-  const [sourceCurrency, setSourceCurrency] = useState("USD");
-  const [buyRate, setBuyRate] = useState("");
-  const [sellRateValue, setSellRateValue] = useState("");
-  const [rateGroupId, setRateGroupId] = useState("");
-  const [spreadTolerance, setSpreadTolerance] = useState("");
-  const [newGroupName, setNewGroupName] = useState("");
-  const [newGroupCode, setNewGroupCode] = useState("");
-  const [valuationName, setValuationName] = useState("");
-  const [valuationRates, setValuationRates] = useState<Record<string, string>>({});
+  const [rates, setRates] = useState<MarketRateRow[]>([]);
+  const [fetchedAt, setFetchedAt] = useState("");
   const [busy, setBusy] = useState(false);
-  const [onlineRates, setOnlineRates] = useState<SarafiAfRate[]>([]);
-  const [onlineFetchedAt, setOnlineFetchedAt] = useState("");
-  const [onlineBusy, setOnlineBusy] = useState(false);
-  const [onlineError, setOnlineError] = useState("");
-  const loadOnlineRates = useCallback(async () => {
-    setOnlineBusy(true);
-    setOnlineError("");
+  const [error, setError] = useState("");
+  const loadRates = useCallback(async () => {
+    setBusy(true);
+    setError("");
     try {
       if (organizationId === "inspection") {
-        setOnlineRates([
+        setRates([
           { currency: "USD", buy: "64.25", sell: "64.3", quotedUnits: 1 },
-          { currency: "EUR", buy: "75.2", sell: "75.8", quotedUnits: 1 },
-          { currency: "PKR", buy: "0.225", sell: "0.229", quotedUnits: 1000 },
+          { currency: "EUR", buy: "74", sell: "74.2", quotedUnits: 1 },
+          { currency: "GBP", buy: "85.2", sell: "85.5", quotedUnits: 1 },
+          { currency: "IRR", buy: "0.00028", sell: "0.00029", quotedUnits: 1000 },
+          { currency: "PKR", buy: "0.226", sell: "0.227", quotedUnits: 1000 },
+          { currency: "SAR", buy: "17.11", sell: "17.12", quotedUnits: 1 },
+          { currency: "AED", buy: "17.49", sell: "17.51", quotedUnits: 1 },
+          { currency: "CNY", buy: "9.57", sell: "9.58", quotedUnits: 1 },
+          { currency: "KWD", buy: "208", sell: "208", quotedUnits: 1 },
         ]);
-        setOnlineFetchedAt(new Date().toISOString());
-      } else {
-        const board = await getSarafiAfRateBoard();
-        setOnlineRates(board.rates);
-        setOnlineFetchedAt(board.fetchedAt);
+        setFetchedAt(new Date().toISOString());
+        return;
       }
+      if (!organizationId) throw new Error("Missing organization");
+      const result = await listRateHistory(organizationId);
+      if (result.error) throw new Error(result.error);
+      const seen = new Set<string>();
+      const latest = (result.data ?? []).filter((rate) => {
+        if (rate.to_currency !== "AFN" || rate.from_currency === "AFN" || seen.has(rate.from_currency)) return false;
+        seen.add(rate.from_currency);
+        return true;
+      });
+      setRates(latest.map((rate) => ({
+        currency: rate.from_currency,
+        buy: rate.buy_rate,
+        sell: rate.sell_rate,
+        quotedUnits: 1,
+      })));
+      setFetchedAt(latest[0]?.effective_from ?? new Date().toISOString());
     } catch {
-      setOnlineError(onlineCopy.unavailable);
+      setError(copy.unavailable);
     } finally {
-      setOnlineBusy(false);
+      setBusy(false);
     }
-  }, [onlineCopy.unavailable, organizationId]);
+  }, [copy.unavailable, organizationId]);
+
   useEffect(() => {
-    const pendingLoad = window.setTimeout(() => void loadOnlineRates(), 0);
+    const pendingLoad = window.setTimeout(() => void loadRates(), 0);
     return () => window.clearTimeout(pendingLoad);
-  }, [loadOnlineRates]);
-  const loadRates = useCallback(async () => {
-    if (!organizationId || organizationId === "inspection") return;
-    const [historyResult, currencyResult, controlResult] = await Promise.all([
-      listRateHistory(organizationId),
-      listCurrencyCatalog(organizationId),
-      canManage ? getOrganizationControlPlane(organizationId) : Promise.resolve({ data: null, error: null }),
-    ]);
-    if (historyResult.data) setHistory(historyResult.data);
-    if (currencyResult.data) {
-      setCatalog(currencyResult.data);
-      const enabled = currencyResult.data.find(
-        (item) => item.enabled && item.code !== "AFN",
-      );
-      if (enabled)
-        setSourceCurrency((current) =>
-          currencyResult.data?.some(
-            (item) => item.code === current && item.enabled,
-          )
-            ? current
-            : enabled.code,
-        );
-    }
-    if (controlResult.data) {
-      setControls(controlResult.data);
-      setRateGroupId((current) => current || controlResult.data?.rate_groups.find((item) => item.active)?.id || "");
-    }
-    if (historyResult.error || currencyResult.error || controlResult.error)
-      onToast(ux(language, "couldNotLoad"));
-  }, [canManage, language, onToast, organizationId]);
-  useEffect(() => {
-    if (!organizationId || organizationId === "inspection") return;
-    void Promise.all([
-      listRateHistory(organizationId),
-      listCurrencyCatalog(organizationId),
-      canManage ? getOrganizationControlPlane(organizationId) : Promise.resolve({ data: null, error: null }),
-    ]).then(([historyResult, currencyResult, controlResult]) => {
-      if (historyResult.data) setHistory(historyResult.data);
-      if (currencyResult.data) {
-        setCatalog(currencyResult.data);
-        const enabled = currencyResult.data.find(
-          (item) => item.enabled && item.code !== "AFN",
-        );
-        if (enabled)
-          setSourceCurrency((current) =>
-            currencyResult.data?.some(
-              (item) => item.code === current && item.enabled,
-            )
-              ? current
-              : enabled.code,
-          );
-      }
-      if (controlResult.data) {
-        setControls(controlResult.data);
-        setRateGroupId((current) => current || controlResult.data?.rate_groups.find((item) => item.active)?.id || "");
-      }
-      if (historyResult.error || currencyResult.error || controlResult.error)
-        onToast(ux(language, "couldNotLoad"));
-    });
-  }, [canManage, language, onToast, organizationId]);
-  const saveRate = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!organizationId) return;
-    setBusy(true);
-    const result = rateGroupId
-      ? await setRateGroupExchangeRate({ organizationId, groupId: rateGroupId, branchId, sourceCurrency, targetCurrency: "AFN", buyRate, sellRate: sellRateValue, spreadTolerance })
-      : await setExchangeRate({ organizationId, branchId, sourceCurrency, targetCurrency: "AFN", buyRate, sellRate: sellRateValue });
-    setBusy(false);
-    if (result.error) {
-      onToast(u("rateSaveFailed"));
-      return;
-    }
-    setBuyRate("");
-    setSellRateValue("");
-    onToast(u("rateSaved"));
-    await loadRates();
+  }, [loadRates]);
+
+  const currencySymbols: Record<string, string> = {
+    USD: "$", EUR: "€", GBP: "£", IRR: "﷼", PKR: "₨", SAR: "﷼",
+    AED: "د.إ", CHF: "Fr", AUD: "A$", CAD: "C$", CNY: "¥",
+    KWD: "د.ك", QAR: "ر.ق", BHD: "د.ب", JPY: "¥",
   };
-  const addRateGroup = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!organizationId) return;
-    setBusy(true);
-    const result = await createRateGroup({ organizationId, name: newGroupName, code: newGroupCode });
-    setBusy(false);
-    if (result.error) { onToast(u("rateSaveFailed")); return; }
-    setNewGroupName(""); setNewGroupCode("");
-    onToast(u("rateSaved"));
-    await loadRates();
-  };
-  const saveValuation = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!organizationId) return;
-    const rates = catalog.filter((item) => item.enabled && item.code !== "AFN" && valuationRates[item.code]).map((item) => ({ currency_code: item.code, rate: valuationRates[item.code] }));
-    if (!rates.length) { onToast(u("rateSaveFailed")); return; }
-    setBusy(true);
-    const result = await createValuationRateSet({ organizationId, name: valuationName || new Date().toISOString().slice(0, 10), effectiveAt: new Date().toISOString(), rates });
-    setBusy(false);
-    if (result.error) { onToast(u("rateSaveFailed")); return; }
-    setValuationName(""); setValuationRates({});
-    onToast(u("rateSaved"));
-    await loadRates();
-  };
-  const current = history[0];
+  const displayedRate = (value: string, quotedUnits: number) =>
+    new Decimal(value).mul(quotedUnits).toDecimalPlaces(4).toString();
+  const boardTime = fetchedAt
+    ? new Date(fetchedAt).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })
+    : "—";
+
   return (
-    <section className="panel">
+    <section className="panel rates-market-only">
       <div className="panel-header">
         <div>
-          <p className="kicker">{u("rateHistory")}</p>
-          <h1>{u("ratesTitle")}</h1>
-          <p>{u("ratesIntro")}</p>
+          <p className="kicker">{copy.market}</p>
+          <h1>{copy.title}</h1>
+          <p>{copy.intro}</p>
         </div>
-        <button className="text-button" onClick={onDashboard}>
-          {u("backHome")} →
-        </button>
+        <button className="text-button" onClick={onDashboard}>{copy.back} →</button>
       </div>
       <section className="online-rate-board" aria-labelledby="online-rate-board-title">
         <div className="online-rate-board-head">
-          <div>
-            <p className="kicker">SARAFI.AF · {language === "en" ? "Sarai Shahzada" : language === "fa-AF" ? "سرای شهزاده" : "سرای شهزاده"}</p>
-            <h2 id="online-rate-board-title">{onlineCopy.title}</h2>
-            <p>{onlineCopy.intro}</p>
-          </div>
-          <div className="inline-actions">
-            <a className="text-button" href="https://sarafi.af/en/exchange-rates" target="_blank" rel="noreferrer">{onlineCopy.source}</a>
-            <button className="text-button" type="button" onClick={() => void loadOnlineRates()} disabled={onlineBusy}>{onlineBusy ? t("working") : onlineCopy.refresh}</button>
+          <h2 id="online-rate-board-title">{copy.board}</h2>
+          <div className="market-rate-actions">
+            <label>{copy.market}<select aria-label={copy.market} defaultValue="shop"><option value="shop">{copy.shop}</option></select></label>
+            <button className="text-button" type="button" onClick={() => void loadRates()} disabled={busy}>
+              {busy ? t("working") : copy.refresh}
+            </button>
           </div>
         </div>
-        {onlineError ? <p className="notice" role="status">{onlineError}</p> : null}
-        {onlineFetchedAt ? <small>{onlineCopy.updated}: {new Date(onlineFetchedAt).toLocaleString(language)}</small> : null}
-        <div className="online-rate-grid">
-          {onlineRates.map((item) => {
-            const enabled = catalog.some((currency) => currency.code === item.currency && currency.enabled);
-            return <button key={item.currency} type="button" className="online-rate-row" disabled={!canManage || !enabled} onClick={() => {
-              setSourceCurrency(item.currency);
-              setBuyRate(item.buy);
-              setSellRateValue(item.sell);
-            }}>
-              <strong>{item.currency} → AFN</strong>
-              <span>{t("buyRate")} <bdi>{item.buy}</bdi></span>
-              <span>{t("sellRate")} <bdi>{item.sell}</bdi></span>
-              <small>{enabled ? onlineCopy.use : "—"}</small>
-            </button>;
-          })}
-        </div>
-      </section>
-      <div className="rate-strip">
-        <div className="rate-title">
-          <span className="rate-live" />
-          <div>
-            <b>{current ? `${current.from_currency} / ${current.to_currency}` : u("noCurrentRate")}</b>
-            <small>{u("rateHistory")}</small>
-          </div>
-        </div>
-        <label>
-          {t("buyRate")}
-          <input
-            value={current?.buy_rate ?? ""}
-            readOnly
-            placeholder={u("liveRate")}
-          />
-        </label>
-        <label>
-          {t("sellRate")}
-          <input
-            value={current?.sell_rate ?? ""}
-            readOnly
-            placeholder={u("liveRate")}
-          />
-        </label>
-      </div>
-      {canManage ? (
-        <form className="rate-management-form" onSubmit={saveRate}>
-          <div>
-            <h2>{u("setShopRate")}</h2>
-            <p>{u("setShopRateIntro")}</p>
-          </div>
-          <label>
-            {advanced.group}
-            <select value={rateGroupId} onChange={(event) => setRateGroupId(event.target.value)}>
-              <option value="">—</option>
-              {controls?.rate_groups.filter((group) => group.active).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-            </select>
-          </label>
-          <label>
-            {u("foreignCurrency")}
-            <select
-              value={sourceCurrency}
-              onChange={(event) => setSourceCurrency(event.target.value)}
-            >
-              {catalog
-                .filter((item) => item.enabled && item.code !== "AFN")
-                .map((item) => (
-                  <option key={item.code} value={item.code}>
-                    {item.code} · {currencyName(language, item)}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label>
-            {t("buyRate")}
-            <input required min="0.000001" step="any" inputMode="decimal" value={buyRate} onChange={(event) => setBuyRate(event.target.value)} placeholder={u("ratePerUnitPlaceholder")} />
-          </label>
-          <label>
-            {t("sellRate")}
-            <input required min="0.000001" step="any" inputMode="decimal" value={sellRateValue} onChange={(event) => setSellRateValue(event.target.value)} placeholder={u("ratePerUnitPlaceholder")} />
-          </label>
-          <label>{advanced.tolerance}<input min="0" step="any" inputMode="decimal" value={spreadTolerance} onChange={(event) => setSpreadTolerance(event.target.value)} placeholder="0" /></label>
-          <button className="primary-action" type="submit" disabled={busy}>
-            {busy ? u("posting") : u("saveShopRate")}
-          </button>
-        </form>
-      ) : (
-        <div className="empty-live">{u("ownerOnlyRates")}</div>
-      )}
-      {canManage && <div className="rate-admin-grid">
-        <form className="inline-management-form" onSubmit={addRateGroup}>
-          <div><h2>{advanced.newGroup}</h2></div>
-          <label>{advanced.groupName}<input required minLength={2} value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} /></label>
-          <label>{advanced.groupCode}<input required minLength={2} dir="ltr" value={newGroupCode} onChange={(event) => setNewGroupCode(event.target.value)} /></label>
-          <button className="primary-action" disabled={busy}>{advanced.newGroup}</button>
-        </form>
-        <form className="inline-management-form valuation-form" onSubmit={saveValuation}>
-          <div><h2>{advanced.valuation}</h2><p>{advanced.valuationIntro}</p></div>
-          <label>{advanced.valuationName}<input required minLength={2} value={valuationName} onChange={(event) => setValuationName(event.target.value)} /></label>
-          {catalog.filter((item) => item.enabled && item.code !== "AFN").map((item) => <label key={item.code}>{item.code} → AFN<input required min="0.000001" step="any" inputMode="decimal" dir="ltr" value={valuationRates[item.code] ?? ""} onChange={(event) => setValuationRates((current) => ({ ...current, [item.code]: event.target.value }))} /></label>)}
-          <button className="primary-action" disabled={busy}>{advanced.saveValuation}</button>
-        </form>
-      </div>}
-      {controls?.valuation_sets.length ? <section className="valuation-history"><h2>{advanced.latestValuations}</h2><div className="balance-list">{controls.valuation_sets.slice(0, 10).map((set) => <div className="balance-row" key={set.id}><span className="currency-badge usd">V</span><span className="balance-name"><b>{set.name}</b><small>{new Date(set.effective_at).toLocaleString(language)} · {set.source}</small></span><strong>{set.rates.map((rate) => `${rate.currency_code} ${rate.rate}`).join(" · ")}</strong></div>)}</div></section> : null}
-      <div className="balance-list">
-        {history.length ? (
-          history.map((item) => (
-            <div className="balance-row" key={item.id}>
-              <span className="currency-badge usd">{item.from_currency}</span>
-              <span className="balance-name">
-                <b>
-                  {item.group_name} ·{" "}
-                  {item.branch_id ? u("branchRate") : u("shopDefault")}
-                </b>
-                <small>
-                  {u("effectiveFrom")}{" "}
-                  {new Date(item.effective_from).toLocaleString(language, { hour12: false })} ·{" "}
-                  {item.to_currency}
-                </small>
-              </span>
-              <strong>
-                {t("buyRate")} {item.buy_rate} · {t("sellRate")}{" "}
-                {item.sell_rate}
-              </strong>
+        {error ? <p className="notice" role="status">{error}</p> : null}
+        {!busy && !error && !rates.length ? <p className="empty-live">{copy.empty}</p> : null}
+        {rates.length ? (
+          <div className="market-rate-table" role="table" aria-label={copy.title}>
+            <div className="market-rate-row market-rate-heading" role="row">
+              <span role="columnheader">{copy.currency}</span>
+              <span role="columnheader">{t("buyRate")}</span>
+              <span role="columnheader">{t("sellRate")}</span>
+              <span role="columnheader">{copy.updated}</span>
             </div>
-          ))
-        ) : (
-          <div className="empty-live">{u("noRateHistory")}</div>
-        )}
-      </div>
-      <div className="empty-live">{u("calculatorNote")}</div>
+            {rates.map((item) => (
+              <div className="market-rate-row" role="row" key={item.currency}>
+                <strong role="cell">
+                  <span className="market-currency-mark" aria-hidden="true">{currencySymbols[item.currency] ?? item.currency.slice(0, 1)}</span>
+                  {item.currency}{item.quotedUnits > 1 ? " 1K" : ""}
+                </strong>
+                <bdi role="cell">{displayedRate(item.buy, item.quotedUnits)}</bdi>
+                <bdi role="cell">{displayedRate(item.sell, item.quotedUnits)}</bdi>
+                <time role="cell" dateTime={fetchedAt || undefined}>{boardTime}</time>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
     </section>
   );
 }
-
 function ReportsView({
   language,
   businessDate,
@@ -6635,17 +6008,22 @@ function ReportsView({
         </div> : null}
       </section>
       <div className="report-primary-action">
-        <button className="primary-action" type="button" disabled={namedLoading} onClick={() => {
-          setNamedReportCode("daily_transactions");
-          setFrom(businessDate);
-          setTo(businessDate);
-          setCurrency("All");
-          setStatus("All");
-          setReportPage(0);
-          void generateReport({ reportCode: "daily_transactions", fromDate: businessDate, toDate: businessDate, currency: "All", status: "All" });
-        }}>
-          {namedLoading ? t("working") : language === "en" ? "Generate today’s report" : language === "fa-AF" ? "ساخت گزارش امروز" : "د نن راپور جوړ کړئ"}
-        </button>
+        <div className="daily-pdf-action">
+          <button className="primary-action" type="button" disabled={namedLoading} onClick={() => {
+            setNamedReportCode("daily_transactions");
+            setFrom(businessDate);
+            setTo(businessDate);
+            setCurrency("All");
+            setStatus("All");
+            setReportPage(0);
+            void generateReport({ reportCode: "daily_transactions", fromDate: businessDate, toDate: businessDate, currency: "All", status: "All" });
+          }}>
+            {namedLoading ? t("working") : language === "en" ? "Prepare today’s report" : language === "fa-AF" ? "آماده‌کردن گزارش امروز" : "د نن راپور چمتو کړئ"}
+          </button>
+          <button className="export-button" type="button" disabled={!reportReady || namedLoading} onClick={() => downloadPdf(reportRows)}>
+            <AppIcon name="report" size={18} /> {language === "en" ? "Download simple daily PDF" : language === "fa-AF" ? "گرفتن گزارش ساده PDF" : "ساده ورځنی PDF واخلئ"}
+          </button>
+        </div>
         {reportSnapshot ? <small><bdi>{new Date(reportSnapshot.generated_at).toLocaleString(language)}</bdi></small> : null}
       </div>
       <details className="report-advanced-filters">
@@ -6707,12 +6085,6 @@ function ReportsView({
       {reportReady ? <details className="export-menu">
         <summary className="export-button">{language === "en" ? "Export formats" : language === "fa-AF" ? "قالب‌های خروجی" : "د راپور بڼې"}</summary>
         <div className="activity-actions">
-        <button
-          className="primary-action"
-          onClick={() => downloadPdf(reportRows)}
-        >
-          {t("exportPdf")}
-        </button>
         <button className="export-button" onClick={downloadCsv}>{t("exportCsv")}</button>
         <button className="export-button" onClick={downloadXlsx}>{language === "en" ? "Export Excel" : language === "fa-AF" ? "گرفتن فایل اکسل" : "د اکسل فایل اخیستل"}</button>
         <button className="export-button" onClick={printReport}>

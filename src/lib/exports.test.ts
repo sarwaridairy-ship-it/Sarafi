@@ -47,8 +47,9 @@ describe("daily report rendering", () => {
 
     expect(html).toContain('lang="fa-AF" dir="rtl"');
     expect(html).toContain("خلاصه امروز");
-    expect(html).toContain("پول فعلی صرافی");
+    expect(html).toContain("معاملات و کارهای روز");
     expect(html).toContain("70250 AFN");
+    expect(html).not.toContain("نشان نسخه");
     expect(html).toContain("unicode-bidi:isolate");
     expect(html).toContain("صرافی کابل &lt;مرکز&gt;");
     expect(html).not.toContain("<مرکز>");
@@ -66,7 +67,7 @@ describe("daily report rendering", () => {
     });
 
     expect(html).toContain("د نن لنډیز");
-    expect(html).toContain("د صرافۍ اوسني پیسې");
+    expect(html).toContain("د ورځې معاملې او کارونه");
     expect(html).toContain("کومه معامله نه ده ثبت شوې");
   });
 });

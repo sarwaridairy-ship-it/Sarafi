@@ -271,6 +271,11 @@ export function PlatformAdminConsole({
   const [reason, setReason] = useState('')
   const [adminNote, setAdminNote] = useState('')
   const [toast, setToast] = useState('')
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(''), 3000)
+    return () => window.clearTimeout(timer)
+  }, [toast])
   const [minimumVersion, setMinimumVersion] = useState('1.0.0')
   const [recommendedVersion, setRecommendedVersion] = useState('1.0.0')
   const [releaseNotesEn, setReleaseNotesEn] = useState('')

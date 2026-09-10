@@ -853,7 +853,7 @@
   .global-search-popover *,
   .notification-popover *,
   .profile-popover * { min-width: 0; overflow-wrap: anywhere; }
-  .mobile-nav { grid-auto-columns: minmax(68px, 1fr); grid-auto-flow: column; grid-template-columns: none; overflow-x: auto; }
+  .mobile-nav { grid-auto-columns: auto; grid-auto-flow: row; overflow-x: hidden; }
   .confirmation-backdrop { align-items: end; padding: 10px; }
   .confirmation-window { border-radius: 18px 18px 10px 10px; max-height: calc(100dvh - 20px); padding: 18px; }
   .confirmation-actions { display: grid; grid-template-columns: 1fr 1fr; }
@@ -862,4 +862,109 @@
   .transaction-receipt-head,
   .transaction-receipt-foot { align-items: stretch; display: grid; }
   .transaction-receipt-foot details { max-width: none; }
+}
+
+/* Compact mobile navigation, market board, cashboxes, and local workflows. */
+.app-shell,
+.main-content,
+.content-wrap,
+.financial-task-form,
+.trade-fields,
+.exchange-entry-row,
+.online-rate-board,
+.named-report-results { min-width: 0; max-width: 100%; }
+.app-shell { overflow-x: clip; }
+.transaction-inline-form { box-sizing: border-box; max-width: none; min-width: 0; width: auto; }
+.transaction-page-form .modal-head { gap: 12px; min-width: 0; width: 100%; }
+.transaction-page-form .modal-head > div { min-width: 0; }
+.transaction-page-form .transaction-back { flex: 0 1 230px; min-width: 0; overflow-wrap: anywhere; }
+.mobile-nav { overflow-x: hidden; }
+.mobile-nav button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.rates-market-only .online-rate-board {
+  background: #fff;
+  border-color: #d8e1dd;
+  box-shadow: 0 12px 34px rgba(24, 57, 48, .07);
+  padding: 0;
+  overflow: hidden;
+}
+.rates-market-only .online-rate-board-head { align-items: end; padding: 18px; }
+.market-rate-actions { align-items: end; display: flex; gap: 10px; }
+.market-rate-actions label { color: var(--calm-muted, #61736c); display: grid; font-size: .75rem; font-weight: 750; gap: 4px; }
+.market-rate-actions select { min-height: 38px; min-width: 170px; border: 1px solid #cfdbd6; border-radius: 9px; background: #fff; padding: 7px 10px; }
+.market-rate-table { border-top: 1px solid #dce5e1; width: 100%; }
+.market-rate-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(120px, 1.4fr) repeat(2, minmax(76px, 1fr)) minmax(78px, .8fr);
+  min-height: 46px;
+  padding: 8px 18px;
+}
+.market-rate-row:nth-child(odd) { background: #f5f7f6; }
+.market-rate-row > * { min-width: 0; }
+.market-rate-row strong { align-items: center; display: flex; gap: 8px; }
+.market-currency-mark { align-items: center; background: #e9f3ef; border-radius: 6px; color: #176b5b; display: inline-flex; font-size: .68rem; height: 24px; justify-content: center; min-width: 28px; padding-inline: 4px; }
+.market-rate-row bdi { color: #344e47; font-weight: 780; }
+.market-rate-row time { color: #73817c; font-size: .78rem; }
+.market-rate-heading { background: #17394b !important; color: #fff; font-size: .78rem; font-weight: 750; min-height: 42px; }
+
+.money-workspace .account-control-panel { border: 0; padding: 0; }
+.money-workspace .account-card-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.money-workspace .account-card { min-height: 150px; }
+
+.currency-settings-search { display: grid; gap: 6px; margin: 16px 0; max-width: 360px; }
+.currency-settings-search input { min-height: 42px; }
+.currency-settings-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.currency-setting { align-items: center; background: #f7f9f8; border: 1px solid #dce4e0; border-radius: 11px; display: grid; gap: 10px; grid-template-columns: 38px minmax(0, 1fr) auto; min-height: 66px; padding: 10px 12px; }
+.currency-setting.enabled { background: #eff8f4; border-color: #aed0c3; }
+.currency-setting > span:nth-child(2) { display: grid; min-width: 0; }
+.currency-setting small { color: var(--calm-muted, #61736c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.currency-setting em { color: #176b5b; font-size: .72rem; font-style: normal; font-weight: 800; }
+.currency-setting input { height: 20px; width: 20px; }
+
+.daily-pdf-action { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.daily-pdf-action .export-button { min-height: 44px; }
+
+.transaction-receipt { max-width: 720px; }
+.transaction-receipt { width: 100%; }
+.transaction-receipt-head > div:first-child > span:last-child { display: grid; gap: 2px; }
+.transaction-receipt-head > div:first-child small { color: rgba(255,255,255,.74); }
+.transaction-receipt .transaction-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 14px 18px; }
+.transaction-receipt .transaction-detail-grid article { min-height: 70px; padding: 11px 12px; }
+.receipt-flow { align-items: center; background: #edf6f2; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding: 14px 18px; }
+.receipt-flow > span { display: grid; min-width: 0; }
+.receipt-flow small { color: var(--calm-muted, #61736c); }
+.receipt-flow strong { overflow-wrap: anywhere; }
+.receipt-flow > b { color: #176b5b; }
+
+@media (max-width: 720px) {
+  .mobile-nav button { font-size: clamp(7px, 2.15vw, 9px); line-height: 1.08; padding-inline: 1px; white-space: normal; }
+  .mobile-nav button .app-icon { height: 18px; width: 18px; }
+  .exchange-entry-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .exchange-entry-row > :first-child { grid-column: 1; grid-row: 1; }
+  .exchange-entry-row > .exchange-rate-card { grid-column: 1 / -1; grid-row: 2; min-height: 118px; }
+  .exchange-entry-row > :last-child { grid-column: 2; grid-row: 1; }
+  .financial-task-form .exchange-money-card { min-height: 142px; }
+  .rates-market-only .online-rate-board-head { align-items: stretch; display: grid; padding: 14px; }
+  .market-rate-actions { align-items: stretch; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .market-rate-actions select { min-width: 0; width: 100%; }
+  .market-rate-row { gap: 4px; grid-template-columns: minmax(82px, 1.25fr) repeat(2, minmax(54px, .8fr)) minmax(48px, .65fr); min-height: 43px; padding: 7px 9px; }
+  .market-rate-row strong { gap: 4px; font-size: .76rem; }
+  .market-rate-row bdi { font-size: .74rem; }
+  .market-rate-row time { font-size: .64rem; }
+  .market-rate-heading { font-size: .66rem; }
+  .transaction-receipt .transaction-detail-grid { grid-template-columns: 1fr 1fr; padding: 10px; }
+  .transaction-receipt .transaction-detail-grid article { min-height: 64px; padding: 9px; }
+  .receipt-flow { padding: 11px; }
+  .currency-settings-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 420px) {
+  .receipt-flow { grid-template-columns: 1fr; }
+  .receipt-flow > b { transform: rotate(90deg); width: min-content; }
+}
+
+@media (max-width: 960px) {
+  .rates-market-only .online-rate-board-head { align-items: stretch; display: grid; }
 }
