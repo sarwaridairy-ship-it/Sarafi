@@ -93,7 +93,7 @@ test.describe("Stage 9 browser matrix", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
     await expect(page.getByRole("button", { name: "More", exact: true })).toHaveCount(0);
-    await expect(page.locator(".mobile-nav button")).toHaveCount(5);
+    await expect(page.locator(".mobile-nav button")).toHaveCount(6);
   });
 
   test("tablet view fits without horizontal overflow", async ({ page }) => {
@@ -107,12 +107,12 @@ test.describe("Stage 9 browser matrix", () => {
     ).toBe(true);
   });
 
-  test("desktop navigation exposes its five primary destinations", async ({
+  test("desktop navigation exposes its primary destinations", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto("/");
-    await expect(page.locator(".sidebar nav button")).toHaveCount(5);
+    await expect(page.locator(".sidebar nav button")).toHaveCount(6);
     await expect(page.getByRole("button", { name: /Manage Sarafi/ })).toBeVisible();
   });
 

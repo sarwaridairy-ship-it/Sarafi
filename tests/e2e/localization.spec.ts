@@ -186,12 +186,12 @@ test("Afghan Dari transaction forms use short shop wording", async ({ page }) =>
 
   await page.goto("/app/inspection/transactions/new/money-in/receive");
   await expect(page.getByRole("heading", { name: "پول گرفتن" })).toBeVisible();
-  await expect(page.getByText("ما این پول را می‌گیریم.", { exact: true })).toBeVisible();
+  await expect(page.getByText("این پول به صرافی می‌آید.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /گرفتن پول را ثبت کنید/ })).toBeVisible();
 
   await page.goto("/app/inspection/transactions/new/money-out/pay");
   await expect(page.getByRole("heading", { name: "پول دادن" })).toBeVisible();
-  await expect(page.getByText("ما این پول را می‌دهیم.", { exact: true })).toBeVisible();
+  await expect(page.getByText("این پول از صرافی بیرون می‌شود.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /دادن پول را ثبت کنید/ })).toBeVisible();
 
   await page.goto("/app/inspection/transactions/new/debt/receivable");

@@ -151,6 +151,7 @@ export function hasAnyCapability(capabilities: readonly string[], required: read
 export type NavigationSection =
   | "Dashboard"
   | "Trade"
+  | "Rates"
   | "Transactions"
   | "Cash & Accounts"
   | "People"
@@ -175,18 +176,19 @@ export function navigationSections(capabilities: readonly string[]): NavigationS
   if (hasCapability(capabilities, "dashboard.cashier"))
     return ["Dashboard", "Trade", "People", "Transactions", "Cashbox Close"];
   if (hasCapability(capabilities, "dashboard.manager"))
-    return ["Dashboard", "Trade", "Cash & Accounts", "Transactions", "Team & Devices"];
+    return ["Dashboard", "Trade", "Rates", "Cash & Accounts", "Transactions", "Team & Devices"];
   if (hasCapability(capabilities, "dashboard.viewer"))
     return ["Dashboard", "Cash & Accounts", "Transactions", "Reports", "Search"];
   if (hasCapability(capabilities, "dashboard.owner") && hasCapability(capabilities, "owner.delete"))
-    return ["Dashboard", "Trade", "Cash & Accounts", "Transactions", "Control"];
+    return ["Dashboard", "Trade", "Rates", "Cash & Accounts", "Transactions", "Control"];
   if (hasCapability(capabilities, "dashboard.owner"))
-    return ["Dashboard", "Trade", "People", "Transactions", "Control"];
+    return ["Dashboard", "Trade", "Rates", "People", "Transactions", "Control"];
 
-  // Custom capability bundles still receive exactly five meaningful slots.
+  // Custom capability bundles receive the most useful role-shaped shortcuts.
   const candidates: NavigationSection[] = [
     "Dashboard",
     ...(hasAnyCapability(capabilities, financialPostCapabilities) ? ["Trade" as const] : []),
+    ...(hasCapability(capabilities, "rates.manage") ? ["Rates" as const] : []),
     ...(hasCapability(capabilities, "transactions.view") ? ["Transactions" as const] : []),
     ...(hasCapability(capabilities, "financial.report") ? ["Reports" as const] : []),
     ...(hasCapability(capabilities, "financial.overview") ? ["Cash & Accounts" as const] : []),

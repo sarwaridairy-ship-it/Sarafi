@@ -38,12 +38,12 @@ export async function recordClientError(input: {
 }
 export type DashboardSnapshot = { role_code?: string; profit_hidden?: boolean; transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string; currency: string; quantity: string }>; receivables: Array<{ currency: string; amount: string }>; payables: Array<{ currency: string; amount: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
 export type DebtRecord = { id: string; branch_id?: string; counterparty_id: string; counterparty_name?: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null; created_at?: string }
-export type CounterpartyRecord = { id: string; branch_id?: string | null; display_name: string; counterparty_type: string; risk_status: string; phone?: string | null; notes?: string | null }
+export type CounterpartyRecord = { id: string; customer_number?: number; customer_reference?: string; branch_id?: string | null; display_name: string; counterparty_type: string; risk_status: string; phone?: string | null; notes?: string | null }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string; direction?: 'incoming' | 'outgoing'; workflow_type?: string; hawala_partner_id?: string | null; integrity_state?: 'valid' | 'review_required'; journal_entry_id?: string | null; payout_journal_entry_id?: string | null; payout_receipt_id?: string | null }
 export type HawalaPartnerRecord = { id: string; counterparty_id: string | null; name: string; active: boolean }
 export type HawalaPayoutMatch = { reference_code: string; beneficiary_name: string; destination_location: string; currency_code: string; amount: string; branch_id: string; hawala_partner_id: string }
 export type HawalaPartnerStatement = { partner_id: string; totals: Array<{ currency_code: string; payable: string; receivable: string; net_receivable: string }>; lines: Array<{ id: string; transfer_id: string; branch_id?: string; reference_code: string; beneficiary_name: string; direction: 'payable' | 'receivable'; currency_code: string; original_amount: string; settled_amount: string; remaining_amount: string; status: string; created_at: string }> }
-export type JournalRecord = { id: string; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null; counterparty_name?: string | null; employee_name?: string | null; given_amount?: string | null; given_currency?: string | null; received_amount?: string | null; received_currency?: string | null }
+export type JournalRecord = { id: string; transaction_number?: number; transaction_reference?: string; customer_number?: number; customer_reference?: string; receipt_number?: string | null; customer_rate?: string | null; fee_amount?: string | null; fee_currency?: string | null; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null; counterparty_name?: string | null; employee_name?: string | null; given_amount?: string | null; given_currency?: string | null; received_amount?: string | null; received_currency?: string | null }
 export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string }
 export type CashboxBalanceRecord = { currency_code: string; expected_amount: string }
 export type CounterpartyStatementRecord = { id: string; occurred_at: string; event_type: string; reference: string; status: string; memo: string | null; direction: 'receivable' | 'payable' | null; currency_code: string | null; amount: string | null }
@@ -574,7 +574,7 @@ export async function getDebtDetail(organizationId: string, debtId: string): Pro
 export async function listCounterparties(organizationId: string): Promise<RpcResult<CounterpartyRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.rpc('list_counterparties_v6', { target_org: organizationId })
+  const result = await client.rpc('search_counterparties_v7', { target_org: organizationId, search_text: null })
   return { data: result.data as CounterpartyRecord[] | null, error: result.error?.message ?? null }
 }
 
@@ -819,8 +819,21 @@ export async function requestReversal(command: Record<string, unknown>): Promise
 export async function listJournalEntries(organizationId: string): Promise<RpcResult<JournalRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const history = await client.rpc('get_transaction_history', { target_org: organizationId, page_size: 50 })
+  const history = await client.rpc('search_transaction_history_v7', { target_org: organizationId, search_text: null, target_from: null, target_to: null, page_size: 100 })
   return { data: history.data as JournalRecord[] | null, error: history.error?.message ?? null }
+}
+
+export async function searchJournalEntries(input: { organizationId: string; search?: string; from?: string | null; to?: string | null; pageSize?: number }): Promise<RpcResult<JournalRecord[]>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('search_transaction_history_v7', {
+    target_org: input.organizationId,
+    search_text: input.search?.trim() || null,
+    target_from: input.from || null,
+    target_to: input.to || null,
+    page_size: input.pageSize ?? 250,
+  })
+  return { data: result.data as JournalRecord[] | null, error: result.error?.message ?? null }
 }
 
 export async function getTransactionDetail(organizationId: string, entryId: string): Promise<RpcResult<JournalRecord>> {

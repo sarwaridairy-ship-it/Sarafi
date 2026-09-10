@@ -49,15 +49,16 @@ describe("calm premium capability contract", () => {
     expect(navigationSections(inspectionCapabilities("manager"))).toEqual([
       "Dashboard",
       "Trade",
+      "Rates",
       "Cash & Accounts",
       "Transactions",
       "Team & Devices",
     ]);
   });
 
-  it("uses the exact five capability-derived destinations for every role", () => {
-    expect(navigationSections(inspectionCapabilities("owner"))).toEqual(["Dashboard", "Trade", "Cash & Accounts", "Transactions", "Control"]);
-    expect(navigationSections(inspectionCapabilities("business_admin"))).toEqual(["Dashboard", "Trade", "People", "Transactions", "Control"]);
+  it("uses role-focused capability-derived destinations", () => {
+    expect(navigationSections(inspectionCapabilities("owner"))).toEqual(["Dashboard", "Trade", "Rates", "Cash & Accounts", "Transactions", "Control"]);
+    expect(navigationSections(inspectionCapabilities("business_admin"))).toEqual(["Dashboard", "Trade", "Rates", "People", "Transactions", "Control"]);
     expect(navigationSections(inspectionCapabilities("cashier"))).toEqual(["Dashboard", "Trade", "People", "Transactions", "Cashbox Close"]);
     expect(navigationSections(inspectionCapabilities("accountant"))).toEqual(["Dashboard", "Transactions", "Reports", "Debts", "Reconciliation"]);
     expect(navigationSections(inspectionCapabilities("compliance_officer"))).toEqual(["Dashboard", "Hawala", "Compliance Reviews", "Compliance Cases", "Search"]);

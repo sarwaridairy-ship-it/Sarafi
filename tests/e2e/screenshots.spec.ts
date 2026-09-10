@@ -113,6 +113,7 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
         path: path.join(outputDirectory, `${kind}-${locale.slug}-desktop.png`),
         fullPage: true,
       });
+      await page.locator(".trade-confirmation .text-button").click();
       await page.locator(".transaction-back").click();
     }
 

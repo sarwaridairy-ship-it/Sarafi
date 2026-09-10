@@ -193,7 +193,7 @@ describe("whole-web v6 acceptance contracts", () => {
     for (const table of ["financial_events", "journal_entries", "journal_lines", "ledger_accounts", "receipts", "counterparties", "debts", "settlements", "hawala_transfers"]) {
       expect(financialApi).not.toContain(`.from('${table}')`);
     }
-    expect(financialApi).toContain("client.rpc('list_counterparties_v6'");
+    expect(financialApi).toContain("client.rpc('search_counterparties_v7'");
     expect(financialApi).toContain("client.rpc('get_counterparty_statement_v6'");
     expect(financialApi).toContain("client.rpc('list_hawala_transfers_v6'");
     expect(migration).toContain("revoke select on table");

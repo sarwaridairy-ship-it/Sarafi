@@ -122,10 +122,10 @@ test.describe("workspace controls", () => {
   }) => {
     await page.goto("/");
     const navigation = page.locator(".sidebar nav");
-    for (const label of ["Home", "Make a Transaction", "My Money", "Activity", "Manage Sarafi"]) {
+    for (const label of ["Home", "Make a Transaction", "My Money", "Activity", "Rates", "Manage Sarafi"]) {
       await expect(navigation.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
     }
-    await expect(navigation.getByRole("button")).toHaveCount(5);
+    await expect(navigation.getByRole("button")).toHaveCount(6);
     await page.goto("/app/inspection/money");
     await expect(page).toHaveURL(/\/app\/inspection\/money$/);
     await expect(page.getByRole("heading", { name: "Where is my money?", exact: true })).toBeVisible();
@@ -140,6 +140,45 @@ test.describe("workspace controls", () => {
     await page.getByRole("button", { name: /^Business & branches/ }).click();
     await expect(page).toHaveURL(/\/control\/business$/);
     await expect(page.getByRole("heading", { name: "Shop settings", exact: true })).toBeVisible();
+  });
+
+  test("Rates is a first-class destination and live references copy into the shop-rate form", async ({ page }) => {
+    await page.goto("/app/inspection/control/rates?role=owner");
+    await expect(page.getByRole("heading", { name: "Live market reference" })).toBeVisible();
+    await page.getByRole("button", { name: /USD → AFN/ }).click();
+    await expect(page.getByRole("textbox", { name: "Buy rate" }).last()).toHaveValue("64.25");
+    await expect(page.getByRole("textbox", { name: "Sell rate" }).last()).toHaveValue("64.3");
+  });
+
+  test("transaction search, date presets, and receipt IDs stay human-readable", async ({ page }) => {
+    await page.goto("/app/inspection/transactions?role=owner");
+    await expect(page.getByRole("button", { name: "Today" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Yesterday" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "7 days" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "30 days" })).toBeVisible();
+    await page.getByRole("searchbox", { name: "Find transaction or customer ID" }).fill("C-00000042");
+    await expect(page.locator(".balance-row")).toHaveCount(1);
+    await expect(page.locator(".balance-row").first()).toContainText("T-00100002");
+    await page.locator(".balance-row").first().click();
+    await expect(page.getByText("Transaction receipt", { exact: true })).toBeVisible();
+    await expect(page.locator(".transaction-receipt")).toContainText("SAR-2026-00100002");
+    await expect(page.locator(".transaction-receipt")).toContainText("C-00000042");
+  });
+
+  test("Dari notification and profile panels remain inside a narrow RTL viewport", async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem("sarafi-language", "fa-AF"));
+    await page.setViewportSize({ width: 360, height: 760 });
+    await page.goto("/?role=owner");
+    await page.getByRole("button", { name: "بازکردن خبرها" }).click();
+    const notificationBox = await page.locator(".notification-popover").boundingBox();
+    expect(notificationBox).not.toBeNull();
+    expect(notificationBox!.x).toBeGreaterThanOrEqual(0);
+    expect(notificationBox!.x + notificationBox!.width).toBeLessThanOrEqual(360);
+    await page.getByRole("button", { name: "پروفایل و ترجیحات" }).click();
+    const profileBox = await page.locator(".profile-popover").boundingBox();
+    expect(profileBox).not.toBeNull();
+    expect(profileBox!.x).toBeGreaterThanOrEqual(0);
+    expect(profileBox!.x + profileBox!.width).toBeLessThanOrEqual(360);
   });
 
   test("required routes survive direct navigation and refresh", async ({ page, browserName }) => {
@@ -387,10 +426,10 @@ test.describe("workspace controls", () => {
     ).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Customer or Saraf" })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Amount" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Save: they owe us/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Review: they owe us/ })).toBeVisible();
     await page.goto("/app/inspection/transactions/new/debt/payable");
     await expect(page.getByRole("heading", { name: "We owe them" })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Money goes to" })).toHaveValue("inspection-cashbox");
+    await expect(page.getByRole("combobox", { name: "Which shop account received the money?" })).toHaveValue("inspection-cashbox");
   });
 
   test("reconciliation section exposes cash count and variance reason fields", async ({
@@ -766,7 +805,7 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/transactions/new/fx/buy?rate=missing");
     await expect(page.locator(".rate-box .rate-warning")).toHaveText("No shop rate is published for this currency.");
     await page.getByRole("textbox", { name: "Transaction rate" }).fill("70.50");
-    await page.getByRole("textbox", { name: "Reason for the rate decision" }).fill("First rate for this customer");
+    await expect(page.getByRole("textbox", { name: "Reason for the rate decision" })).toHaveCount(0);
     await expect(page.getByRole("checkbox", { name: "Publish this as the new shop rate" })).toBeVisible();
   });
 
@@ -774,14 +813,13 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/transactions/new/fx/buy?rate=stale");
     await expect(page.getByText("This shop rate is older than 24 hours.")).toBeVisible();
     await page.getByRole("checkbox", { name: "Continue with the current old rate" }).check();
-    await expect(page.getByRole("textbox", { name: "Reason for the rate decision" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Reason for the rate decision" })).toHaveCount(0);
     await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.25");
   });
 
   test("cashier rate override requests approval and preserves the draft", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy?role=cashier&rate=missing");
     await page.getByRole("textbox", { name: "Transaction rate" }).fill("70.50");
-    await page.getByRole("textbox", { name: "Reason for the rate decision" }).fill("Customer-agreed counter rate");
     await page.locator(".financial-task-form").getByRole("textbox", { name: /We receive/ }).fill("1000");
     await page.getByRole("button", { name: "Review transaction" }).click();
     await page.getByRole("button", { name: "Confirm and save" }).click();
@@ -906,7 +944,7 @@ test.describe("workspace controls", () => {
     await dialog.getByRole("textbox", { name: "We give" }).fill("100");
     await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("93.68");
     await dialog.getByRole("textbox", { name: "Transaction rate" }).fill("0.92");
-    await dialog.getByRole("textbox", { name: "Reason for the rate decision" }).fill("Customer negotiated rate");
+    await expect(dialog.getByRole("textbox", { name: "Reason for the rate decision" })).toHaveCount(0);
     await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("92.00");
     await dialog.getByRole("button", { name: "Review transaction" }).click();
     const confirmation = dialog.locator(".trade-confirmation");

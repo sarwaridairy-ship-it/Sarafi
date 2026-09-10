@@ -46,18 +46,18 @@ test.describe("calm premium v4 objective acceptance", () => {
       expect(await page.locator(".calm-attention .calm-list button").count()).toBeLessThanOrEqual(5);
       expect(await page.locator(".calm-recent .calm-activity-list article").count()).toBeLessThanOrEqual(5);
       await expect(page.locator(".calm-home table, .calm-home .export-button, .calm-home .rate-strip")).toHaveCount(0);
-      await expect(page.locator(".mobile-nav > *")).toHaveCount(5);
+      await expect(page.locator(".mobile-nav > *")).toHaveCount(["owner", "business_admin", "manager"].includes(role) ? 6 : 5);
       if (role === "accountant") await expect(page.locator(".calm-primary")).toContainText("daily summary");
     });
   }
 
-  test("normal FX keeps the rate open and reveals governance only after editing", async ({ page }) => {
+  test("normal FX keeps the rate open without asking for a rate-decision reason", async ({ page }) => {
     await page.goto(`${workspace}/transactions/new/fx/buy?role=owner`);
     const form = page.locator(".financial-task-form");
     await expect(form).toBeVisible();
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
     await form.getByRole("textbox", { name: "Transaction rate" }).fill("70.50");
-    await expect(form.getByRole("textbox", { name: /reason/i })).toBeVisible();
+    await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
   });
 
   test("a new FX intent never inherits a reviewed transaction", async ({ page }) => {
@@ -66,6 +66,7 @@ test.describe("calm premium v4 objective acceptance", () => {
     await buyForm.locator(".trade-fields input").first().fill("100");
     await buyForm.getByRole("button", { name: /Review transaction/ }).click();
     await expect(buyForm.getByRole("heading", { name: "Check before saving" })).toBeVisible();
+    await buyForm.getByRole("button", { name: "Edit transaction" }).click();
 
     await page.locator(".sidebar nav").getByRole("button", { name: "Make a Transaction", exact: true }).click();
     await page.getByRole("button", { name: /^Currency Exchange/ }).click();
@@ -140,12 +141,12 @@ test.describe("calm premium v4 objective acceptance", () => {
   });
 
   for (const width of [360, 390]) {
-    test(`${width}px mobile keeps five navigation items and the primary action above them`, async ({ page }) => {
+    test(`${width}px mobile keeps the primary destinations reachable and the primary action above them`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(`${workspace}/home?role=owner`);
       const primary = page.locator(".calm-primary");
       const mobileNav = page.locator(".mobile-nav");
-      await expect(mobileNav.locator(":scope > *")).toHaveCount(5);
+      await expect(mobileNav.locator(":scope > *")).toHaveCount(6);
       const primaryBox = await primary.boundingBox();
       const navBox = await mobileNav.boundingBox();
       expect(primaryBox).not.toBeNull();

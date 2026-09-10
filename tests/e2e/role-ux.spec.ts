@@ -52,18 +52,18 @@ test.describe("role-aware workspace presentation", () => {
   }
 
   for (const [role, labels] of [
-    ["owner", ["Home", "Make a Transaction", "My Money", "Activity", "Manage Sarafi"]],
-    ["business_admin", ["Home", "Make a Transaction", "Customers", "Activity", "Manage Sarafi"]],
-    ["manager", ["Home", "Make a Transaction", "Cashboxes", "Activity", "Team"]],
+    ["owner", ["Home", "Make a Transaction", "My Money", "Activity", "Rates", "Manage Sarafi"]],
+    ["business_admin", ["Home", "Make a Transaction", "Customers", "Activity", "Rates", "Manage Sarafi"]],
+    ["manager", ["Home", "Make a Transaction", "Cashboxes", "Activity", "Rates", "Team"]],
     ["cashier", ["Home", "Make a Transaction", "Customers", "My Activity", "Close Cashbox"]],
     ["accountant", ["Home", "Activity", "Reports", "Debts", "Reconcile"]],
     ["compliance_officer", ["Home", "Hawala Review", "Reviews", "Cases", "Search"]],
     ["viewer", ["Home", "My Money", "Activity", "Reports", "Search"]],
   ] as const) {
-    test(`${role} receives the required five-item navigation`, async ({ page }) => {
+    test(`${role} receives the required role navigation`, async ({ page }) => {
       await page.goto(`/?role=${role}`);
       const navigation = page.locator(".sidebar nav");
-      await expect(navigation.getByRole("button")).toHaveCount(5);
+      await expect(navigation.getByRole("button")).toHaveCount(labels.length);
       for (const label of labels) {
         await expect(navigation.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
       }

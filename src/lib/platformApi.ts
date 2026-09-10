@@ -17,6 +17,7 @@ export type SubscriptionPlan = {
   status: 'draft' | 'published' | 'retired'
   sort_order: number
   features: Record<string, boolean>
+  term_prices: Array<{ term_months: 1 | 3 | 6 | 12; price_afn: string }>
 }
 
 export type PaymentProvider = {
@@ -52,6 +53,7 @@ export type PaymentRequest = {
   plan_name?: string
   provider_code: string
   amount_afn: string
+  term_months: 1 | 3 | 6 | 12
   payer_reference: string | null
   payer_note?: string | null
   status: string
@@ -68,6 +70,8 @@ export type BillingPortal = {
 
 export type PlatformOrganization = {
   id: string
+  business_number?: number
+  business_reference?: string
   display_name: string
   created_at: string
   member_count: number
@@ -92,6 +96,8 @@ export type PlatformConsole = {
 
 export type PlatformOrganizationUser = {
   user_id: string
+  user_number?: number
+  user_reference?: string
   membership_id: string
   display_name: string
   email: string
@@ -126,6 +132,7 @@ export async function createSubscriptionPaymentRequest(input: {
   organizationId: string
   planId: string
   providerCode: string
+  termMonths: 1 | 3 | 6 | 12
   reference: string
   note?: string
 }): Promise<RpcResult<{ request: PaymentRequest; checkout_url: string | null }>> {
@@ -135,6 +142,7 @@ export async function createSubscriptionPaymentRequest(input: {
     target_org: input.organizationId,
     target_plan: input.planId,
     target_provider: input.providerCode,
+    term_months_input: input.termMonths,
     payer_reference_input: input.reference.trim(),
     payer_note_input: input.note?.trim() || null,
   })

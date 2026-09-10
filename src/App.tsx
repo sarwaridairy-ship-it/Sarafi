@@ -51,7 +51,7 @@ import {
   listHawalaPartners,
   findHawalaPayout,
   getHawalaPartnerStatement,
-  listJournalEntries,
+  searchJournalEntries,
   listLocationEvidence,
   listRateHistory,
   listReportExports,
@@ -154,6 +154,7 @@ import {
 import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot, workspaceSectionPath } from "./app/routes";
 import type { InlineRateResolverProps } from "./features/rates/InlineRateResolver";
 import { ReferenceScanner } from "./features/hawala/ReferenceScanner";
+import { getSarafiAfRateBoard, type SarafiAfRate } from "./lib/sarafiAfRates";
 
 const loadExports = () => import("./lib/exports");
 const ImportWorkspace = lazy(() => import("./ImportWorkspace").then((module) => ({ default: module.ImportWorkspace })));
@@ -614,7 +615,6 @@ function App() {
   }));
   const [rateOverrideEnabled, setRateOverrideEnabled] = useState(false);
   const [rateOverride, setRateOverride] = useState("");
-  const [rateOverrideReason, setRateOverrideReason] = useState("");
   const [publishRate, setPublishRate] = useState(false);
   const [allowStaleRate, setAllowStaleRate] = useState(false);
   const [dashboardDate, setDashboardDate] = useState(() =>
@@ -1068,7 +1068,6 @@ function App() {
           });
           setRateOverrideEnabled(false);
           setRateOverride("");
-          setRateOverrideReason("");
           setPublishRate(false);
           setAllowStaleRate(false);
           if (current.stale) setToast(language === "en" ? "The approved rate is older than one day; review it before posting." : language === "fa-AF" ? "نرخ تأییدشده بیشتر از یک روز قدیمی است؛ پیش از ثبت آن را بررسی کنید." : "تایید شوی نرخ له یوې ورځې زوړ دی؛ له ثبت مخکې یې وګورئ.");
@@ -1222,10 +1221,6 @@ function App() {
       setToast(language === "en" ? "Choose how to handle the old shop rate before continuing." : language === "fa-AF" ? "پیش از ادامه، روش استفاده از نرخ قدیمی را انتخاب کنید." : "له دوام مخکې د زاړه نرخ د کارولو لاره وټاکئ.");
       return;
     }
-    if ((rateOverrideEnabled || allowStaleRate) && rateOverrideReason.trim().length < 3) {
-      setToast(language === "en" ? "Add a reason for this rate decision." : language === "fa-AF" ? "دلیل این تصمیم نرخ را بنویسید." : "د دې نرخ پرېکړې دلیل ولیکئ.");
-      return;
-    }
     if (
       !amount ||
       !new Decimal(amount).isFinite() ||
@@ -1261,6 +1256,11 @@ function App() {
           }
         : deriveTradeAmounts(tradeSide, amount, appliedRate, appliedRate);
       const { rate: effectiveRate, soldAmount, boughtAmount, soldBaseValue, boughtBaseValue } = pricing;
+      const rateDecisionReason = rateOverrideEnabled
+        ? "Customer rate confirmed in transaction review"
+        : allowStaleRate || rateContext.stale || tradeReceiveRateContext.stale
+          ? "Existing shop rate confirmed in transaction review"
+          : undefined;
       const exchangeRatePublications = [exchangeSourceRatePublication, exchangeTargetRatePublication]
         .filter((item): item is InlineRatePublication => Boolean(item));
       const command = {
@@ -1278,8 +1278,8 @@ function App() {
         bought_base_value: boughtBaseValue,
         customer_rate: effectiveRate,
         rate_source: rateOverrideEnabled ? "transaction_override" as const : (rateContext.stale || (tradeSide === "EXCHANGE_FX" && tradeReceiveRateContext.stale)) ? "approved_stale_shop_rate" as const : "shop_rate" as const,
-        override_reason: rateOverrideReason.trim() || undefined,
-        approval_reason: rateOverrideReason.trim() || undefined,
+        override_reason: rateDecisionReason,
+        approval_reason: rateDecisionReason,
         allow_stale_rate: allowStaleRate || undefined,
         device_id: linkedDevice?.id || undefined,
         fee_amount: tradeFee || undefined,
@@ -1376,7 +1376,6 @@ function App() {
     setTradeCommandId(crypto.randomUUID());
     setRateOverrideEnabled(false);
     setRateOverride("");
-    setRateOverrideReason("");
     setPublishRate(false);
     setAllowStaleRate(false);
     setExchangeSourceRatePublication(undefined);
@@ -1453,7 +1452,6 @@ function App() {
     setTradeCommandId(crypto.randomUUID());
     setRateOverrideEnabled(false);
     setRateOverride("");
-    setRateOverrideReason("");
     setPublishRate(false);
     setAllowStaleRate(false);
     setTradeReviewing(false);
@@ -1787,6 +1785,7 @@ function App() {
   const navigationLabel: Record<string, [string, AppIconName]> = {
     Dashboard: [t("home"), "home"],
     Trade: [makeTransactionLabel, "trade"],
+    Rates: [t("rates"), "rates"],
     Transactions: [workspaceRole === "cashier" ? myActivityLabel : activityLabel, "transactions"],
     "Cash & Accounts": [myMoneyLabel, "wallet"],
     People: [customersLabel, "people"],
@@ -1881,8 +1880,6 @@ function App() {
         current: "Current shop rate",
         useDifferent: "Use a different rate for this transaction",
         newRate: "Transaction rate",
-        reason: "Reason for the rate decision",
-        reasonPlaceholder: "Explain the customer rate or stale-rate decision",
         publish: "Publish this as the new shop rate",
         continueStale: "Continue with the current old rate",
         approval: "If this rate is outside the allowed difference, it will be sent for approval and your draft will stay open.",
@@ -1899,8 +1896,6 @@ function App() {
           current: "نرخ فعلی دکان",
           useDifferent: "برای این معامله نرخ متفاوت استفاده شود",
           newRate: "نرخ معامله",
-          reason: "دلیل تصمیم نرخ",
-          reasonPlaceholder: "دلیل نرخ مشتری یا استفاده از نرخ قدیمی را بنویسید",
           publish: "این نرخ به‌عنوان نرخ جدید دکان نشر شود",
           continueStale: "با نرخ فعلی قدیمی ادامه داده شود",
           approval: "اگر نرخ بیرون از تفاوت مجاز باشد، برای تأیید فرستاده می‌شود و پیش‌نویس باز می‌ماند.",
@@ -1916,8 +1911,6 @@ function App() {
           current: "د دوکان اوسنی نرخ",
           useDifferent: "د دې معاملې لپاره بل نرخ وکاروئ",
           newRate: "د معاملې نرخ",
-          reason: "د نرخ د پرېکړې دلیل",
-          reasonPlaceholder: "د پېرېدونکي نرخ یا زاړه نرخ د کارولو دلیل ولیکئ",
           publish: "دا د دوکان د نوي نرخ په توګه خپور کړئ",
           continueStale: "له اوسني زاړه نرخ سره دوام ورکړئ",
           approval: "که نرخ له اجازه شوې توپیر څخه بهر وي، د تایید لپاره لېږل کېږي او مسوده خلاصه پاتې کېږي.",
@@ -1952,7 +1945,6 @@ function App() {
     setRateOverrideEnabled(false);
     setRateOverride("");
     setTradeExchangeRate("");
-    setRateOverrideReason("");
     setPublishRate(false);
     setTradeReviewing(false);
   };
@@ -2530,7 +2522,6 @@ function App() {
                       setTradeExchangeRate("");
                       setRateOverrideEnabled(false);
                       setRateOverride("");
-                      setRateOverrideReason("");
                       setExchangeSourceRatePublication(undefined);
                       setExchangeTargetRatePublication(undefined);
                       setTradeReviewing(false);
@@ -2592,7 +2583,6 @@ function App() {
                         setTradeReceiveCurrency(event.target.value);
                         setTradeExchangeRate("");
                         setRateOverrideEnabled(false);
-                        setRateOverrideReason("");
                         setExchangeTargetRatePublication(undefined);
                         setTradeReviewing(false);
                       }}
@@ -2675,15 +2665,7 @@ function App() {
                   onChange={(value) => { setExchangeTargetRatePublication(value); setTradeReviewing(false); }}
                   onReadyChange={setExchangeTargetRateReady}
                 />
-                {rateOverrideEnabled ? (
-                  <>
-                    <label>
-                      {rateWorkflowCopy.reason}
-                      <textarea required minLength={3} value={rateOverrideReason} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverrideReason(event.target.value); setTradeReviewing(false); }} placeholder={rateWorkflowCopy.reasonPlaceholder} />
-                    </label>
-                    {capability("approval.request") && !capability("approval.decide") ? <p>{rateWorkflowCopy.approval}</p> : null}
-                  </>
-                ) : null}
+                {rateOverrideEnabled && capability("approval.request") && !capability("approval.decide") ? <p>{rateWorkflowCopy.approval}</p> : null}
               </details>
             )}
             {tradeSide !== "EXCHANGE_FX" && (rateContext.missing || rateContext.stale || rateOverrideEnabled || allowStaleRate) && (
@@ -2697,12 +2679,6 @@ function App() {
                   <label className="choice-row">
                     <input type="checkbox" checked={allowStaleRate} disabled={tradeReviewing || tradeBusy || rateOverrideEnabled} onChange={(event) => { setAllowStaleRate(event.target.checked); setTradeReviewing(false); }} />
                     <span>{rateWorkflowCopy.continueStale}</span>
-                  </label>
-                )}
-                {(rateOverrideEnabled || allowStaleRate) && (
-                  <label>
-                    {rateWorkflowCopy.reason}
-                    <textarea required minLength={3} value={rateOverrideReason} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setRateOverrideReason(event.target.value); setTradeReviewing(false); }} placeholder={rateWorkflowCopy.reasonPlaceholder} />
                   </label>
                 )}
                 {rateOverrideEnabled && canPublishTransactionRate && (
@@ -2732,10 +2708,11 @@ function App() {
               </section>
             )}
             {tradeReviewing && tradePreview && (
-              <section className="trade-confirmation" aria-live="polite">
-                <h3>{u("confirmationTitle")}</h3>
+              <div className="confirmation-backdrop">
+              <section className="trade-confirmation confirmation-window" role="dialog" aria-modal="true" aria-labelledby="trade-confirmation-title">
+                <h3 id="trade-confirmation-title">{u("confirmationTitle")}</h3>
                 <p>{u("confirmationIntro")}</p>
-                <div className="setup-summary">
+                <div className="setup-summary receipt-review-summary">
                   <span>{t("sellAmount")}</span>
                   <b dir="ltr">
                     {new Decimal(tradeGivenAmount || "0").toFixed(2)}{" "}
@@ -2754,27 +2731,21 @@ function App() {
                   <span>{t("marketRate")}</span>
                   <b>✓</b>
                 </div>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => setTradeReviewing(false)}
-                >
-                  {u("editTransaction")}
-                </button>
+                <div className="confirmation-actions">
+                  <button type="button" className="text-button" onClick={() => setTradeReviewing(false)}>{u("editTransaction")}</button>
+                  <button className="primary-action" type="submit" disabled={tradeBusy} autoFocus>{tradeBusy ? t("working") : u("confirmTransaction")} <span>→</span></button>
+                </div>
               </section>
+              </div>
             )}
-            <button
+            {!tradeReviewing && <button
               className="primary-action full"
               type="submit"
               disabled={tradeBusy || (tradeSide === "EXCHANGE_FX" && (!exchangeSourceRateReady || !exchangeTargetRateReady || !effectiveTradeRate))}
             >
-              {tradeBusy
-                ? t("working")
-                : tradeReviewing
-                  ? u("confirmTransaction")
-                  : u("reviewTransaction")}{" "}
+              {tradeBusy ? t("working") : u("reviewTransaction")}{" "}
               <span>→</span>
-            </button>
+            </button>}
             <p className="modal-note">{u("shopCheck")}</p>
           </form>
         </div>
@@ -2805,8 +2776,8 @@ function App() {
             {operationReceivesMoney || operationPaysMoney ? (
               <p className={`transaction-plain-direction ${operationReceivesMoney ? "money-in" : "money-out"}`}>
                 {operationReceivesMoney
-                  ? (language === "en" ? "We receive this money." : language === "fa-AF" ? "ما این پول را می‌گیریم." : "موږ دا پیسې اخلو.")
-                  : (language === "en" ? "We pay this money." : language === "fa-AF" ? "ما این پول را می‌دهیم." : "موږ دا پیسې ورکوو.")}
+                  ? (language === "en" ? "This money comes into the shop." : language === "fa-AF" ? "این پول به صرافی می‌آید." : "دا پیسې صرافۍ ته راځي.")
+                  : (language === "en" ? "This money leaves the shop." : language === "fa-AF" ? "این پول از صرافی بیرون می‌شود." : "دا پیسې له صرافۍ وځي.")}
               </p>
             ) : null}
             <label>
@@ -5298,7 +5269,7 @@ function PeopleView({
   const navigate = useNavigate();
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const [people, setPeople] = useState<CounterpartyRecord[]>(() => organizationId === "inspection" ? [{ id: "inspection-customer", display_name: ux(language, "previewCustomer"), counterparty_type: "customer", risk_status: "standard", phone: "+93 700 000 000" }] : []);
+  const [people, setPeople] = useState<CounterpartyRecord[]>(() => organizationId === "inspection" ? [{ id: "inspection-customer", customer_number: 42, customer_reference: "C-00000042", display_name: ux(language, "previewCustomer"), counterparty_type: "customer", risk_status: "standard", phone: "+93 700 000 000" }] : []);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [statement, setStatement] = useState<
     Array<{
@@ -5421,6 +5392,8 @@ function PeopleView({
     if (organizationId === "inspection") {
       const created: CounterpartyRecord = {
         id: crypto.randomUUID(),
+        customer_number: Date.now(),
+        customer_reference: "C-" + String(Date.now()).slice(-8),
         display_name: newPersonName.trim(),
         counterparty_type: newPersonType,
         risk_status: "standard",
@@ -5455,7 +5428,9 @@ function PeopleView({
     onToast(u("customerCreated"));
   };
   const filtered = people.filter((person) =>
-    person.display_name
+    [person.display_name, person.phone, person.customer_reference, person.customer_number]
+      .filter(Boolean)
+      .join(" ")
       .toLocaleLowerCase()
       .includes(query.trim().toLocaleLowerCase()),
   );
@@ -5534,7 +5509,7 @@ function PeopleView({
               </span>
               <span className="balance-name">
                 <b>{person.display_name}</b>
-                <small>{t("customer")}</small>
+                <small>{person.customer_reference ? person.customer_reference + " · " : ""}{t("customer")}</small>
               </span>
               <strong>{u("viewStatement")} →</strong>
             </button>
@@ -5550,7 +5525,7 @@ function PeopleView({
             <div>
               <p className="kicker">{u("statement")}</p>
               <h2>{selected.display_name}</h2>
-              <p>{u("balancesStaySeparate")}</p>
+              <p>{selected.customer_reference ? selected.customer_reference + " · " : ""}{u("balancesStaySeparate")}</p>
             </div>
             <button className="text-button" onClick={() => {
               setSelectedResult(null);
@@ -5688,6 +5663,32 @@ function PeopleView({
   );
 }
 
+type TransactionDatePreset = "today" | "yesterday" | "week" | "month" | "custom";
+
+function shiftBusinessDate(value: string, days: number) {
+  const date = new Date(value + "T12:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function transactionDateRange(preset: TransactionDatePreset, fromDate: string, toDate: string) {
+  const today = businessDateInTimeZone(new Date(), "Asia/Kabul");
+  const startDay = preset === "today"
+    ? today
+    : preset === "yesterday"
+      ? shiftBusinessDate(today, -1)
+      : preset === "week"
+        ? shiftBusinessDate(today, -6)
+        : preset === "month"
+          ? shiftBusinessDate(today, -29)
+          : fromDate;
+  const endDay = preset === "yesterday" ? shiftBusinessDate(today, -1) : preset === "custom" ? toDate : today;
+  return {
+    from: startDay || null,
+    to: endDay || null,
+  };
+}
+
 function TransactionsView({
   language,
   organizationId,
@@ -5705,15 +5706,27 @@ function TransactionsView({
   const navigate = useNavigate();
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
+  const filterCopy = ({
+    en: { find: "Find transaction or customer ID", today: "Today", yesterday: "Yesterday", week: "7 days", month: "30 days", custom: "Choose dates", from: "From", to: "To", apply: "Show transactions", receipt: "Transaction receipt", transactionId: "Transaction ID", customerId: "Customer ID", receiptNo: "Receipt number", rate: "Rate", fee: "Commission", technical: "Technical reference" },
+    "fa-AF": { find: "جستجوی شماره معامله یا مشتری", today: "امروز", yesterday: "دیروز", week: "۷ روز", month: "۳۰ روز", custom: "انتخاب تاریخ", from: "از تاریخ", to: "تا تاریخ", apply: "نمایش معاملات", receipt: "رسید معامله", transactionId: "شماره معامله", customerId: "شماره مشتری", receiptNo: "شماره رسید", rate: "نرخ", fee: "کمیشن", technical: "شماره تخنیکی" },
+    "ps-AF": { find: "د معاملې یا پېرېدونکي شمېره ولټوئ", today: "نن", yesterday: "پرون", week: "۷ ورځې", month: "۳۰ ورځې", custom: "نېټې ټاکل", from: "له نېټې", to: "تر نېټې", apply: "معاملې ښودل", receipt: "د معاملې رسید", transactionId: "د معاملې شمېره", customerId: "د پېرېدونکي شمېره", receiptNo: "د رسید شمېره", rate: "نرخ", fee: "کمېشن", technical: "تخنیکي شمېره" },
+  } as const)[language];
   const [entries, setEntries] = useState<JournalRecord[]>([]);
   const [selectedResult, setSelectedResult] = useState<JournalRecord | null>(null);
   const { transactionId: routeEntryId = null } = useParams<{ transactionId: string }>();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const visibleEntries: JournalRecord[] = useMemo(() => organizationId === "inspection"
-      ? [
+  const [filterPreset, setFilterPreset] = useState<TransactionDatePreset>("today");
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const today = businessDateInTimeZone(new Date(), "Asia/Kabul");
+  const [customFrom, setCustomFrom] = useState(today);
+  const [customTo, setCustomTo] = useState(today);
+  const inspectionEntries = useMemo<JournalRecord[]>(() => [
           {
             id: "inspection-expense-entry",
+            transaction_number: 100001,
+            transaction_reference: "T-00100001",
+            receipt_number: "SAR-2026-00100001",
             status: "posted",
             memo: null,
             occurred_at: new Date().toISOString(),
@@ -5728,6 +5741,9 @@ function TransactionsView({
           },
           {
             id: "inspection-buy-entry",
+            transaction_number: 100002,
+            transaction_reference: "T-00100002",
+            receipt_number: "SAR-2026-00100002",
             status: "posted",
             memo: null,
             occurred_at: new Date().toISOString(),
@@ -5739,25 +5755,55 @@ function TransactionsView({
             currency_code: "USD",
             amount: "1000.00",
             counterparty_name: ux(language, "previewCustomer"),
+            customer_number: 42,
+            customer_reference: "C-00000042",
             employee_name: ux(language, "previewCashierName"),
             given_amount: "70250.00",
             given_currency: "AFN",
             received_amount: "1000.00",
             received_currency: "USD",
+            customer_rate: "70.25",
+            fee_amount: "250",
+            fee_currency: "AFN",
           },
-        ]
-      : entries, [entries, language, organizationId]);
+        ], [language]);
+  const activeRange = transactionDateRange(filterPreset, customFrom, customTo);
+  const visibleEntries: JournalRecord[] = useMemo(() => {
+    const source = organizationId === "inspection" ? inspectionEntries : entries;
+    if (organizationId !== "inspection") return source;
+    const query = transactionSearch.trim().toLocaleLowerCase(language);
+    return source.filter((entry) => {
+      const occurred = businessDateInTimeZone(new Date(entry.occurred_at), "Asia/Kabul");
+      const inRange = (!activeRange.from || occurred >= activeRange.from)
+        && (!activeRange.to || occurred <= activeRange.to);
+      const searchable = [
+        entry.transaction_reference, entry.transaction_number, entry.customer_reference,
+        entry.customer_number, entry.counterparty_name, entry.receipt_number,
+      ].filter(Boolean).join(" ").toLocaleLowerCase(language);
+      return inRange && (!query || searchable.includes(query));
+    });
+  }, [activeRange.from, activeRange.to, entries, inspectionEntries, language, organizationId, transactionSearch]);
   const selected = routeEntryId
     ? organizationId === "inspection"
       ? visibleEntries.find((entry) => entry.id === routeEntryId) ?? null
       : selectedResult?.id === routeEntryId ? selectedResult : null
     : null;
+  const loadTransactions = useCallback(async () => {
+    if (!organizationId || organizationId === "inspection") return;
+    const range = transactionDateRange(filterPreset, customFrom, customTo);
+    const result = await searchJournalEntries({
+      organizationId,
+      search: transactionSearch,
+      from: range.from,
+      to: range.to,
+    });
+    if (result.data) setEntries(result.data);
+    if (result.error) onToast(ux(language, "couldNotLoad"));
+  }, [customFrom, customTo, filterPreset, language, onToast, organizationId, transactionSearch]);
   useEffect(() => {
-    if (organizationId && organizationId !== "inspection")
-      void listJournalEntries(organizationId).then((result) => {
-        if (result.data) setEntries(result.data);
-      });
-  }, [organizationId]);
+    const pendingLoad = window.setTimeout(() => void loadTransactions(), 0);
+    return () => window.clearTimeout(pendingLoad);
+  }, [loadTransactions]);
   useEffect(() => {
     if (!routeEntryId || !organizationId) return;
     if (organizationId === "inspection") return;
@@ -5784,7 +5830,12 @@ function TransactionsView({
       setSelectedResult(null);
       setReason("");
       if (organizationId) {
-        const refreshed = await listJournalEntries(organizationId);
+        const refreshed = await searchJournalEntries({
+          organizationId,
+          search: transactionSearch,
+          from: activeRange.from,
+          to: activeRange.to,
+        });
         if (refreshed.data) setEntries(refreshed.data);
       }
       navigate(location.pathname.replace(/\/[^/]+$/, ""), { replace: true });
@@ -5841,25 +5892,42 @@ function TransactionsView({
           <div>
             <p className="kicker">{t("transactions")}</p>
             <h1 id="transaction-detail-title">{transactionName(selected)}</h1>
-            <p>{selected.immutable_reference ?? selected.id}</p>
+            <p>{selected.transaction_reference ?? selected.receipt_number ?? selected.immutable_reference ?? selected.id}</p>
           </div>
           <button className="text-button" type="button" onClick={() => navigate(listPath)}>{language === "en" ? "Back to transactions" : language === "fa-AF" ? "بازگشت به معاملات" : "معاملو ته ستنېدل"} →</button>
         </div>
+        <article className="transaction-receipt">
+          <header className="transaction-receipt-head">
+            <div><span className="brand-mark">S</span><strong>SARAFI</strong></div>
+            <div><small>{filterCopy.receipt}</small><b dir="ltr">{selected.transaction_reference ?? "—"}</b></div>
+          </header>
+          <div className="receipt-id-strip">
+            <span>{filterCopy.transactionId}</span><strong dir="ltr">{selected.transaction_reference ?? "—"}</strong>
+            <span>{filterCopy.receiptNo}</span><strong dir="ltr">{selected.receipt_number ?? "—"}</strong>
+          </div>
         <div className="transaction-detail-grid">
           <article><small>{language === "en" ? "Status" : language === "fa-AF" ? "وضعیت" : "حالت"}</small><strong>{selected.status}</strong></article>
           <article><small>{u("businessDate")}</small><strong>{new Date(selected.occurred_at).toLocaleString(language, { hour12: false })}</strong></article>
           <article><small>{u("sourceAccount")}</small><strong>{flow.source}</strong></article>
           <article><small>{u("destinationAccount")}</small><strong>{flow.destination}</strong></article>
           <article><small>{u("customerLabel")}</small><strong>{selected.counterparty_name || t("walkInCustomer")}</strong></article>
+          {selected.customer_reference && <article><small>{filterCopy.customerId}</small><strong dir="ltr">{selected.customer_reference}</strong></article>}
           <article><small>{u("employeeLabel")}</small><strong>{selected.employee_name || u("teamMember")}</strong></article>
           {selected.amount && selected.currency_code && <article><small>{t("amount")}</small><strong>{formatFinancialAmount(selected.amount)} {selected.currency_code}</strong></article>}
           {selected.given_amount && <article><small>{u("weGaveLabel")}</small><strong>{formatFinancialAmount(selected.given_amount)} {selected.given_currency}</strong></article>}
           {selected.received_amount && <article><small>{u("weReceivedLabel")}</small><strong>{formatFinancialAmount(selected.received_amount)} {selected.received_currency}</strong></article>}
+          {selected.customer_rate && <article><small>{filterCopy.rate}</small><strong dir="ltr">{selected.customer_rate}</strong></article>}
+          {selected.fee_amount && <article><small>{filterCopy.fee}</small><strong dir="ltr">{formatFinancialAmount(selected.fee_amount)} {selected.fee_currency ?? ""}</strong></article>}
           <article><small>{t("note")}</small><strong>{selected.memo || "—"}</strong></article>
         </div>
+          <footer className="transaction-receipt-foot">
+            <span>{language === "en" ? "Recorded by" : language === "fa-AF" ? "ثبت توسط" : "ثبت کوونکی"}: {selected.employee_name || u("teamMember")}</span>
+            <details><summary>{filterCopy.technical}</summary><bdi>{selected.id}</bdi></details>
+          </footer>
+        </article>
         {canReverse && selected.status === "posted" && (
           <form className="transaction-correction-form" onSubmit={reverse}>
-            <div><p className="kicker">{u("correction")}</p><h2>{u("correctTransaction")}</h2><p>{u("originalReference")}: {selected.id.slice(0, 12)}</p></div>
+            <div><p className="kicker">{u("correction")}</p><h2>{u("correctTransaction")}</h2><p>{u("originalReference")}: {selected.transaction_reference ?? selected.receipt_number ?? selected.id.slice(0, 12)}</p></div>
             <label>{t("note")}<input required minLength={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={u("correctionReason")} /></label>
             <button className="primary-action" type="submit" disabled={busy}>{busy ? u("posting") : u("submitCorrection")} <span>→</span></button>
           </form>
@@ -5879,6 +5947,26 @@ function TransactionsView({
           {u("backHome")} →
         </button>
       </div>
+      <form className="transaction-filters" onSubmit={(event) => { event.preventDefault(); void loadTransactions(); }}>
+        <label className="transaction-search-field">
+          <span>{filterCopy.find}</span>
+          <input type="search" value={transactionSearch} onChange={(event) => setTransactionSearch(event.target.value)} placeholder="T-000001 / C-000001" />
+        </label>
+        <div className="transaction-date-presets" role="group" aria-label={u("businessDate")}>
+          {([
+            ["today", filterCopy.today],
+            ["yesterday", filterCopy.yesterday],
+            ["week", filterCopy.week],
+            ["month", filterCopy.month],
+            ["custom", filterCopy.custom],
+          ] as const).map(([value, label]) => <button key={value} type="button" className={filterPreset === value ? "active" : ""} aria-pressed={filterPreset === value} onClick={() => setFilterPreset(value)}>{label}</button>)}
+        </div>
+        {filterPreset === "custom" && <div className="transaction-custom-dates">
+          <label>{filterCopy.from}<input type="date" value={customFrom} max={customTo} onChange={(event) => setCustomFrom(event.target.value)} /></label>
+          <label>{filterCopy.to}<input type="date" value={customTo} min={customFrom} onChange={(event) => setCustomTo(event.target.value)} /></label>
+        </div>}
+        <button className="primary-action" type="submit">{filterCopy.apply}</button>
+      </form>
       <div className="balance-list">
         {visibleEntries.length ? (
           visibleEntries.map((entry) => (
@@ -5897,13 +5985,13 @@ function TransactionsView({
               <span className="balance-name">
                 <b>{transactionName(entry)}</b>
                 <small>
-                  {new Date(entry.occurred_at).toLocaleString(language, { hour12: false })} · {entry.immutable_reference?.slice(0, 18) ?? entry.id.slice(0, 12)}
+                  {new Date(entry.occurred_at).toLocaleString(language, { hour12: false })} · {entry.transaction_reference ?? entry.receipt_number ?? entry.immutable_reference?.slice(0, 18) ?? entry.id.slice(0, 12)}
                 </small>
                 <small className="transaction-flow-line">
                   {moneyFlow(entry).source} → {moneyFlow(entry).destination}
                 </small>
                 <small className="transaction-people-line">
-                  {u("customerLabel")}: {entry.counterparty_name || t("walkInCustomer")} · {u("employeeLabel")}: {entry.employee_name || u("teamMember")}
+                  {u("customerLabel")}: {entry.counterparty_name || t("walkInCustomer")}{entry.customer_reference ? " · " + entry.customer_reference : ""} · {u("employeeLabel")}: {entry.employee_name || u("teamMember")}
                 </small>
                 {entry.given_amount && entry.received_amount && (
                   <small className="transaction-two-sides" dir="ltr">
@@ -5950,6 +6038,11 @@ function RatesView({
     "fa-AF": { group: "گروه نرخ مشتری", tolerance: "فاصله مجاز نرخ", newGroup: "افزودن گروه نرخ", groupName: "نام گروه", groupCode: "کود کوتاه", valuation: "نرخ‌های ارزش‌گذاری گزارش", valuationIntro: "برای هر اسعار فعال یک ارزش افغانی ثبت کنید. این کار فقط گزارش را تغییر می‌دهد و پول یا معاملات گذشته را تغییر نمی‌دهد.", valuationName: "نام ارزش‌گذاری", saveValuation: "ذخیره نرخ‌های ارزش‌گذاری", latestValuations: "ارزش‌گذاری‌های ذخیره‌شده" },
     "ps-AF": { group: "د پېرودونکي د نرخ ډله", tolerance: "د نرخ اجازه شوې فاصله", newGroup: "د نرخ ډله زیاتول", groupName: "د ډلې نوم", groupCode: "لنډ کوډ", valuation: "د راپور د ارزونې نرخونه", valuationIntro: "د هر فعال اسعار لپاره په افغانۍ ارزښت ولیکئ. دا یوازې راپور بدلوي؛ نغدې او پخوانۍ معاملې نه بدلوي.", valuationName: "د ارزونې نوم", saveValuation: "د ارزونې نرخونه ساتل", latestValuations: "ساتل شوې ارزونې" },
   } as const)[language];
+  const onlineCopy = ({
+    en: { title: "Live market reference", intro: "Rates come only from SARAFI.AF, Sarai Shahzada. Choose a row to copy it into the shop-rate form, then review and save it.", refresh: "Refresh", updated: "Updated", use: "Use this rate", unavailable: "The online reference is temporarily unavailable. Your saved shop rates are unchanged.", source: "Open SARAFI.AF" },
+    "fa-AF": { title: "نرخ زنده بازار", intro: "نرخ‌ها تنها از SARAFI.AF، سرای شهزاده گرفته می‌شود. یک ردیف را انتخاب کنید تا در فورم نرخ صرافی بیاید؛ بعد بررسی و ذخیره کنید.", refresh: "تازه‌سازی", updated: "تازه‌شده", use: "استفاده از این نرخ", unavailable: "نرخ آنلاین فعلاً در دسترس نیست. نرخ‌های ذخیره‌شده صرافی تغییر نکرده است.", source: "باز کردن SARAFI.AF" },
+    "ps-AF": { title: "د بازار ژوندی نرخ", intro: "نرخونه یوازې د SARAFI.AF د سرای شهزاده له پاڼې راځي. یو نرخ وټاکئ، بیا یې وګورئ او د صرافۍ د نرخ په توګه یې وساتئ.", refresh: "تازه کول", updated: "تازه شوی", use: "دا نرخ وکاروئ", unavailable: "انلاین نرخ اوس نه موندل کېږي. د صرافۍ ساتل شوي نرخونه نه دي بدل شوي.", source: "SARAFI.AF پرانیستل" },
+  } as const)[language];
   const [history, setHistory] = useState<RateHistoryRecord[]>([]);
   const [controls, setControls] = useState<OrganizationControlPlane | null>(null);
   const [loadedCatalog, setCatalog] = useState<CurrencyCatalogRecord[]>([]);
@@ -5966,6 +6059,36 @@ function RatesView({
   const [valuationName, setValuationName] = useState("");
   const [valuationRates, setValuationRates] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [onlineRates, setOnlineRates] = useState<SarafiAfRate[]>([]);
+  const [onlineFetchedAt, setOnlineFetchedAt] = useState("");
+  const [onlineBusy, setOnlineBusy] = useState(false);
+  const [onlineError, setOnlineError] = useState("");
+  const loadOnlineRates = useCallback(async () => {
+    setOnlineBusy(true);
+    setOnlineError("");
+    try {
+      if (organizationId === "inspection") {
+        setOnlineRates([
+          { currency: "USD", buy: "64.25", sell: "64.3", quotedUnits: 1 },
+          { currency: "EUR", buy: "75.2", sell: "75.8", quotedUnits: 1 },
+          { currency: "PKR", buy: "0.225", sell: "0.229", quotedUnits: 1000 },
+        ]);
+        setOnlineFetchedAt(new Date().toISOString());
+      } else {
+        const board = await getSarafiAfRateBoard();
+        setOnlineRates(board.rates);
+        setOnlineFetchedAt(board.fetchedAt);
+      }
+    } catch {
+      setOnlineError(onlineCopy.unavailable);
+    } finally {
+      setOnlineBusy(false);
+    }
+  }, [onlineCopy.unavailable, organizationId]);
+  useEffect(() => {
+    const pendingLoad = window.setTimeout(() => void loadOnlineRates(), 0);
+    return () => window.clearTimeout(pendingLoad);
+  }, [loadOnlineRates]);
   const loadRates = useCallback(async () => {
     if (!organizationId || organizationId === "inspection") return;
     const [historyResult, currencyResult, controlResult] = await Promise.all([
@@ -6079,6 +6202,36 @@ function RatesView({
           {u("backHome")} →
         </button>
       </div>
+      <section className="online-rate-board" aria-labelledby="online-rate-board-title">
+        <div className="online-rate-board-head">
+          <div>
+            <p className="kicker">SARAFI.AF · {language === "en" ? "Sarai Shahzada" : language === "fa-AF" ? "سرای شهزاده" : "سرای شهزاده"}</p>
+            <h2 id="online-rate-board-title">{onlineCopy.title}</h2>
+            <p>{onlineCopy.intro}</p>
+          </div>
+          <div className="inline-actions">
+            <a className="text-button" href="https://sarafi.af/en/exchange-rates" target="_blank" rel="noreferrer">{onlineCopy.source}</a>
+            <button className="text-button" type="button" onClick={() => void loadOnlineRates()} disabled={onlineBusy}>{onlineBusy ? t("working") : onlineCopy.refresh}</button>
+          </div>
+        </div>
+        {onlineError ? <p className="notice" role="status">{onlineError}</p> : null}
+        {onlineFetchedAt ? <small>{onlineCopy.updated}: {new Date(onlineFetchedAt).toLocaleString(language)}</small> : null}
+        <div className="online-rate-grid">
+          {onlineRates.map((item) => {
+            const enabled = catalog.some((currency) => currency.code === item.currency && currency.enabled);
+            return <button key={item.currency} type="button" className="online-rate-row" disabled={!canManage || !enabled} onClick={() => {
+              setSourceCurrency(item.currency);
+              setBuyRate(item.buy);
+              setSellRateValue(item.sell);
+            }}>
+              <strong>{item.currency} → AFN</strong>
+              <span>{t("buyRate")} <bdi>{item.buy}</bdi></span>
+              <span>{t("sellRate")} <bdi>{item.sell}</bdi></span>
+              <small>{enabled ? onlineCopy.use : "—"}</small>
+            </button>;
+          })}
+        </div>
+      </section>
       <div className="rate-strip">
         <div className="rate-title">
           <span className="rate-live" />
@@ -6290,7 +6443,7 @@ function ReportsView({
     const branchScopedReport = effectiveReportCode !== "security_activity";
     const cashboxScopedReport = !["receivables", "payables", "aging", "counterparty_statement", "rate_history", "security_activity"].includes(effectiveReportCode);
     setNamedLoading(true);
-    const result = await createFinancialReportSnapshot({
+    const filters = {
       organizationId,
       reportCode: effectiveReportCode,
       fromDate: (overrides?.fromDate ?? from) || undefined,
@@ -6299,10 +6452,19 @@ function ReportsView({
       status: overrides?.status ?? status,
       branchId: branchScopedReport ? branchId ?? undefined : undefined,
       cashboxId: cashboxScopedReport ? cashboxId ?? undefined : undefined,
-    });
+    };
+    const [result, activityResult, securityResult] = await Promise.all([
+      createFinancialReportSnapshot(filters),
+      effectiveReportCode === "daily_transactions"
+        ? createFinancialReportSnapshot({ ...filters, reportCode: "employee_activity", cashboxId: undefined })
+        : Promise.resolve({ data: null, error: null }),
+      effectiveReportCode === "daily_transactions"
+        ? createFinancialReportSnapshot({ ...filters, reportCode: "security_activity", branchId: undefined, cashboxId: undefined })
+        : Promise.resolve({ data: null, error: null }),
+    ]);
     setReportSnapshot(result.data);
-    setNamedRows(result.data?.rows ?? []);
-    if (result.error) onToast(ux(language, "couldNotLoad"));
+    setNamedRows([...(result.data?.rows ?? []), ...(activityResult.data?.rows ?? []), ...(securityResult.data?.rows ?? [])]);
+    if (result.error || activityResult.error || securityResult.error) onToast(ux(language, "couldNotLoad"));
     setNamedLoading(false);
   };
   const invalidateReport = () => {
@@ -6310,9 +6472,11 @@ function ReportsView({
     setInspectionReportGenerated(false);
     setNamedRows([]);
   };
+  const inspectionCountUnit = language === "en" ? "items" : language === "fa-AF" ? "عدد" : "شمېر";
   const reportSourceRows = organizationId === "inspection" ? [
-    { reference: "000002", date: new Date().toISOString(), label: reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode, detail: branchName, amount: "1000", secondary_amount: "0", currency: namedReportCode === "employee_activity" ? "COUNT" : "AFN", status: "posted" },
+    { reference: "000002", date: new Date().toISOString(), label: reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode, detail: branchName, amount: "1000", secondary_amount: "0", currency: namedReportCode === "employee_activity" ? inspectionCountUnit : "AFN", status: "posted" },
     { reference: "000001", date: new Date().toISOString(), label: reportCopy.reports.find(([code]) => code === namedReportCode)?.[1] ?? namedReportCode, detail: branchName, amount: "2500", currency: "AFN", status: "posted" },
+    ...(namedReportCode === "daily_transactions" ? [{ reference: "000003", date: new Date().toISOString(), label: "financial_actions", detail: ux(language, "previewCashierName"), amount: "2", currency: inspectionCountUnit, status: "recorded" }] : []),
   ] satisfies NamedReportRow[] : namedRows;
   const namedFilteredRows = organizationId === "inspection"
     ? reportSourceRows.filter((row) => (currency === "All" || row.currency === currency || row.currency === "MIXED" || row.currency === "COUNT") && (status === "All" || row.status === status))
@@ -6322,8 +6486,8 @@ function ReportsView({
     occurredAt: row.date,
     type: localReportTerm(row.label) + (row.detail ? ` · ${localReportTerm(row.detail)}` : ""),
     branchId: branchName,
-    status: row.status,
-    realizedProfit: String(row.amount ?? "0"),
+    status: reportStatuses[row.status] ?? localReportTerm(row.status),
+    realizedProfit: `${String(row.amount ?? "0")} ${row.currency ?? ""}`.trim(),
   }));
   const pageSize = 25;
   const pageRows = namedFilteredRows.slice(reportPage * pageSize, (reportPage + 1) * pageSize);
@@ -6615,6 +6779,8 @@ function DebtsView({
   const [settlementRateReady, setSettlementRateReady] = useState(false);
   const [settlementAccountId, setSettlementAccountId] = useState(inspection ? "inspection-cashbox" : "");
   const [busy, setBusy] = useState(false);
+  const [confirmingCreate, setConfirmingCreate] = useState(false);
+  const [confirmingSettlement, setConfirmingSettlement] = useState(false);
   const { debtId: routeDebtId = null } = useParams<{ debtId: string }>();
   const receivableCreateRoute = useMatch("/app/:organizationId/transactions/new/debt/receivable");
   const payableCreateRoute = useMatch("/app/:organizationId/transactions/new/debt/payable");
@@ -6644,6 +6810,11 @@ function DebtsView({
       ? debts.find((debt) => debt.id === debtIdFromPath) ?? null
       : selectedDebtResult?.id === debtIdFromPath ? selectedDebtResult : null
     : selectedDebtChoice;
+  const selectedCreateAccount = accounts.find((account) => account.id === moneyAccountId);
+  const selectedSettlementAccount = accounts.find((account) => account.id === settlementAccountId);
+  const selectedCreateBalance = selectedCreateAccount?.balances.find((balance) => balance.currency === currency)?.amount ?? "0";
+  const insufficientCreateBalance = direction === "receivable" && Boolean(amount)
+    && new Decimal(amount || "0").gt(selectedCreateBalance);
   useEffect(() => {
     if (!organizationId || organizationId === "inspection") return;
     void Promise.all([
@@ -6656,8 +6827,8 @@ function DebtsView({
       if (peopleResult.data) setPeople(peopleResult.data);
       if (accountResult.data) {
         setAccounts(accountResult.data);
-        setMoneyAccountId((current) => current || accountResult.data?.[0]?.id || "");
-        setSettlementAccountId((current) => current || accountResult.data?.[0]?.id || "");
+        setMoneyAccountId((current) => current || accountResult.data?.find((account) => account.active)?.id || "");
+        setSettlementAccountId((current) => current || accountResult.data?.find((account) => account.active)?.id || "");
       }
       if (currencyResult.data) setCatalog(currencyResult.data);
     });
@@ -6689,6 +6860,46 @@ function DebtsView({
       onToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
       return;
     }
+    if (insufficientCreateBalance) {
+      onToast(language === "en" ? "The selected shop account does not have enough money." : language === "fa-AF" ? "در حساب انتخاب‌شده صرافی پول کافی نیست." : "د صرافۍ په ټاکلي حساب کې کافي پیسې نشته.");
+      return;
+    }
+    if (!confirmingCreate) {
+      setConfirmingCreate(true);
+      return;
+    }
+    if (inspection) {
+      const createdDebt: DebtRecord = {
+        id: "inspection-debt-" + Date.now(),
+        counterparty_id: counterpartyId,
+        counterparty_name: people.find((person) => person.id === counterpartyId)?.display_name,
+        branch_id: branchId,
+        direction,
+        currency_code: currency,
+        original_amount: amount,
+        outstanding_amount: amount,
+        due_at: null,
+        notes: null,
+        created_at: new Date().toISOString(),
+      };
+      setDebts((current) => [createdDebt, ...current]);
+      onFinancialCompleted({
+        receiptNumber: "SAR-DEBT-" + String(Date.now()).slice(-6),
+        journalEntryId: createdDebt.id,
+        givenAmount: amount,
+        givenCurrency: currency,
+        receivedAmount: amount,
+        receivedCurrency: currency,
+        rate: "—",
+        occurredAt: new Date().toISOString(),
+        typeLabel: direction === "receivable" ? u("theyOweUs") : u("weOweThem"),
+        repeatPath: pathname,
+      });
+      setCounterpartyId("");
+      setAmount("");
+      setConfirmingCreate(false);
+      return;
+    }
     setBusy(true);
     const result = await recordDebt({
       organization_id: organizationId,
@@ -6701,6 +6912,7 @@ function DebtsView({
         direction === "receivable" ? moneyAccountId : undefined,
       destination_money_account_id:
         direction === "payable" ? moneyAccountId : undefined,
+      cashbox_id: selectedCreateAccount?.cashbox_id || undefined,
       device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
       publish_rate: createRatePublication,
@@ -6733,6 +6945,7 @@ function DebtsView({
       setCounterpartyId("");
       setAmount("");
       setCreateRatePublication(undefined);
+      setConfirmingCreate(false);
     }
   };
   const settle = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -6744,6 +6957,32 @@ function DebtsView({
     }
     if (selectedDebt.currency_code !== "AFN" && !settlementRateReady) {
       onToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
+      return;
+    }
+    if (!confirmingSettlement) {
+      setConfirmingSettlement(true);
+      return;
+    }
+    if (inspection) {
+      setDebts((current) => current.map((debt) => debt.id === selectedDebt.id
+        ? { ...debt, outstanding_amount: Decimal.max(new Decimal(0), new Decimal(debt.outstanding_amount).minus(settlementAmount)).toFixed(2) }
+        : debt));
+      onFinancialCompleted({
+        receiptNumber: "SAR-SETTLE-" + String(Date.now()).slice(-6),
+        journalEntryId: "inspection-settlement-" + Date.now(),
+        givenAmount: settlementAmount,
+        givenCurrency: selectedDebt.currency_code,
+        receivedAmount: settlementAmount,
+        receivedCurrency: selectedDebt.currency_code,
+        rate: "—",
+        occurredAt: new Date().toISOString(),
+        typeLabel: selectedDebt.direction === "receivable"
+          ? (language === "en" ? "Debt money received" : language === "fa-AF" ? "پول طلب گرفته شد" : "د پور پیسې واخیستل شوې")
+          : (language === "en" ? "Debt money paid" : language === "fa-AF" ? "پول قرض داده شد" : "د پور پیسې ورکړل شوې"),
+        repeatPath: pathname,
+      });
+      setConfirmingSettlement(false);
+      setSettlementAmount("");
       return;
     }
     setBusy(true);
@@ -6758,6 +6997,7 @@ function DebtsView({
         selectedDebt.direction === "receivable"
           ? settlementAccountId
           : undefined,
+      cashbox_id: selectedSettlementAccount?.cashbox_id || undefined,
       device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
       publish_rate: settlementRatePublication,
@@ -6790,6 +7030,7 @@ function DebtsView({
       setSelectedDebt(null);
       setSettlementAmount("");
       setSettlementRatePublication(undefined);
+      setConfirmingSettlement(false);
       if (organizationId) {
         const refreshed = await listDebts(organizationId);
         if (refreshed.data) setDebts(refreshed.data);
@@ -6821,12 +7062,12 @@ function DebtsView({
           <select
             required
             value={counterpartyId}
-            onChange={(event) => setCounterpartyId(event.target.value)}
+            onChange={(event) => { setCounterpartyId(event.target.value); setConfirmingCreate(false); }}
           >
             <option value="">{u("choosePerson")}</option>
             {people.map((person) => (
               <option key={person.id} value={person.id}>
-                {person.display_name}
+                {person.display_name}{person.customer_reference ? " · " + person.customer_reference : ""}
               </option>
             ))}
           </select>
@@ -6839,7 +7080,7 @@ function DebtsView({
               min="0.01"
               step="0.01"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => { setAmount(event.target.value); setConfirmingCreate(false); }}
               placeholder="0.00"
             />
           </label>
@@ -6850,6 +7091,7 @@ function DebtsView({
               setCurrency(next);
               setCreateRatePublication(undefined);
               setCreateRateReady(next === "AFN");
+              setConfirmingCreate(false);
             }}>
               {catalog.filter((item) => item.enabled).map((item) => (
                 <option key={item.code} value={item.code}>
@@ -6866,30 +7108,48 @@ function DebtsView({
           language={language}
           canPublish={hasCapability(capabilities, "rates.manage")}
           value={createRatePublication}
-          onChange={setCreateRatePublication}
+          onChange={(value) => { setCreateRatePublication(value); setConfirmingCreate(false); }}
           onReadyChange={setCreateRateReady}
         />
         <label>
-          {direction === "receivable" ? u("sourceAccount") : u("destinationAccount")}
-          <select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}>
+          {direction === "receivable"
+            ? (language === "en" ? "Which shop account paid the money?" : language === "fa-AF" ? "پول از کدام حساب صرافی بیرون شد؟" : "پیسې د صرافۍ له کوم حسابه ووتلې؟")
+            : (language === "en" ? "Which shop account received the money?" : language === "fa-AF" ? "پول به کدام حساب صرافی آمد؟" : "پیسې د صرافۍ کوم حساب ته راغلې؟")}
+          <select required value={moneyAccountId} onChange={(event) => { setMoneyAccountId(event.target.value); setConfirmingCreate(false); }}>
             <option value="">{u("chooseMoneyAccount")}</option>
             {accounts.map((account) => (
-              <option key={account.id} value={account.id}>{account.name}</option>
+              <option key={account.id} value={account.id}>{account.name} · {account.balances.find((balance) => balance.currency === currency)?.amount ?? "0"} {currency}</option>
             ))}
           </select>
         </label>
         <div className="money-flow-summary">
-          <span><small>{u("sourceAccount")}</small><b>{direction === "receivable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseSourceAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
+          <span><small>{direction === "receivable" ? (language === "en" ? "From the shop account" : language === "fa-AF" ? "از حساب صرافی" : "د صرافۍ له حسابه") : (language === "en" ? "From the person" : language === "fa-AF" ? "از طرف شخص" : "له کس څخه")}</small><b>{direction === "receivable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseSourceAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
           <strong aria-hidden="true">→</strong>
-          <span><small>{u("destinationAccount")}</small><b>{direction === "payable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
+          <span><small>{direction === "payable" ? (language === "en" ? "To the shop account" : language === "fa-AF" ? "به حساب صرافی" : "د صرافۍ حساب ته") : (language === "en" ? "To the person" : language === "fa-AF" ? "به حساب شخص" : "کس ته")}</small><b>{direction === "payable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
         </div>
-        <button className="primary-action full" type="submit" disabled={busy || (currency !== "AFN" && !createRateReady)}>
+        {insufficientCreateBalance && <p className="field-error" role="alert">{language === "en" ? "Not enough money in this shop account." : language === "fa-AF" ? "در این حساب صرافی پول کافی نیست." : "د صرافۍ په دې حساب کې کافي پیسې نشته."}</p>}
+        {!confirmingCreate && <button className="primary-action full" type="submit" disabled={busy || insufficientCreateBalance || (currency !== "AFN" && !createRateReady)}>
           {busy
             ? u("posting")
             : direction === "receivable"
-              ? (language === "en" ? "Save: they owe us" : language === "fa-AF" ? "ثبت: این شخص به ما قرضدار است" : "ثبت: دا کس موږ ته پوروړی دی")
-              : (language === "en" ? "Save: we owe them" : language === "fa-AF" ? "ثبت: ما به این شخص قرضدار استیم" : "ثبت: موږ دې کس ته پوروړي یو")} <span>→</span>
-        </button>
+              ? (language === "en" ? "Review: they owe us" : language === "fa-AF" ? "بررسی: این شخص به ما قرضدار است" : "کتنه: دا کس موږ ته پوروړی دی")
+              : (language === "en" ? "Review: we owe them" : language === "fa-AF" ? "بررسی: ما به این شخص قرضدار استیم" : "کتنه: موږ دې کس ته پوروړي یو")} <span>→</span>
+        </button>}
+        {confirmingCreate && <div className="confirmation-backdrop">
+          <section className="confirmation-window debt-confirmation" role="dialog" aria-modal="true" aria-labelledby="debt-create-confirmation-title">
+            <p className="kicker">{language === "en" ? "Final check" : language === "fa-AF" ? "بررسی نهایی" : "وروستۍ کتنه"}</p>
+            <h2 id="debt-create-confirmation-title">{direction === "receivable" ? u("theyOweUs") : u("weOweThem")}</h2>
+            <div className="setup-summary">
+              <span>{u("person")}</span><b>{people.find((person) => person.id === counterpartyId)?.display_name ?? "—"}</b>
+              <span>{t("amount")}</span><b dir="ltr">{formatFinancialAmount(amount)} {currency}</b>
+              <span>{direction === "receivable" ? u("sourceAccount") : u("destinationAccount")}</span><b>{selectedCreateAccount?.name ?? "—"}</b>
+            </div>
+            <div className="confirmation-actions">
+              <button className="text-button" type="button" onClick={() => setConfirmingCreate(false)}>{u("editTransaction")}</button>
+              <button className="primary-action" type="submit" disabled={busy} autoFocus>{busy ? u("posting") : u("confirmTransaction")} <span>→</span></button>
+            </div>
+          </section>
+        </div>}
       </form>}
       {!selectedDebt && (journey === "list" || journey === "settle") && <div className="balance-list debt-selection-list">
         {debts.length ? (
@@ -6969,14 +7229,14 @@ function DebtsView({
               max={selectedDebt.outstanding_amount}
               step="0.01"
               value={settlementAmount}
-              onChange={(event) => setSettlementAmount(event.target.value)}
+              onChange={(event) => { setSettlementAmount(event.target.value); setConfirmingSettlement(false); }}
             />
           </label>
           <label>
             {selectedDebt.direction === "receivable"
               ? (language === "en" ? "Where did the money arrive?" : language === "fa-AF" ? "پول به کدام حساب آمد؟" : "پیسې کوم حساب ته راغلې؟")
               : (language === "en" ? "Where did the money leave from?" : language === "fa-AF" ? "پول از کدام حساب رفت؟" : "پیسې له کوم حسابه ووتلې؟")}
-            <select required value={settlementAccountId} onChange={(event) => setSettlementAccountId(event.target.value)}>
+            <select required value={settlementAccountId} onChange={(event) => { setSettlementAccountId(event.target.value); setConfirmingSettlement(false); }}>
               <option value="">{u("chooseMoneyAccount")}</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>{account.name}</option>
@@ -6990,16 +7250,31 @@ function DebtsView({
             language={language}
             canPublish={hasCapability(capabilities, "rates.manage")}
             value={settlementRatePublication}
-            onChange={setSettlementRatePublication}
+            onChange={(value) => { setSettlementRatePublication(value); setConfirmingSettlement(false); }}
             onReadyChange={setSettlementRateReady}
           />
-          <button className="primary-action full" type="submit" disabled={busy || (selectedDebt.currency_code !== "AFN" && !settlementRateReady)}>
+          {!confirmingSettlement && <button className="primary-action full" type="submit" disabled={busy || (selectedDebt.currency_code !== "AFN" && !settlementRateReady)}>
             {busy
               ? u("settling")
               : selectedDebt.direction === "receivable"
-                ? (language === "en" ? "Save money received" : language === "fa-AF" ? "گرفتن پول را ثبت کنید" : "د پیسو اخیستل ثبت کړئ")
-                : (language === "en" ? "Save money paid" : language === "fa-AF" ? "دادن پول را ثبت کنید" : "د پیسو ورکول ثبت کړئ")} <span>→</span>
-          </button>
+                ? (language === "en" ? "Review money received" : language === "fa-AF" ? "پول گرفته‌شده را بررسی کنید" : "اخیستل شوې پیسې وګورئ")
+                : (language === "en" ? "Review money paid" : language === "fa-AF" ? "پول داده‌شده را بررسی کنید" : "ورکړل شوې پیسې وګورئ")} <span>→</span>
+          </button>}
+          {confirmingSettlement && <div className="confirmation-backdrop">
+            <section className="confirmation-window debt-confirmation" role="dialog" aria-modal="true" aria-labelledby="debt-settlement-confirmation-title">
+              <p className="kicker">{language === "en" ? "Final check" : language === "fa-AF" ? "بررسی نهایی" : "وروستۍ کتنه"}</p>
+              <h2 id="debt-settlement-confirmation-title">{selectedDebt.direction === "receivable" ? u("weReceivedLabel") : u("weGaveLabel")}</h2>
+              <div className="setup-summary">
+                <span>{u("person")}</span><b>{selectedDebt.counterparty_name ?? people.find((person) => person.id === selectedDebt.counterparty_id)?.display_name ?? "—"}</b>
+                <span>{t("amount")}</span><b dir="ltr">{formatFinancialAmount(settlementAmount)} {selectedDebt.currency_code}</b>
+                <span>{selectedDebt.direction === "receivable" ? u("destinationAccount") : u("sourceAccount")}</span><b>{selectedSettlementAccount?.name ?? "—"}</b>
+              </div>
+              <div className="confirmation-actions">
+                <button className="text-button" type="button" onClick={() => setConfirmingSettlement(false)}>{u("editTransaction")}</button>
+                <button className="primary-action" type="submit" disabled={busy} autoFocus>{busy ? u("settling") : u("confirmTransaction")} <span>→</span></button>
+              </div>
+            </section>
+          </div>}
         </form>
       )}
       {(journey === "list" || journey === "settle") && <div className="empty-live">{u("settlementNote")}</div>}
@@ -8069,6 +8344,11 @@ function AuthScreen({
                 {t("backToSignIn")}
               </button>
             )}
+            <a className="auth-portal-link" href={adminPortal ? "/" : "/platform-admin"}>
+              {adminPortal
+                ? (language === "en" ? "Business sign in" : language === "fa-AF" ? "ورود صرافی" : "صرافۍ ته ننوتل")
+                : (language === "en" ? "Platform administrator" : language === "fa-AF" ? "مدیریت عمومی سیستم" : "د سیستم عمومي اداره")}
+            </a>
           </div>
         </section>
       </div>

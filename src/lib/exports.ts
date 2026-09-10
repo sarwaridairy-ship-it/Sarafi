@@ -131,13 +131,13 @@ export type DailyReportInput = {
 
 const dailyReportCopy = {
   en: {
-    title: "Daily report", summary: "Today at a glance", count: "Transactions", volume: "Turnover", profit: "Profit", expenses: "Expenses", position: "Net position", money: "Money now", debts: "Debts and receivables", receivable: "People owe the shop", payable: "The shop owes", activity: "Recent activity", empty: "No transactions were recorded for this report.", branch: "Branch", date: "Business date", made: "Prepared", preparedBy: "Prepared by", cashbox: "Cashbox", cashboxCheck: "Cashbox check", period: "Period", filters: "Filters", snapshot: "Snapshot", page: "Page", difference: "Difference",
+    title: "Daily report", summary: "Today at a glance", count: "Transactions", volume: "Turnover", profit: "Profit", expenses: "Expenses", position: "Net position", money: "Money now", debts: "Debts and receivables", receivable: "People owe the shop", payable: "The shop owes", activity: "Recent activity", empty: "No transactions were recorded for this report.", branch: "Branch", date: "Business date", made: "Prepared", preparedBy: "Prepared by", cashbox: "Cashbox", cashboxCheck: "Cashbox check", period: "Period", filters: "Filters", snapshot: "Snapshot", page: "Page", difference: "Difference", reference: "ID", amount: "Amount", status: "Status",
   },
   "fa-AF": {
-    title: "گزارش روزانه", summary: "خلاصه امروز", count: "تعداد معاملات", volume: "گردش امروز", profit: "مفاد امروز", expenses: "مصارف", position: "ارزش خالص", money: "پول فعلی صرافی", debts: "طلب و قرض", receivable: "مردم به صرافی قرضدار اند", payable: "صرافی به مردم قرضدار است", activity: "معاملات اخیر", empty: "در این گزارش معامله‌ای ثبت نشده است.", branch: "شعبه", date: "تاریخ کاری", made: "ساخته‌شده", preparedBy: "تهیه‌کننده", cashbox: "صندوق", cashboxCheck: "بررسی صندوق", period: "دوره", filters: "فیلترها", snapshot: "نشان نسخه", page: "صفحه", difference: "تفاوت",
+    title: "گزارش روزانه", summary: "خلاصه امروز", count: "تعداد معاملات", volume: "گردش امروز", profit: "مفاد امروز", expenses: "مصارف", position: "ارزش خالص", money: "پول فعلی صرافی", debts: "طلب و قرض", receivable: "مردم به صرافی قرضدار اند", payable: "صرافی به مردم قرضدار است", activity: "معاملات و کارهای روز", empty: "در این گزارش معامله‌ای ثبت نشده است.", branch: "شعبه", date: "تاریخ کاری", made: "ساخته‌شده", preparedBy: "تهیه‌کننده", cashbox: "صندوق", cashboxCheck: "بررسی صندوق", period: "دوره", filters: "فیلترها", snapshot: "نشان نسخه", page: "صفحه", difference: "تفاوت", reference: "شماره", amount: "مبلغ", status: "حالت",
   },
   "ps-AF": {
-    title: "ورځنی راپور", summary: "د نن لنډیز", count: "د معاملو شمېر", volume: "د نن راکړه ورکړه", profit: "د نن ګټه", expenses: "لګښتونه", position: "خالص ارزښت", money: "د صرافۍ اوسني پیسې", debts: "پورونه او طلبونه", receivable: "خلک صرافۍ ته پوروړي دي", payable: "صرافي پوروړې ده", activity: "وروستۍ معاملې", empty: "په دې راپور کې کومه معامله نه ده ثبت شوې.", branch: "څانګه", date: "کاري نېټه", made: "جوړ شوی", preparedBy: "چمتو کوونکی", cashbox: "صندوق", cashboxCheck: "د صندوق کتنه", period: "موده", filters: "چاڼونه", snapshot: "د نسخې نښه", page: "پاڼه", difference: "توپیر",
+    title: "ورځنی راپور", summary: "د نن لنډیز", count: "د معاملو شمېر", volume: "د نن راکړه ورکړه", profit: "د نن ګټه", expenses: "لګښتونه", position: "خالص ارزښت", money: "د صرافۍ اوسني پیسې", debts: "پورونه او طلبونه", receivable: "خلک صرافۍ ته پوروړي دي", payable: "صرافي پوروړې ده", activity: "د ورځې معاملې او کارونه", empty: "په دې راپور کې کومه معامله نه ده ثبت شوې.", branch: "څانګه", date: "کاري نېټه", made: "جوړ شوی", preparedBy: "چمتو کوونکی", cashbox: "صندوق", cashboxCheck: "د صندوق کتنه", period: "موده", filters: "چاڼونه", snapshot: "د نسخې نښه", page: "پاڼه", difference: "توپیر", reference: "شمېره", amount: "اندازه", status: "حالت",
   },
 } as const;
 
@@ -147,19 +147,19 @@ export function buildDailyReportHtml(input: DailyReportInput): string {
   const snapshot = input.snapshot;
   const money = (value: string, currency = "AFN") =>
     `<bdi class="pdf-money">${escapeHtml(value || "0")} ${escapeHtml(currency)}</bdi>`;
-  const locations = snapshot?.locations.slice(0, 8).map((location) =>
+  const locations = snapshot?.locations.map((location) =>
     `<li><span>${escapeHtml(location.location_name)}</span>${money(location.quantity, location.currency)}</li>`,
   ).join("") ?? "";
   const debtLine = (items: Array<{ currency: string; amount: string }> | undefined) =>
     items?.length ? items.map((item) => money(item.amount, item.currency)).join(" · ") : money("0");
-  const activities = input.rows.slice(0, 8).map((row) =>
-    `<tr><td><bdi>${escapeHtml(row.entryId)}</bdi></td><td>${escapeHtml(row.type)}</td><td>${escapeHtml(row.status)}</td><td><bdi>${escapeHtml(row.occurredAt)}</bdi></td></tr>`,
+  const activities = input.rows.map((row) =>
+    `<tr><td><bdi>${escapeHtml(row.entryId)}</bdi></td><td>${escapeHtml(row.type)}</td><td><bdi>${escapeHtml(row.realizedProfit)}</bdi></td><td>${escapeHtml(row.status)}</td><td><bdi>${escapeHtml(row.occurredAt)}</bdi></td></tr>`,
   ).join("");
   const prepared = new Intl.DateTimeFormat(input.language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(input.generatedAt ?? Date.now()));
   return `<article class="sarafi-daily-pdf" lang="${input.language}" dir="${direction}">
     <style>
-      .sarafi-daily-pdf{position:relative;box-sizing:border-box;width:794px;height:1123px;overflow:hidden;padding:52px 58px;color:#11252e;background:#fff;font-family:Tahoma,"Segoe UI",Arial,sans-serif;font-size:13px;line-height:1.45}
-      .sarafi-daily-pdf *{box-sizing:border-box}.pdf-head{display:flex;align-items:flex-start;justify-content:space-between;gap:28px;padding-bottom:20px;border-bottom:3px solid #0d7169}.pdf-brand{display:flex;align-items:center;gap:13px}.pdf-mark{display:grid;width:46px;height:46px;place-items:center;border-radius:13px;color:#f4d58a;background:#102a36;font-size:24px;font-weight:900}.pdf-head h1{margin:0;color:#102a36;font-size:25px}.pdf-head p,.pdf-meta{margin:4px 0 0;color:#607078}.pdf-meta{text-align:${direction === "rtl" ? "left" : "right"};font-size:11px}.pdf-section{margin-top:22px}.pdf-section h2{margin:0 0 11px;color:#173541;font-size:15px}.pdf-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.pdf-stat{min-height:75px;padding:11px;border:1px solid #d9e2df;border-radius:10px;background:#f7f8f5}.pdf-stat span{display:block;min-height:30px;color:#607078;font-size:10px}.pdf-stat strong{display:block;color:#102a36;font-size:15px}.pdf-money{direction:ltr;unicode-bidi:isolate;display:inline-block;font-weight:800}.pdf-columns{display:grid;grid-template-columns:1.35fr .85fr;gap:14px}.pdf-card{padding:15px;border:1px solid #d9e2df;border-radius:11px}.pdf-card ul{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin:0;padding:0;list-style:none}.pdf-card li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #edf0ed}.pdf-debt{display:grid;gap:10px}.pdf-debt div{padding:12px;border-inline-start:4px solid #c49a4b;border-radius:7px;background:#fbf8f0}.pdf-debt span{display:block;margin-bottom:4px;color:#68767b;font-size:10px}.pdf-cashbox{display:flex;justify-content:space-between;gap:12px;margin-top:10px;padding:11px 12px;border-radius:8px;background:#eef6f3}.pdf-table{width:100%;border-collapse:collapse;font-size:10px}.pdf-table th{padding:8px 9px;color:#fff;background:#102a36;text-align:start}.pdf-table td{padding:8px 9px;border-bottom:1px solid #e4e9e6}.pdf-empty{padding:22px;border:1px dashed #ccd7d2;border-radius:10px;color:#68767b;text-align:center}.pdf-foot{position:absolute;right:58px;bottom:40px;left:58px;display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #d9e2df;color:#6d797e;font-size:10px}
+      .sarafi-daily-pdf{position:relative;box-sizing:border-box;width:794px;min-height:1123px;padding:52px 58px;color:#11252e;background:#fff;font-family:Tahoma,"Segoe UI",Arial,sans-serif;font-size:13px;line-height:1.45}
+      .sarafi-daily-pdf *{box-sizing:border-box}.pdf-head{display:flex;align-items:flex-start;justify-content:space-between;gap:28px;padding-bottom:20px;border-bottom:3px solid #0d7169}.pdf-brand{display:flex;align-items:center;gap:13px}.pdf-mark{display:grid;width:46px;height:46px;place-items:center;border-radius:13px;color:#f4d58a;background:#102a36;font-size:24px;font-weight:900}.pdf-head h1{margin:0;color:#102a36;font-size:25px}.pdf-head p,.pdf-meta{margin:4px 0 0;color:#607078}.pdf-meta{text-align:${direction === "rtl" ? "left" : "right"};font-size:11px}.pdf-section{margin-top:22px}.pdf-section h2{margin:0 0 11px;color:#173541;font-size:15px}.pdf-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.pdf-stat{min-height:75px;padding:11px;border:1px solid #d9e2df;border-radius:10px;background:#f7f8f5}.pdf-stat span{display:block;min-height:30px;color:#607078;font-size:10px}.pdf-stat strong{display:block;color:#102a36;font-size:15px}.pdf-money{direction:ltr;unicode-bidi:isolate;display:inline-block;font-weight:800}.pdf-columns{display:grid;grid-template-columns:1.35fr .85fr;gap:14px}.pdf-card{padding:15px;border:1px solid #d9e2df;border-radius:11px;break-inside:avoid}.pdf-card ul{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin:0;padding:0;list-style:none}.pdf-card li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #edf0ed}.pdf-debt{display:grid;gap:10px}.pdf-debt div{padding:12px;border-inline-start:4px solid #c49a4b;border-radius:7px;background:#fbf8f0}.pdf-debt span{display:block;margin-bottom:4px;color:#68767b;font-size:10px}.pdf-cashbox{display:flex;justify-content:space-between;gap:12px;margin-top:10px;padding:11px 12px;border-radius:8px;background:#eef6f3}.pdf-table{width:100%;border-collapse:collapse;font-size:10px}.pdf-table tr{break-inside:avoid}.pdf-table th{padding:8px 9px;color:#fff;background:#102a36;text-align:start}.pdf-table td{padding:8px 9px;border-bottom:1px solid #e4e9e6}.pdf-empty{padding:22px;border:1px dashed #ccd7d2;border-radius:10px;color:#68767b;text-align:center}.pdf-foot{display:flex;justify-content:space-between;margin-top:28px;padding-top:12px;border-top:1px solid #d9e2df;color:#6d797e;font-size:10px}
     </style>
     <header class="pdf-head"><div class="pdf-brand"><span class="pdf-mark">S</span><div><h1>${escapeHtml(input.businessName)}</h1><p>${escapeHtml(input.reportName || labels.title)}</p></div></div><div class="pdf-meta">${labels.branch}: ${escapeHtml(input.branchName)}<br>${labels.cashbox}: ${escapeHtml(input.cashboxName ?? "—")}<br>${labels.period}: <bdi>${escapeHtml(input.period ?? input.businessDate)}</bdi><br>${labels.filters}: ${escapeHtml(input.filters ?? "—")}<br>${labels.preparedBy}: ${escapeHtml(input.preparedBy ?? "—")}<br>${labels.snapshot}: <bdi>${escapeHtml(input.snapshotHash ?? "—")}</bdi></div></header>
     <section class="pdf-section"><h2>${labels.summary}</h2><div class="pdf-summary"><div class="pdf-stat"><span>${labels.count}</span><strong>${snapshot?.transaction_count ?? input.rows.length}</strong></div><div class="pdf-stat"><span>${labels.volume}</span><strong>${money(snapshot?.volume_base ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.profit}</span><strong>${money(snapshot?.realized_profit ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.expenses}</span><strong>${money(snapshot?.expenses ?? "0")}</strong></div><div class="pdf-stat"><span>${labels.position}</span><strong>${money(snapshot?.net_position_base ?? "0")}</strong></div></div></section>
@@ -215,7 +215,7 @@ export async function downloadPdf(input: DailyReportInput): Promise<void> {
     `${labels.position}: ${snapshot?.net_position_base ?? "0"} AFN`,
     "",
     labels.money,
-    ...(snapshot?.locations ?? []).slice(0, 8).map((item) => `${item.location_name}: ${item.quantity} ${item.currency}`),
+    ...(snapshot?.locations ?? []).map((item) => `${item.location_name}: ${item.quantity} ${item.currency}`),
     "",
     labels.debts,
     `${labels.receivable}: ${(snapshot?.receivables ?? []).map((item) => `${item.amount} ${item.currency}`).join(" · ") || "0"}`,
@@ -223,7 +223,6 @@ export async function downloadPdf(input: DailyReportInput): Promise<void> {
     `${labels.difference}: ${snapshot?.reconciliation_differences ?? "0"}`,
     "",
     labels.activity,
-    ...(input.rows.slice(0, 12).map((row) => `${row.entryId} · ${row.type} · ${row.status} · ${row.occurredAt}`)),
   ];
   pdf.setFont(reportFont, "normal");
   pdf.setFontSize(10);
@@ -235,6 +234,36 @@ export async function downloadPdf(input: DailyReportInput): Promise<void> {
       pdf.text(item, input.language === "en" ? 48 : 547, y, { align: input.language === "en" ? "left" : "right" });
       y += 15;
     }
+  }
+  const textX = input.language === "en" ? 58 : 537;
+  const textAlign = input.language === "en" ? "left" : "right";
+  const referenceX = input.language === "en" ? 537 : 58;
+  const referenceAlign = input.language === "en" ? "right" : "left";
+  for (const row of input.rows) {
+    const descriptionLines = row.type
+      .split(" · ")
+      .flatMap((part) => pdf.splitTextToSize(part, 320) as string[]);
+    const rowHeight = Math.max(58, 36 + descriptionLines.length * 13);
+    if (y + rowHeight > 795) {
+      pdf.addPage();
+      y = 46;
+      pdf.setFontSize(11);
+      pdf.text(labels.activity, input.language === "en" ? 48 : 547, y, { align: input.language === "en" ? "left" : "right" });
+      y += 18;
+    }
+    pdf.setDrawColor(218, 226, 223);
+    pdf.roundedRect(48, y, 499, rowHeight, 5, 5);
+    pdf.setFontSize(10);
+    descriptionLines.forEach((line, index) => {
+      pdf.text(line, textX, y + 16 + index * 13, { align: textAlign });
+    });
+    pdf.setFontSize(8);
+    pdf.text(`${labels.reference}: ${row.entryId}`, referenceX, y + 16, { align: referenceAlign });
+    const detailY = y + 22 + descriptionLines.length * 13;
+    pdf.text(`${labels.status}: ${row.status}`, textX, detailY, { align: textAlign });
+    pdf.text(`${labels.amount}: ${row.realizedProfit}`, referenceX, detailY, { align: referenceAlign });
+    pdf.text(row.occurredAt, referenceX, detailY + 13, { align: referenceAlign });
+    y += rowHeight + 7;
   }
   const pageCount = pdf.getNumberOfPages();
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
