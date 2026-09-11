@@ -599,7 +599,7 @@ alter table public.hawala_transfers
 -- clients may upload, but still receive no storage.objects SELECT policy.
 create or replace function public.private_document_upload_target_is_valid(
   target_org uuid,
-  target_entity uuid
+  target_counterparty uuid
 )
 returns boolean
 language sql
@@ -609,10 +609,10 @@ set search_path = ''
 as $$
   select public.has_capability(target_org, 'documents.upload', '{}'::jsonb)
     and (
-      exists (select 1 from public.counterparties cp where cp.organization_id = target_org and cp.id = target_entity)
+      exists (select 1 from public.counterparties cp where cp.organization_id = target_org and cp.id = target_counterparty)
       or exists (
         select 1 from public.hawala_transfers h
-        where h.id = target_entity
+        where h.id = target_counterparty
           and (h.organization_id = target_org or h.recipient_organization_id = target_org)
           and public.has_capability(target_org, 'hawala.payout', jsonb_build_object(
             'branch_id', case when h.recipient_organization_id = target_org then h.recipient_branch_id else h.branch_id end,
