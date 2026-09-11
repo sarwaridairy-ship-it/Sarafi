@@ -3,6 +3,10 @@ import { createTelemetryFetch } from './telemetry'
 
 export type PublicSupabaseConfig = { url: string; anonKey: string }
 
+export function isPasskeyFeatureEnabled(env: ImportMetaEnv = import.meta.env): boolean {
+  return env.VITE_SUPABASE_PASSKEY_ENABLED?.trim().toLowerCase() === 'true'
+}
+
 type BrowserLocation = { origin: string; hostname: string }
 
 export function resolveSupabaseUrl(configuredUrl: string, location?: BrowserLocation): string {
@@ -28,7 +32,7 @@ export function getSupabaseClient(): SupabaseClient | null {
   const config = readPublicSupabaseConfig()
   if (!config) return null
   client ??= createClient(config.url, config.anonKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, experimental: { passkey: isPasskeyFeatureEnabled() } },
     realtime: { params: { eventsPerSecond: 10 } },
     global: { fetch: createTelemetryFetch(config.url) },
   })

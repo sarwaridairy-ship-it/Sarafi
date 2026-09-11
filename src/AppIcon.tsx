@@ -24,7 +24,8 @@ export type AppIconName =
   | "report"
   | "rates"
   | "cashbox"
-  | "search";
+  | "search"
+  | "menu";
 
 const iconPaths: Record<AppIconName, ReactNode> = {
   home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></>,
@@ -51,6 +52,7 @@ const iconPaths: Record<AppIconName, ReactNode> = {
   rates: <><path d="M4 18 9 13l3 3 8-9"/><path d="M15 7h5v5"/></>,
   cashbox: <><path d="M3 7h18v13H3z"/><path d="M3 11h18"/><circle cx="12" cy="15.5" r="2"/><path d="M7 4h10v3"/></>,
   search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+  menu: <><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></>,
 };
 
 export function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {

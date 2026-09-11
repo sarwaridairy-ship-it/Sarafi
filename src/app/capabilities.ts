@@ -110,7 +110,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "hawala.transition",
   ],
   compliance_officer: [
-    "workspace.view", "financial.overview", "team.view", "compliance.review", "dashboard.compliance",
+    "workspace.view", "team.view", "compliance.review", "dashboard.compliance",
     "transactions.view", "hawala.view", "documents.list", "documents.upload", "documents.view",
     "documents.download", "documents.archive",
   ],

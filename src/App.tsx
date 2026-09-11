@@ -6,7 +6,7 @@ import "./App.css";
 import "./professional.css";
 import "./styles/calm-premium.css";
 import { validateClientEnvironment } from "./lib/env";
-import { readPublicSupabaseConfig } from "./lib/supabase";
+import { isPasskeyFeatureEnabled, readPublicSupabaseConfig } from "./lib/supabase";
 import { deriveTradeAmounts } from "./domain/tradePricing";
 import type { InlineRatePublication } from "./domain/commands";
 import { buildCsvReport } from "./domain/reporting";
@@ -25,6 +25,7 @@ import {
   listCurrencyCatalog,
   listDocumentTemplates,
   listMoneyAccounts,
+  getMoneyValuationSnapshot,
   getReceiptForJournalEntry,
   getOwnerDashboard,
   getWorkspaceSettings,
@@ -65,6 +66,7 @@ import {
   recordDebt,
   recordHawalaSend,
   recordHawalaIncoming,
+  transitionHawalaStatus,
   payHawalaBeneficiary,
   requestHawalaPayoutApproval,
   resumeApprovedHawalaPayout,
@@ -80,6 +82,7 @@ import {
   updateTeamAssignment,
   trustTeamDevice,
   uploadPrivateCounterpartyDocument,
+  uploadPrivateHawalaIdentityDocument,
   type DashboardSnapshot,
   type CounterpartyRecord,
   type DebtRecord,
@@ -90,6 +93,7 @@ import {
   type JournalRecord,
   type CurrencyCatalogRecord,
   type MoneyAccountRecord,
+  type MoneyValuationSnapshot,
   type TeamMemberRecord,
   type TeamInvitationRecord,
   type TeamScopeRecord,
@@ -114,6 +118,7 @@ import {
 } from "./lib/financialApi";
 import { getSupabaseClient } from "./lib/supabase";
 import { businessDateInTimeZone } from "./lib/businessTime";
+import { clearActiveAppUnlockGrant, configureAppLockPin, getActiveAppUnlockGrant, getAppLockStatus, registerAppPasskey, unlockAppWithPasskey, unlockAppWithPin } from "./lib/appLock";
 import { createBusiness } from "./lib/onboarding";
 import {
   sendPasswordReset,
@@ -525,6 +530,7 @@ function App() {
     ? "Compliance Cases"
     : matchedSection?.section ?? "Dashboard";
   const [showBranchMenu, setShowBranchMenu] = useState(false);
+  const [showNavigationDrawer, setShowNavigationDrawer] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -645,6 +651,8 @@ function App() {
   }));
   const [rateOverrideEnabled, setRateOverrideEnabled] = useState(false);
   const [rateOverride, setRateOverride] = useState("");
+  const [rateOverrideReason, setRateOverrideReason] = useState("");
+  const [tradeQuoteReversed, setTradeQuoteReversed] = useState(false);
   const [publishRate, setPublishRate] = useState(false);
   const [allowStaleRate, setAllowStaleRate] = useState(false);
   const [dashboardDate, setDashboardDate] = useState(() =>
@@ -732,6 +740,9 @@ function App() {
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null,
   );
+  const inspectionLockPreview = inspectionMode && new URLSearchParams(window.location.search).get("lock") === "1";
+  const [appLocked, setAppLocked] = useState(inspectionLockPreview);
+  const [appLockConfigured, setAppLockConfigured] = useState(false);
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole>(
     inspectionMode &&
       [
@@ -811,6 +822,60 @@ function App() {
     const result = await listNotifications(organizationId);
     if (result.data) setNotifications(result.data);
   }, [organizationId]);
+
+  const lockWorkspace = useCallback(() => {
+    clearActiveAppUnlockGrant();
+    setShowProfileMenu(false);
+    setShowNotifications(false);
+    setShowSearch(false);
+    setGlobalSearch("");
+    setNotifications([]);
+    setTrades([]);
+    setDashboard(null);
+    setTradeCounterparties([]);
+    setCurrencyCatalog([]);
+    setMoneyAccounts([]);
+    setCompletedTrade(null);
+    setFxApprovalDraft(null);
+    setAppLocked(true);
+  }, [setCompletedTrade, setTradeCounterparties]);
+
+  useEffect(() => {
+    const deviceId = linkedDevice?.id;
+    if (!organizationId || organizationId === "inspection" || !user || !deviceId) return;
+    let active = true;
+    void getAppLockStatus(organizationId, deviceId).then((result) => {
+      if (!active || !result.data) return;
+      setAppLockConfigured(result.data.configured);
+      if (result.data.configured && !getActiveAppUnlockGrant(organizationId, deviceId)) setAppLocked(true);
+    });
+    return () => { active = false; };
+  }, [linkedDevice?.id, organizationId, user]);
+
+  const previousLockContext = useRef<{ organizationId: string | null; branchId: string | null }>({ organizationId: null, branchId: null });
+  useEffect(() => {
+    const previous = previousLockContext.current;
+    const changed = Boolean(previous.organizationId && (
+      previous.organizationId !== organizationId || previous.branchId !== branchId
+    ));
+    previousLockContext.current = { organizationId, branchId };
+    if (appLockConfigured && changed) lockWorkspace();
+  }, [appLockConfigured, branchId, lockWorkspace, organizationId]);
+
+  useEffect(() => {
+    if (!appLockConfigured || appLocked) return;
+    let idleTimer = window.setTimeout(lockWorkspace, 15 * 60 * 1000);
+    let backgroundTimer: number | undefined;
+    const resetIdle = () => { window.clearTimeout(idleTimer); idleTimer = window.setTimeout(lockWorkspace, 15 * 60 * 1000); };
+    const visibility = () => {
+      if (document.hidden) backgroundTimer = window.setTimeout(lockWorkspace, 2 * 60 * 1000);
+      else if (backgroundTimer !== undefined) { window.clearTimeout(backgroundTimer); backgroundTimer = undefined; }
+    };
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart"];
+    events.forEach((event) => window.addEventListener(event, resetIdle, { passive: true }));
+    document.addEventListener("visibilitychange", visibility);
+    return () => { window.clearTimeout(idleTimer); if (backgroundTimer !== undefined) window.clearTimeout(backgroundTimer); events.forEach((event) => window.removeEventListener(event, resetIdle)); document.removeEventListener("visibilitychange", visibility); };
+  }, [appLockConfigured, appLocked, lockWorkspace]);
 
   useEffect(() => {
     document.documentElement.dir = isRtl(language) ? "rtl" : "ltr";
@@ -1136,8 +1201,8 @@ function App() {
       setTradeReceiveSellRate(target.sell);
       setRateContext({ stale: source.stale, missing: source.missing, effectiveFrom, tolerance: "0.10", toleranceBps: "50" });
       setTradeReceiveRateContext({ stale: target.stale, missing: target.missing, effectiveFrom, toleranceBps: "50" });
-      setExchangeSourceRateReady(!source.missing);
-      setExchangeTargetRateReady(!target.missing);
+      setExchangeSourceRateReady(!source.missing && !source.stale);
+      setExchangeTargetRateReady(!target.missing && !target.stale);
       setRateOverrideEnabled(false);
       setRateOverride("");
       setPublishRate(false);
@@ -1172,8 +1237,8 @@ function App() {
           effectiveFrom: target?.effective_from,
           toleranceBps: target?.tolerance_bps ?? "50",
         });
-        setExchangeSourceRateReady(tradeCurrency === "AFN" || Boolean(source?.buy_rate && source?.sell_rate));
-        setExchangeTargetRateReady(tradeReceiveCurrency === "AFN" || Boolean(target?.buy_rate && target?.sell_rate));
+        setExchangeSourceRateReady(tradeCurrency === "AFN" || Boolean(source?.buy_rate && source?.sell_rate && !source.stale));
+        setExchangeTargetRateReady(tradeReceiveCurrency === "AFN" || Boolean(target?.buy_rate && target?.sell_rate && !target.stale));
         setRateOverrideEnabled(false);
         setRateOverride("");
         setPublishRate(false);
@@ -1315,6 +1380,10 @@ function App() {
       setToast(language === "en" ? "Choose how to handle the old shop rate before continuing." : language === "fa-AF" ? "پیش از ادامه، روش استفاده از نرخ قدیمی را انتخاب کنید." : "له دوام مخکې د زاړه نرخ د کارولو لاره وټاکئ.");
       return;
     }
+    if (rateOverrideEnabled && rateOverrideReason.trim().length < 3) {
+      setToast(language === "en" ? "Write a short reason for the manual rate." : language === "fa-AF" ? "دلیل کوتاه برای نرخ دستی بنویسید." : "د لاسي نرخ لنډ لامل ولیکئ.");
+      return;
+    }
     if (!tradeReviewing) {
       setTradeReviewing(true);
       return;
@@ -1333,13 +1402,22 @@ function App() {
       const soldCurrency = tradeGivenCurrency;
       const boughtCurrency = tradeReceivedCurrency;
       const { soldAmount, boughtAmount, soldBaseValue, boughtBaseValue } = tradePreview;
-      const rateDecisionReason = rateOverrideEnabled
-        ? "Customer rate confirmed in transaction review"
-        : allowStaleRate || tradeRateStale
-          ? "Existing shop rate confirmed in transaction review"
-          : undefined;
-      const exchangeRatePublications = [exchangeSourceRatePublication, exchangeTargetRatePublication]
+      const inlineRateResolutions = [exchangeSourceRatePublication, exchangeTargetRatePublication]
         .filter((item): item is InlineRatePublication => Boolean(item));
+      const inlineTransactionRateResolutions = inlineRateResolutions
+        .filter((item) => (item.publication_scope ?? "transaction") === "transaction");
+      const exchangeRatePublications = inlineRateResolutions
+        .filter((item) => item.publication_scope === "rate_board");
+      const inlineTransactionReason = inlineTransactionRateResolutions
+        .map((item) => item.reason?.trim())
+        .find((reason): reason is string => Boolean(reason));
+      const rateDecisionReason = rateOverrideEnabled
+        ? rateOverrideReason.trim()
+        : inlineTransactionReason
+          ? inlineTransactionReason
+          : allowStaleRate || tradeRateStale
+            ? "Existing shop rate confirmed in transaction review"
+            : undefined;
       const command = {
         organization_id: organizationId,
         branch_id: branchId,
@@ -1354,7 +1432,7 @@ function App() {
         sold_base_value: soldBaseValue,
         bought_base_value: boughtBaseValue,
         customer_rate: tradeBackendCustomerRate,
-        rate_source: rateOverrideEnabled ? "transaction_override" as const : tradeRateStale ? "approved_stale_shop_rate" as const : "shop_rate" as const,
+        rate_source: rateOverrideEnabled || inlineTransactionRateResolutions.length ? "transaction_override" as const : tradeRateStale ? "approved_stale_shop_rate" as const : "shop_rate" as const,
         override_reason: rateDecisionReason,
         approval_reason: rateDecisionReason,
         allow_stale_rate: allowStaleRate || undefined,
@@ -1370,10 +1448,15 @@ function App() {
               target_currency: "AFN",
               buy_rate: tradeSide === "BUY_FX" ? effectiveTradeRate : rate || effectiveTradeRate,
               sell_rate: tradeSide === "SELL_FX" ? effectiveTradeRate : sellRate || effectiveTradeRate,
+              reason: rateOverrideReason.trim(),
+              publication_scope: "rate_board" as const,
             }
           : undefined,
         publish_rates: exchangeRatePublications.length
           ? exchangeRatePublications
+          : undefined,
+        transaction_rate_resolutions: inlineTransactionRateResolutions.length
+          ? inlineTransactionRateResolutions
           : undefined,
       };
 
@@ -1743,6 +1826,7 @@ function App() {
   const transactionFormActive =
     transactionCenterActive && !location.pathname.endsWith("/transactions/new");
   const fxFormActive = activeFinancialRoute?.startsWith("/fx/") ?? location.pathname.endsWith("/transactions/new/fx");
+  const exchangeFxRouteActive = activeFinancialRoute === "/fx/exchange";
   const openingFormActive = location.pathname.endsWith("/transactions/new/opening-money");
   /* oxlint-disable react/set-state-in-effect -- shareable routes restore resumable financial form state. */
   useEffect(() => {
@@ -1756,7 +1840,6 @@ function App() {
       else if (activeFinancialRoute === "/fx/sell") setTradeSide("SELL_FX");
       else if (activeFinancialRoute === "/fx/exchange") {
         setTradeSide("BUY_FX");
-        navigate(financialRoute(organizationId, "/fx/buy"), { replace: true });
       }
       else if (side === "BUY_FX" || side === "SELL_FX") setTradeSide(side);
       setOperationKind(null);
@@ -1875,6 +1958,9 @@ function App() {
   if (workspaceCapabilities.includes("dashboard.manager")) navigationLabel["Cash & Accounts"] = [cashboxesLabel, "wallet"];
   const primaryNavigation: Array<[string, string, AppIconName]> = navigationSections(workspaceCapabilities)
     .map((section) => [section, navigationLabel[section][0], navigationLabel[section][1]]);
+  const mobileNavigation = primaryNavigation.length <= 5
+    ? primaryNavigation
+    : [...primaryNavigation.slice(0, 4), primaryNavigation.at(-1)!];
   const roleName = (role: string) =>
     ({
       owner: u("owner"),
@@ -1939,7 +2025,6 @@ function App() {
   } catch {
     impliedExchangeRate = "";
   }
-  const shopTradeRate = impliedExchangeRate;
   const effectiveTradeRate = rateOverrideEnabled ? rateOverride : impliedExchangeRate;
   const singleAfnPair = (tradeCurrency === "AFN") !== (tradeReceiveCurrency === "AFN");
   const sourceBuyValuationRate = sourceBuyRate || (rateOverrideEnabled && tradeSide === "BUY_FX" && tradeReceiveCurrency === "AFN" ? effectiveTradeRate : "");
@@ -2049,10 +2134,16 @@ function App() {
   };
   const tradeRateTargetCurrency = tradeReceiveCurrency;
   const displayedTradeRate = effectiveTradeRate;
+  let visibleTradeRate = displayedTradeRate;
+  if (tradeQuoteReversed && displayedTradeRate) {
+    try { visibleTradeRate = new Decimal(1).div(displayedTradeRate).toSignificantDigits(10).toString(); } catch { visibleTradeRate = ""; }
+  }
   const tradeRateMissing = (tradeCurrency !== "AFN" && rateContext.missing)
     || (tradeReceiveCurrency !== "AFN" && tradeReceiveRateContext.missing);
   const tradeRateStale = (tradeCurrency !== "AFN" && rateContext.stale)
     || (tradeReceiveCurrency !== "AFN" && tradeReceiveRateContext.stale);
+  const sourceRateNeedsResolution = tradeCurrency !== "AFN" && (rateContext.missing || rateContext.stale);
+  const targetRateNeedsResolution = tradeReceiveCurrency !== "AFN" && (tradeReceiveRateContext.missing || tradeReceiveRateContext.stale);
   const tradeRateStatus = rateOverrideEnabled
     ? rateWorkflowCopy.custom
     : tradeRateMissing
@@ -2071,6 +2162,7 @@ function App() {
     setRateOverrideEnabled(false);
     setRateOverride("");
     setPublishRate(false);
+    setRateOverrideReason("");
     setTradeReviewing(false);
   };
   let tradePreview: ReturnType<typeof deriveTradeAmounts> | null = null;
@@ -2307,9 +2399,12 @@ function App() {
       />
     );
 
+  if (appLocked && (organizationId !== "inspection" || inspectionLockPreview)) return <AppLockScreen language={language} organizationId={organizationId} organizationName={organizationName} userName={user?.email ?? "inspection@sarafi.local"} deviceId={linkedDevice?.id ?? (inspectionLockPreview ? "inspection-device" : "")} onUnlocked={() => setAppLocked(false)} onSignOut={() => void handleSignOut()} />;
+
   return (
     <div className={`app-shell ${isRtl(language) ? "rtl" : ""}`}>
-      <aside className="sidebar">
+      {showNavigationDrawer ? <button className="navigation-scrim" type="button" aria-label={language === "en" ? "Close navigation" : language === "fa-AF" ? "بستن فهرست" : "لېست بندول"} onClick={() => setShowNavigationDrawer(false)} /> : null}
+      <aside className={`sidebar ${showNavigationDrawer ? "drawer-open" : ""}`}>
         <div className="brand">
           <span className="brand-mark">S</span>
           <span>
@@ -2365,6 +2460,7 @@ function App() {
                   setShowSearch(true);
                   setShowNotifications(false);
                 } else openSection(item);
+                setShowNavigationDrawer(false);
               }}
             >
               <span className="nav-icon">
@@ -2396,9 +2492,9 @@ function App() {
       <nav
         className="mobile-nav"
         aria-label={t("workspace")}
-        style={{ gridTemplateColumns: `repeat(${primaryNavigation.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${mobileNavigation.length}, minmax(0, 1fr))` }}
       >
-        {primaryNavigation.map(([item, label, icon]) => (
+        {mobileNavigation.map(([item, label, icon]) => (
           <button
             className={activeSection === item || (item === "Trade" && location.pathname.includes("/transactions/new/")) ? "active" : ""}
             key={item}
@@ -2418,6 +2514,7 @@ function App() {
       </nav>
       <main className="main-content">
         <header className="topbar">
+          <button className="navigation-toggle" type="button" onClick={() => setShowNavigationDrawer((value) => !value)} aria-expanded={showNavigationDrawer} aria-label={language === "en" ? "Open navigation" : language === "fa-AF" ? "بازکردن فهرست" : "لېست پرانیستل"}><AppIcon name="menu" /></button>
           <div className="breadcrumb">
             <span>{t("workspace")}</span>
             <b>/</b>
@@ -2466,6 +2563,7 @@ function App() {
                 <label>{u("changeLanguage")}<select value={language} onChange={(event) => setLanguage(event.target.value as Language)}><option value="en">English</option><option value="fa-AF">دری</option><option value="ps-AF">پښتو</option></select></label>
                 <button type="button" onClick={() => setPrivacy((value) => !value)}><AppIcon name={privacy ? "eye" : "eyeOff"} size={18} />{privacy ? u("showAmounts") : u("hideAmounts")}</button>
                 <button type="button" onClick={() => { setShowHelp(true); setShowProfileMenu(false); }}>?<span>{u("openHelp")}</span></button>
+                {appLockConfigured ? <button type="button" onClick={lockWorkspace}><AppIcon name="shield" size={18} /><span>{language === "en" ? "Lock app" : language === "fa-AF" ? "قفل برنامه" : "اپ قفلول"}</span></button> : null}
                 {!inspectionMode ? <button type="button" className="profile-sign-out" onClick={() => void handleSignOut()}>↪<span>{u("signOut")}</span></button> : null}
               </section> : null}
             </div>
@@ -2537,6 +2635,7 @@ function App() {
                     if (person) setTradeCounterparties((current) => current.some((item) => item.id === person.id) ? current : [...current, person]);
                     setCounterpartyRefresh((value) => value + 1);
                   }}
+                  onAppLockConfigured={() => setAppLockConfigured(true)}
                 />
               </Suspense>
             ) : null
@@ -2585,8 +2684,9 @@ function App() {
               <div>
                 <p className="kicker">{t("newTransaction")}</p>
                 <h2 id="trade-dialog-title">
-                  {tradeSide === "BUY_FX" ? t("buy") : t("sell")}{" "}
-                  · {t("recordTrade")}
+                  {exchangeFxRouteActive
+                    ? (language === "en" ? "Exchange currency" : language === "fa-AF" ? "تبدیل اسعار" : "اسعار بدلول")
+                    : <>{tradeSide === "BUY_FX" ? t("buy") : t("sell")} · {t("recordTrade")}</>}
                 </h2>
               </div>
               <button
@@ -2601,7 +2701,7 @@ function App() {
                 {language === "en" ? "Back to transaction types" : language === "fa-AF" ? "بازگشت به نوع معامله" : "د معاملې ډولونو ته ستنېدل"}
               </button>
             </div>
-            <div className="trade-mode-switch" role="tablist" aria-label={t("newTransaction")}>
+            {!exchangeFxRouteActive ? <div className="trade-mode-switch" role="tablist" aria-label={t("newTransaction")}>
               {([
                 ["BUY_FX", t("buy")],
                 ["SELL_FX", t("sell")],
@@ -2621,7 +2721,7 @@ function App() {
                   {label}
                 </button>
               ))}
-            </div>
+            </div> : null}
             <fieldset
               className="trade-fields"
               disabled={tradeReviewing || tradeBusy}
@@ -2672,29 +2772,37 @@ function App() {
                   </select>
                 </label>
 
-                <div className="rate-box exchange-rate-card">
-                  <span className="exchange-card-label" dir={isRtl(language) ? "rtl" : "ltr"}>{t("exchangeRate")}</span>
+                {!sourceRateNeedsResolution && !targetRateNeedsResolution ? <div className="rate-box exchange-rate-card compact-trade-rate compact-rate-row">
+                  <span className={`compact-rate-mode ${rateOverrideEnabled ? "manual" : ""}`} dir={isRtl(language) ? "rtl" : "ltr"}><i aria-hidden="true" />{rateOverrideEnabled ? rateWorkflowCopy.custom : language === "en" ? "Auto" : language === "fa-AF" ? "خودکار" : "اتومات"}</span>
                   <label className="rate-input-shell">
-                    <small>1 {tradeCurrency} =</small>
+                    <small>1 {tradeQuoteReversed ? tradeRateTargetCurrency : tradeCurrency} =</small>
                     <input
                       required
+                      readOnly={!rateOverrideEnabled}
                       min="0.000001"
                       step="any"
                       inputMode="decimal"
-                      value={displayedTradeRate}
-                      onChange={(event) => changeDisplayedTradeRate(event.target.value)}
+                      value={visibleTradeRate}
+                      onChange={(event) => {
+                        if (!tradeQuoteReversed) changeDisplayedTradeRate(event.target.value);
+                        else {
+                          try { changeDisplayedTradeRate(new Decimal(1).div(event.target.value).toString()); } catch { changeDisplayedTradeRate(""); }
+                        }
+                      }}
                       placeholder="0.00"
                       aria-label={rateWorkflowCopy.newRate}
                     />
-                    <small>{tradeRateTargetCurrency}</small>
+                    <small>{tradeQuoteReversed ? tradeCurrency : tradeRateTargetCurrency}</small>
                   </label>
-                  <small className={!rateOverrideEnabled && (tradeRateMissing || tradeRateStale) ? "rate-warning" : "positive"} dir={isRtl(language) ? "rtl" : "ltr"}>
+                  <button className="compact-rate-swap" type="button" onClick={() => setTradeQuoteReversed((value) => !value)} aria-label={language === "en" ? "Reverse quote" : language === "fa-AF" ? "برعکس‌ساختن نرخ" : "نرخ سرچپه کول"}>⇄</button>
+                  <small className={`compact-rate-time ${!rateOverrideEnabled && (tradeRateMissing || tradeRateStale) ? "rate-warning" : "positive"}`} dir={isRtl(language) ? "rtl" : "ltr"}>
                     {tradeRateStatus}
                   </small>
-                  {rateOverrideEnabled && (shopTradeRate || impliedExchangeRate) ? (
-                    <button type="button" className="text-button" onClick={restoreApprovedTradeRate}>{rateWorkflowCopy.useShop}</button>
-                  ) : null}
-                </div>
+                  <button type="button" className="compact-rate-change" onClick={() => rateOverrideEnabled ? restoreApprovedTradeRate() : changeDisplayedTradeRate(displayedTradeRate || "")}>{rateOverrideEnabled ? rateWorkflowCopy.useShop : language === "en" ? "Change" : language === "fa-AF" ? "تغییر" : "بدلول"}</button>
+                  {rateOverrideEnabled ? <label className="compact-trade-rate-reason" dir={isRtl(language) ? "rtl" : "ltr"}>{language === "en" ? "Reason for manual rate" : language === "fa-AF" ? "دلیل نرخ دستی" : "د لاسي نرخ لامل"}<input required minLength={3} maxLength={240} value={rateOverrideReason} onChange={(event) => setRateOverrideReason(event.target.value)} placeholder={language === "en" ? "Short operational reason" : language === "fa-AF" ? "دلیل کوتاه کاری" : "لنډ کاري لامل"} /></label> : null}
+                  {rateOverrideEnabled ? <div className="compact-rate-scope compact-trade-rate-scope" role="group" aria-label={language === "en" ? "Manual rate scope" : language === "fa-AF" ? "ساحه نرخ دستی" : "د لاسي نرخ ساحه"}><button type="button" className={!publishRate ? "active" : ""} onClick={() => setPublishRate(false)}>{language === "en" ? "This transaction only" : language === "fa-AF" ? "فقط همین معامله" : "یوازې دا معامله"}</button>{canPublishTransactionRate ? <button type="button" className={publishRate ? "active" : ""} onClick={() => setPublishRate(true)}>{rateWorkflowCopy.publish}</button> : null}</div> : null}
+                  {rateOverrideEnabled && capability("approval.request") && !capability("approval.decide") ? <small className="compact-rate-approval" dir={isRtl(language) ? "rtl" : "ltr"}>{rateWorkflowCopy.approval}</small> : null}
+                </div> : null}
 
                 <label className="exchange-money-card">
                   <span className="exchange-card-label" dir={isRtl(language) ? "rtl" : "ltr"}>
@@ -2739,6 +2847,37 @@ function App() {
                   </select>
                 </label>
               </div>
+              {(sourceRateNeedsResolution || targetRateNeedsResolution) && (
+                <section
+                  className={`rate-governance exchange-rate-governance ${tradeRateMissing || tradeRateStale ? "needs-attention" : ""}`}
+                  aria-label={t("exchangeRate")}
+                >
+                  {sourceRateNeedsResolution ? <InlineRateResolver
+                    organizationId={organizationId}
+                    branchId={branchId}
+                    currency={tradeCurrency}
+                    language={language}
+                    canPublish={canPublishTransactionRate}
+                    canRequestApproval={capability("approval.request")}
+                    rateSide={tradeSide === "BUY_FX" ? "buy" : tradeSide === "SELL_FX" ? "sell" : "valuation"}
+                    value={exchangeSourceRatePublication}
+                    onChange={(value) => { setExchangeSourceRatePublication(value); setTradeReviewing(false); }}
+                    onReadyChange={setExchangeSourceRateReady}
+                  /> : null}
+                  {targetRateNeedsResolution ? <InlineRateResolver
+                    organizationId={organizationId}
+                    branchId={branchId}
+                    currency={tradeReceiveCurrency}
+                    language={language}
+                    canPublish={canPublishTransactionRate}
+                    canRequestApproval={capability("approval.request")}
+                    rateSide={tradeSide === "BUY_FX" ? "sell" : tradeSide === "SELL_FX" ? "buy" : "valuation"}
+                    value={exchangeTargetRatePublication}
+                    onChange={(value) => { setExchangeTargetRatePublication(value); setTradeReviewing(false); }}
+                    onReadyChange={setExchangeTargetRateReady}
+                  /> : null}
+                </section>
+              )}
               {currencyAddTarget ? <section className="trade-currency-add-panel" aria-label={rateWorkflowCopy.addCurrency}>
                 <label>{rateWorkflowCopy.chooseCurrency}
                   <select value={currencyToAdd} onChange={(event) => setCurrencyToAdd(event.target.value)}>
@@ -2783,56 +2922,6 @@ function App() {
                 </label>
               </details>
             </fieldset>
-            {(tradeRateMissing || tradeRateStale || (tradeCurrency !== "AFN" && tradeReceiveCurrency !== "AFN")) && (
-              <section
-                className={`rate-governance exchange-rate-governance ${tradeRateMissing || tradeRateStale ? "needs-attention" : ""}`}
-                aria-label={t("exchangeRate")}
-              >
-                {tradeCurrency !== "AFN" ? <InlineRateResolver
-                  organizationId={organizationId}
-                  branchId={branchId}
-                  currency={tradeCurrency}
-                  language={language}
-                  canPublish={canPublishTransactionRate}
-                  value={exchangeSourceRatePublication}
-                  onChange={(value) => { setExchangeSourceRatePublication(value); setTradeReviewing(false); }}
-                  onReadyChange={setExchangeSourceRateReady}
-                /> : null}
-                {tradeReceiveCurrency !== "AFN" ? <InlineRateResolver
-                  organizationId={organizationId}
-                  branchId={branchId}
-                  currency={tradeReceiveCurrency}
-                  language={language}
-                  canPublish={canPublishTransactionRate}
-                  value={exchangeTargetRatePublication}
-                  onChange={(value) => { setExchangeTargetRatePublication(value); setTradeReviewing(false); }}
-                  onReadyChange={setExchangeTargetRateReady}
-                /> : null}
-                {rateOverrideEnabled && capability("approval.request") && !capability("approval.decide") ? <p>{rateWorkflowCopy.approval}</p> : null}
-              </section>
-            )}
-            {(tradeRateStale || rateOverrideEnabled || allowStaleRate) && (
-              <section className={`rate-governance ${tradeRateStale ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
-                {rateContext.effectiveFrom ? (
-                  <div className="applied-rate-row">
-                    <small>{new Date(rateContext.effectiveFrom).toLocaleString(language)}</small>
-                  </div>
-                ) : null}
-                {tradeRateStale && !tradeRateMissing && (
-                  <label className="choice-row">
-                    <input type="checkbox" checked={allowStaleRate} disabled={tradeReviewing || tradeBusy || rateOverrideEnabled} onChange={(event) => { setAllowStaleRate(event.target.checked); setTradeReviewing(false); }} />
-                    <span>{rateWorkflowCopy.continueStale}</span>
-                  </label>
-                )}
-                {rateOverrideEnabled && canPublishTransactionRate && tradeCurrency !== "AFN" && tradeReceiveCurrency === "AFN" && (
-                  <label className="choice-row">
-                    <input type="checkbox" checked={publishRate} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setPublishRate(event.target.checked); setTradeReviewing(false); }} />
-                    <span>{rateWorkflowCopy.publish}</span>
-                  </label>
-                )}
-                {capability("approval.request") && !capability("approval.decide") && (rateOverrideEnabled || allowStaleRate || tradeRateMissing) && <p>{rateWorkflowCopy.approval}</p>}
-              </section>
-            )}
             {(
               <section className="trade-account-flow">
                 <h3>{u("tradeMoneyFlow")}</h3>
@@ -3419,13 +3508,47 @@ function QuickCustomerDialog({
   );
 }
 
+function AppLockScreen({ language, organizationId, organizationName, userName, deviceId, onUnlocked, onSignOut }: { language: Language; organizationId: string; organizationName: string; userName: string; deviceId: string; onUnlocked: () => void; onSignOut: () => void }) {
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const copy = language === "en"
+    ? { title: "SARAFI is locked", intro: "Financial information is hidden. Unlock to continue.", pin: "Six-digit PIN", unlock: "Unlock", passkey: "Use passkey", signOut: "Sign out" }
+    : language === "fa-AF"
+      ? { title: "برنامه صرافی قفل است", intro: "معلومات مالی پنهان است. برای ادامه قفل را باز کنید.", pin: "رمز شش‌رقمی", unlock: "بازکردن", passkey: "استفاده از کلید عبور", signOut: "خروج" }
+      : { title: "د سرافي اپ قفل دی", intro: "مالي معلومات پټ دي. د دوام لپاره قفل خلاص کړئ.", pin: "شپږ عددي PIN", unlock: "قفل خلاصول", passkey: "پاسکي کارول", signOut: "وتل" };
+  const submitPin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); if (pin.length !== 6) return; setBusy(true); setError("");
+    const nextError = await unlockAppWithPin(organizationId, deviceId, pin); setBusy(false);
+    if (nextError) { setError(nextError); setPin(""); return; } onUnlocked();
+  };
+  const submitPasskey = async () => {
+    setBusy(true); setError(""); const nextError = await unlockAppWithPasskey(organizationId, deviceId); setBusy(false);
+    if (nextError) { setError(nextError); return; } onUnlocked();
+  };
+  return <main className="app-lock-screen"><section className="app-lock-card" aria-labelledby="app-lock-title"><div className="brand auth-brand"><span className="brand-mark">S</span><span>SARAFI</span></div><span className="app-lock-shield"><AppIcon name="shield" size={30} /></span><h1 id="app-lock-title">{copy.title}</h1><p>{copy.intro}</p><div className="app-lock-identity"><b>{organizationName}</b><small>{userName}</small></div><form onSubmit={submitPin}><label>{copy.pin}<input autoFocus required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label><button className="primary-action" disabled={busy || pin.length !== 6 || !deviceId}>{copy.unlock}</button></form><button className="secondary-action full" type="button" disabled={busy || !deviceId || !isPasskeyFeatureEnabled()} onClick={() => void submitPasskey()}>{copy.passkey}</button>{error ? <p className="field-error" role="alert">{error}</p> : null}<button className="text-button" type="button" onClick={onSignOut}>{copy.signOut}</button></section></main>;
+}
+
 function SecurityOverviewView({
   language,
+  organizationId,
+  deviceId,
+  canManage,
+  onToast,
+  onConfigured,
   onNavigate,
 }: {
   language: Language;
+  organizationId: string | null;
+  deviceId: string;
+  canManage: boolean;
+  onToast: (message: string) => void;
+  onConfigured: () => void;
   onNavigate: (section: string) => void;
 }) {
+  const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [lockBusy, setLockBusy] = useState(false);
   const copy = language === "en"
     ? {
         kicker: "Control Center",
@@ -3441,6 +3564,14 @@ function SecurityOverviewView({
         approvalLayer: "Approvals",
         auditLayer: "Audit trail",
         choose: "Choose an area to review",
+        appLock: "App lock",
+        appLockCopy: "Use a six-digit server-protected PIN or a passkey. PIN setup requires two-step verification.",
+        pin: "New six-digit PIN",
+        confirmPin: "Confirm PIN",
+        savePin: "Save app PIN",
+        passkey: "Register passkey",
+        mismatch: "The PINs do not match.",
+        saved: "App lock is ready.",
       }
     : language === "fa-AF"
       ? {
@@ -3457,6 +3588,7 @@ function SecurityOverviewView({
           approvalLayer: "تأییدها",
           auditLayer: "تاریخچه",
           choose: "یک بخش را برای بررسی انتخاب کنید",
+          appLock: "قفل برنامه", appLockCopy: "از رمز شش‌رقمی محفوظ در سرور یا کلید عبور استفاده کنید. ساخت رمز به تأیید دومرحله‌ای نیاز دارد.", pin: "رمز شش‌رقمی جدید", confirmPin: "تکرار رمز", savePin: "ذخیره رمز برنامه", passkey: "ثبت کلید عبور", mismatch: "رمزها یکسان نیست.", saved: "قفل برنامه آماده است.",
         }
       : {
           kicker: "د کنټرول مرکز",
@@ -3472,7 +3604,22 @@ function SecurityOverviewView({
           approvalLayer: "تاییدونه",
           auditLayer: "تاریخ",
           choose: "د کتنې لپاره یوه برخه وټاکئ",
+          appLock: "د اپ قفل", appLockCopy: "شپږ عددي په سرور کې خوندي PIN یا پاسکي وکاروئ. د PIN جوړول دوه پړاوه تایید غواړي.", pin: "نوی شپږ عددي PIN", confirmPin: "PIN بیا ولیکئ", savePin: "د اپ PIN خوندي کول", passkey: "پاسکي ثبتول", mismatch: "PIN یو شان نه دی.", saved: "د اپ قفل چمتو دی.",
         };
+  const savePin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!organizationId || !/^\d{6}$/.test(pin)) return;
+    if (pin !== confirmPin) { onToast(copy.mismatch); return; }
+    setLockBusy(true);
+    const error = await configureAppLockPin(organizationId, deviceId, pin);
+    setLockBusy(false);
+    if (error) { onToast(error); return; }
+    setPin(""); setConfirmPin(""); onConfigured(); onToast(copy.saved);
+  };
+  const addPasskey = async () => {
+    setLockBusy(true); const error = await registerAppPasskey(); setLockBusy(false);
+    onToast(error ?? copy.saved);
+  };
   return (
     <section className="professional-workspace security-overview">
       <header className="security-overview-hero">
@@ -3495,6 +3642,7 @@ function SecurityOverviewView({
         <button className="control-center-card" onClick={() => onNavigate("Team & Devices")}><AppIcon name="people" /><span><strong>{copy.devices}</strong><small>{copy.devicesCopy}</small></span><span aria-hidden="true">→</span></button>
         <button className="control-center-card" onClick={() => { window.sessionStorage.setItem("sarafi-settings-section", "security"); onNavigate("Business Settings"); }}><AppIcon name="shield" /><span><strong>{copy.controls}</strong><small>{copy.controlsCopy}</small></span><span aria-hidden="true">→</span></button>
       </div>
+      <section className="security-app-lock-card"><div><span className="security-overview-shield"><AppIcon name="shield" size={22} /></span><div><h2>{copy.appLock}</h2><p>{copy.appLockCopy}</p></div></div><form onSubmit={savePin}><label>{copy.pin}<input required pattern="[0-9]{6}" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label><label>{copy.confirmPin}<input required pattern="[0-9]{6}" inputMode="numeric" autoComplete="new-password" maxLength={6} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label><button className="primary-action" disabled={!canManage || !deviceId || lockBusy || pin.length !== 6 || confirmPin.length !== 6}>{copy.savePin}</button><button className="secondary-action" type="button" disabled={lockBusy || !deviceId || !isPasskeyFeatureEnabled()} onClick={() => void addPasskey()}>{copy.passkey}</button></form></section>
     </section>
   );
 }
@@ -3530,6 +3678,7 @@ function WorkspaceView({
   onFinancialCompleted,
   onCurrencyCatalogChange,
   onCounterpartyChanged,
+  onAppLockConfigured,
 }: {
   language: Language;
   section: string;
@@ -3561,6 +3710,7 @@ function WorkspaceView({
   onFinancialCompleted: (transaction: CompletedTrade) => void;
   onCurrencyCatalogChange: (currencies: CurrencyCatalogRecord[]) => void;
   onCounterpartyChanged: (person?: CounterpartyRecord) => void;
+  onAppLockConfigured: () => void;
 }) {
   if (section === "Billing" && organizationId)
     return (
@@ -3583,7 +3733,7 @@ function WorkspaceView({
       />
     );
   if (section === "Security")
-    return <SecurityOverviewView language={language} onNavigate={onNavigate} />;
+    return <SecurityOverviewView language={language} organizationId={organizationId} deviceId={deviceId} canManage={hasCapability(capabilities, "security.manage")} onToast={onToast} onConfigured={onAppLockConfigured} onNavigate={onNavigate} />;
   if (section === "Business Settings")
     return (
       <SettingsView
@@ -5032,6 +5182,10 @@ function MoneyLocationView({
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const [loadedAccounts, setAccounts] = useState<MoneyAccountRecord[]>([]);
+  const [valuation, setValuation] = useState<MoneyValuationSnapshot | null>(null);
+  const [valuationError, setValuationError] = useState("");
+  const [comparisonCurrency, setComparisonCurrency] = useState("USD");
+  const [scopeMode, setScopeMode] = useState<"all" | "branch">("all");
   const [inspectionAccounts, setInspectionAccounts] = useState<MoneyAccountRecord[]>([]);
   const [loading, setLoading] = useState(organizationId !== "inspection");
   const [showCreate, setShowCreate] = useState(false);
@@ -5042,10 +5196,20 @@ function MoneyLocationView({
     ? [...inspectionMoneyAccounts(language), ...inspectionAccounts]
     : loadedAccounts;
   const cashboxes = accounts.filter((account) => account.account_type === "cashbox");
+  const inspectionValuation: MoneyValuationSnapshot = {
+    snapshot_id: "inspection-valuation-v7", snapshot_sha256: "7".repeat(64), snapshot_date: "2026-09-11", captured_at: "2026-09-11T22:55:00+04:30",
+    base_currency: "AFN", comparison_currency: "USD", valuation_rate_set_id: "inspection-rate-set", valuation_effective_at: "2026-09-11T22:55:00+04:30", quality: "current", excluded_currency_count: 0,
+    totals: { available_base: "11000", receivables_base: "0", payables_base: "0", hawala_net_base: "0", net_position_base: "11000", book_value_base: "11000", valuation_difference_base: "0", comparison_value: "171.875", comparison_rate: "64" },
+    currencies: [
+      { currency_code: "AFN", available: "2000", receivable: "0", payable: "0", hawala_net: "0", native_net: "2000", rate: "1", rate_status: "current", current_base: "2000", book_base: "2000" },
+      { currency_code: "TRY", available: "2000", receivable: "0", payable: "0", hawala_net: "0", native_net: "2000", rate: "1.3", rate_status: "current", current_base: "2600", book_base: "2600" },
+      { currency_code: "USD", available: "100", receivable: "0", payable: "0", hawala_net: "0", native_net: "100", rate: "64", rate_status: "current", current_base: "6400", book_base: "6400" },
+    ], locations: [],
+  };
+  const activeValuation = organizationId === "inspection" ? inspectionValuation : valuation;
   const copy = ({
     en: {
-      title: "Cashboxes",
-      intro: "See the money currently held in each cashbox.",
+      title: "My Money", intro: "Exact native balances valued from one approved daily rate snapshot.", total: "Total money — today's estimated value", equivalent: "Equivalent", scope: "Scope", allLocations: "All branches and cashboxes", thisBranch: "This branch", snapshot: "Valuation snapshot", compare: "Compare in", refresh: "Refresh", breakdown: "Currency breakdown", native: "Native balance", dailyRate: "Daily rate to", currentValue: "Current value", quality: "Valuation quality", currentQuality: "All rates approved and current", partialQuality: "Partial total — missing or stale currencies are excluded", handling: "Rate handling", missingRule: "Missing rate: exclude and warn", staleRule: "Stale rate: show a partial total", bookValue: "Book value", receivables: "Receivables", payables: "Payables", hawalaNet: "Hawala net",
       balances: "Cashbox balances",
       balancesIntro: "One clear card for every cashbox.",
       cashbox: "Cashbox",
@@ -5063,8 +5227,7 @@ function MoneyLocationView({
       loading: "Loading cashboxes…",
     },
     "fa-AF": {
-      title: "صندوق‌ها",
-      intro: "پول موجود در هر صندوق را ساده و روشن ببینید.",
+      title: "پول من", intro: "موجودی دقیق هر اسعار با یک مجموعه نرخ روزانه تأییدشده ارزش‌گذاری می‌شود.", total: "تمام پول — ارزش تخمینی امروز", equivalent: "برابر با", scope: "ساحه", allLocations: "همه شعبه‌ها و صندوق‌ها", thisBranch: "همین شعبه", snapshot: "مجموعه نرخ ارزش‌گذاری", compare: "مقایسه به", refresh: "تازه‌سازی", breakdown: "تفکیک اسعار", native: "موجودی اصلی", dailyRate: "نرخ روزانه به", currentValue: "ارزش فعلی", quality: "کیفیت ارزش‌گذاری", currentQuality: "همه نرخ‌ها تأییدشده و تازه است", partialQuality: "جمع قسمی — اسعار بدون نرخ تازه شامل نیست", handling: "برخورد با نرخ", missingRule: "نرخ نیست: شامل جمع نمی‌شود و هشدار می‌دهد", staleRule: "نرخ کهنه: جمع قسمی نشان داده می‌شود", bookValue: "ارزش دفتری", receivables: "طلب‌ها", payables: "بدهی‌ها", hawalaNet: "خالص حواله",
       balances: "موجودی صندوق‌ها",
       balancesIntro: "برای هر صندوق یک کارت ساده.",
       cashbox: "صندوق",
@@ -5082,8 +5245,7 @@ function MoneyLocationView({
       loading: "صندوق‌ها بار می‌شود…",
     },
     "ps-AF": {
-      title: "صندوقونه",
-      intro: "په هر صندوق کې موجودې پیسې په ساده ډول وګورئ.",
+      title: "زما پیسې", intro: "د هر اسعار کره پیسې د یوې تایید شوې ورځنۍ نرخ ټولګې له مخې ارزول کېږي.", total: "ټولې پیسې — د نن اټکلي ارزښت", equivalent: "برابر", scope: "ساحه", allLocations: "ټولې څانګې او صندوقونه", thisBranch: "همدا څانګه", snapshot: "د ارزونې نرخ ټولګه", compare: "پرتله په", refresh: "تازه کول", breakdown: "د اسعارو وېش", native: "اصلي موجودي", dailyRate: "ورځنی نرخ په", currentValue: "اوسنی ارزښت", quality: "د ارزونې کیفیت", currentQuality: "ټول نرخونه تایید او تازه دي", partialQuality: "نیمګړی جمع — بې‌نرخه یا زاړه اسعار نه دي شامل", handling: "د نرخ چلند", missingRule: "نرخ نشته: نه شاملېږي او خبرداری ورکوي", staleRule: "زوړ نرخ: نیمګړی جمع ښودل کېږي", bookValue: "دفتري ارزښت", receivables: "اخیستنې", payables: "ورکړې", hawalaNet: "د حوالې خالص",
       balances: "د صندوقونو پیسې",
       balancesIntro: "د هر صندوق لپاره یو ساده کارت.",
       cashbox: "صندوق",
@@ -5101,26 +5263,39 @@ function MoneyLocationView({
       loading: "صندوقونه پورته کېږي…",
     },
   } as const)[language];
+  const formatSnapshotTime = (value: string) => new Intl.DateTimeFormat(language, language === "en"
+    ? { dateStyle: "medium", timeStyle: "short" }
+    : { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })
+    .format(new Date(value));
+  const rateStatusLabel = (status: MoneyValuationSnapshot["currencies"][number]["rate_status"]) => ({
+    en: { current: "Current", stale: "Stale", missing: "Missing" },
+    "fa-AF": { current: "تازه", stale: "کهنه", missing: "بدون نرخ" },
+    "ps-AF": { current: "تازه", stale: "زوړ", missing: "بې نرخه" },
+  } as const)[language][status];
 
   const loadAccounts = useCallback(async () => {
     if (!organizationId || organizationId === "inspection") return;
-    const result = await listMoneyAccounts(organizationId);
+    const [result, valuationResult] = await Promise.all([listMoneyAccounts(organizationId), getMoneyValuationSnapshot({ organizationId, comparisonCurrency, branchId: scopeMode === "branch" ? branchId : null })]);
     if (result.data) setAccounts(result.data);
     if (result.error) onToast(ux(language, "couldNotLoad"));
+    if (valuationResult.data) { setValuation(valuationResult.data); setValuationError(""); }
+    if (valuationResult.error) setValuationError(valuationResult.error);
     setLoading(false);
-  }, [language, onToast, organizationId]);
+  }, [branchId, comparisonCurrency, language, onToast, organizationId, scopeMode]);
 
   useEffect(() => {
     let active = true;
     if (!organizationId || organizationId === "inspection") return;
-    void listMoneyAccounts(organizationId).then((result) => {
+    void Promise.all([listMoneyAccounts(organizationId), getMoneyValuationSnapshot({ organizationId, comparisonCurrency, branchId: scopeMode === "branch" ? branchId : null })]).then(([result, valuationResult]) => {
       if (!active) return;
       if (result.data) setAccounts(result.data);
       if (result.error) onToast(ux(language, "couldNotLoad"));
+      if (valuationResult.data) { setValuation(valuationResult.data); setValuationError(""); }
+      if (valuationResult.error) setValuationError(valuationResult.error);
       setLoading(false);
     });
     return () => { active = false; };
-  }, [activityRefresh, language, onToast, organizationId]);
+  }, [activityRefresh, branchId, comparisonCurrency, language, onToast, organizationId, scopeMode]);
 
   const addCashbox = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -5153,7 +5328,7 @@ function MoneyLocationView({
   };
 
   return (
-    <section className="panel money-workspace">
+    <section className="money-workspace money-valuation-workspace">
       <div className="panel-header">
         <div>
           <p className="kicker">{t("myMoney")}</p>
@@ -5164,6 +5339,26 @@ function MoneyLocationView({
           {language === "en" ? "Back to Home" : language === "fa-AF" ? "بازگشت به خانه" : "کور ته ستنېدل"} →
         </button>
       </div>
+      <section className="money-valuation-controls" aria-label={copy.snapshot}>
+        <label><span>{copy.scope}</span><select value={scopeMode} onChange={(event) => setScopeMode(event.target.value as "all" | "branch")}><option value="all">{copy.allLocations}</option><option value="branch">{copy.thisBranch}</option></select></label>
+        <span><small>{copy.snapshot}</small><b>{activeValuation?.valuation_effective_at ? formatSnapshotTime(activeValuation.valuation_effective_at) : "—"}</b></span>
+        <label><span>{copy.compare}</span><select value={comparisonCurrency} onChange={(event) => setComparisonCurrency(event.target.value)}><option value="USD">USD</option><option value="AFN">AFN</option><option value="EUR">EUR</option></select></label>
+        <button className="text-button" type="button" onClick={() => void loadAccounts()}>{copy.refresh}</button>
+      </section>
+      {valuationError ? <div className="money-valuation-warning" role="alert">{valuationError}</div> : null}
+      {activeValuation ? <>
+        <section className="money-valuation-hero">
+          <div><small>{copy.total}</small><strong dir="ltr">{formatFinancialAmount(activeValuation.totals.net_position_base)} {activeValuation.base_currency}</strong><span>{activeValuation.currencies.length} {language === "en" ? "currencies included" : language === "fa-AF" ? "اسعار شامل" : "اسعار شامل دي"}</span></div>
+          <div><small>{copy.equivalent} {activeValuation.comparison_currency}</small><strong dir="ltr">{activeValuation.totals.comparison_value ? new Decimal(activeValuation.totals.comparison_value).toDecimalPlaces(3, Decimal.ROUND_HALF_UP).toString() : "—"} {activeValuation.comparison_currency}</strong><span dir="ltr">{activeValuation.totals.comparison_rate ? `1 ${activeValuation.comparison_currency} = ${formatFinancialAmount(activeValuation.totals.comparison_rate)} ${activeValuation.base_currency}` : copy.partialQuality}</span></div>
+        </section>
+        <section className="money-position-strip">
+          <span><small>{copy.receivables}</small><b dir="ltr">{formatFinancialAmount(activeValuation.totals.receivables_base)} {activeValuation.base_currency}</b></span><span><small>{copy.payables}</small><b dir="ltr">{formatFinancialAmount(activeValuation.totals.payables_base)} {activeValuation.base_currency}</b></span><span><small>{copy.hawalaNet}</small><b dir="ltr">{formatFinancialAmount(activeValuation.totals.hawala_net_base)} {activeValuation.base_currency}</b></span><span><small>{copy.bookValue}</small><b dir="ltr">{formatFinancialAmount(activeValuation.totals.book_value_base)} {activeValuation.base_currency}</b></span>
+        </section>
+        <div className="money-valuation-layout">
+          <section className="money-currency-breakdown" aria-labelledby="money-currency-title"><h2 id="money-currency-title">{copy.breakdown}</h2><div className="money-currency-row heading"><span>{t("currency")}</span><span>{copy.native}</span><span>{copy.dailyRate} {activeValuation.base_currency}</span><span>{copy.currentValue}</span></div>{activeValuation.currencies.map((item) => { const total = new Decimal(activeValuation.totals.net_position_base || 0); const share = item.current_base && !total.isZero() ? new Decimal(item.current_base).div(total).mul(100).toDecimalPlaces(1).toString() : null; return <div className={`money-currency-row rate-${item.rate_status}`} key={item.currency_code}><span><b>{item.currency_code}</b><small>{rateStatusLabel(item.rate_status)}</small></span><strong dir="ltr">{formatFinancialAmount(item.native_net)}</strong><bdi>{item.rate ?? "—"}</bdi><span><strong dir="ltr">{item.current_base ? formatFinancialAmount(item.current_base) : "—"}</strong>{share ? <small>{share}%</small> : null}</span></div>; })}</section>
+          <aside className="money-valuation-aside"><section><h2>{copy.quality}</h2><p className={activeValuation.quality === "current" ? "positive" : "money-partial"}>● {activeValuation.quality === "current" ? copy.currentQuality : copy.partialQuality}</p><small>{copy.bookValue}: {formatFinancialAmount(activeValuation.totals.book_value_base)} {activeValuation.base_currency}</small></section><section><h2>{copy.handling}</h2><p>● {copy.missingRule}</p><p>● {copy.staleRule}</p></section></aside>
+        </div>
+      </> : null}
       <section className="account-control-panel cashbox-only-panel" aria-labelledby="cashbox-balances-title">
         <div className="panel-header compact-header">
           <div>
@@ -6771,7 +6966,10 @@ function DebtsView({
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
   const inspection = organizationId === "inspection";
-  const [debts, setDebts] = useState<DebtRecord[]>(() => inspection ? [{ id: "inspection-debt", counterparty_id: "inspection-customer", direction: "receivable", currency_code: "AFN", original_amount: "18000", outstanding_amount: "18000", due_at: null, notes: null }] : []);
+  const [debts, setDebts] = useState<DebtRecord[]>(() => inspection ? [
+    { id: "inspection-debt", counterparty_id: "inspection-customer", direction: "receivable", currency_code: "AFN", original_amount: "18000", outstanding_amount: "18000", due_at: null, notes: null },
+    { id: "inspection-payable-debt", counterparty_id: "inspection-customer", direction: "payable", currency_code: "USD", original_amount: "250", outstanding_amount: "250", due_at: null, notes: null },
+  ] : []);
   const [people, setPeople] = useState<CounterpartyRecord[]>(() => inspection ? [{ id: "inspection-customer", display_name: ux(language, "previewCustomer"), counterparty_type: "customer", risk_status: "standard" }] : []);
   const [counterpartyId, setCounterpartyId] = useState("");
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
@@ -6793,10 +6991,14 @@ function DebtsView({
   const legacyDebtSettlementRoute = useMatch("/app/:organizationId/debts/settle");
   const legacyReceivableSettlementRoute = useMatch("/app/:organizationId/transactions/new/money-in/debt-payment");
   const legacyPayableSettlementRoute = useMatch("/app/:organizationId/transactions/new/money-out/debt-payment");
+  const canonicalReceivableSettlementRoute = useMatch("/app/:organizationId/transactions/new/money/receive/debt");
+  const canonicalPayableSettlementRoute = useMatch("/app/:organizationId/transactions/new/money/pay/debt");
   const settlementRoute = dedicatedDebtSettlementRoute
     ?? legacyDebtSettlementRoute
     ?? legacyReceivableSettlementRoute
-    ?? legacyPayableSettlementRoute;
+    ?? legacyPayableSettlementRoute
+    ?? canonicalReceivableSettlementRoute
+    ?? canonicalPayableSettlementRoute;
   const debtDetailRoute = useMatch("/app/:organizationId/debts/:debtId");
   const journey = receivableCreateRoute
     ? "receivable"
@@ -6809,6 +7011,14 @@ function DebtsView({
           : "list";
   const direction: "receivable" | "payable" = journey === "payable" ? "payable" : "receivable";
   const debtIdFromPath = routeDebtId;
+  const settlementDirection = canonicalReceivableSettlementRoute || legacyReceivableSettlementRoute
+    ? "receivable"
+    : canonicalPayableSettlementRoute || legacyPayableSettlementRoute
+      ? "payable"
+      : null;
+  const visibleDebts = settlementDirection
+    ? debts.filter((debt) => debt.direction === settlementDirection)
+    : debts;
   const [selectedDebtResult, setSelectedDebtResult] = useState<DebtRecord | null>(null);
   const selectedDebt = debtIdFromPath
     ? inspection
@@ -7126,8 +7336,8 @@ function DebtsView({
         </div>}
       </form>}
       {!selectedDebt && (journey === "list" || journey === "settle") && <div className="balance-list debt-selection-list">
-        {debts.length ? (
-          debts.map((debt) => (
+        {visibleDebts.length ? (
+          visibleDebts.map((debt) => (
             <button
               className="balance-row"
               key={debt.id}
@@ -7416,6 +7626,14 @@ function ReconciliationView({
   );
 }
 
+function isHawalaEndpointReady(partner: HawalaPartnerRecord) {
+  return Boolean(
+    partner.endpoint_active && partner.endpoint_verified_at && partner.endpoint_type
+    && partner.recipient_organization_id && partner.recipient_branch_id
+    && (partner.endpoint_type === "internal_branch" || partner.reciprocal_partner_id),
+  );
+}
+
 function HawalaView({
   language,
   organizationId,
@@ -7441,17 +7659,37 @@ function HawalaView({
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const u = (key: Parameters<typeof ux>[1]) => ux(language, key);
-  const [transfers, setTransfers] = useState<HawalaTransferRecord[]>([]);
+  const hawalaStatusLabel = (status: string) => ({
+    en: { draft: "Draft", sent: "Sent", acknowledged: "Acknowledged", ready: "Ready", paid: "Paid", completed: "Completed", cancelled: "Cancelled", expired: "Expired", review_required: "Review required", created: "Created", funded: "Funded" },
+    "fa-AF": { draft: "پیش‌نویس", sent: "فرستاده‌شده", acknowledged: "رسیده", ready: "آماده پرداخت", paid: "پرداخت‌شده", completed: "تکمیل‌شده", cancelled: "لغوشده", expired: "منقضی", review_required: "نیازمند بررسی", created: "ثبت‌شده", funded: "تمویل‌شده" },
+    "ps-AF": { draft: "مسوده", sent: "لېږل شوې", acknowledged: "رسېدلې", ready: "ورکړې ته چمتو", paid: "ورکړل شوې", completed: "بشپړه شوې", cancelled: "لغوه شوې", expired: "وخت تېر", review_required: "کتنې ته اړتیا", created: "ثبت شوې", funded: "تمویل شوې" },
+  } as Record<Language, Record<string, string>>)[language][status] ?? status;
+  const hawalaDirectionLabel = (direction?: string) => direction === "incoming"
+    ? (language === "en" ? "Incoming" : language === "fa-AF" ? "ورودی" : "راتلونکې")
+    : direction === "outgoing"
+      ? (language === "en" ? "Outgoing" : language === "fa-AF" ? "خروجی" : "تلونکې")
+      : (language === "en" ? "Legacy record" : language === "fa-AF" ? "ثبت قدیمی" : "پخوانی ثبت");
+  const [transfers, setTransfers] = useState<HawalaTransferRecord[]>(() => organizationId === "inspection" ? [
+    { id: "inspection-incoming", beneficiary_name: "Ahmad Rahimi", origin_location: "Kabul Central", destination_location: "Herat Main", currency_code: "USD", amount: "100", fee: "2", reference_code: "INCOMING-1001", status: "ready", created_at: "2026-09-11T18:20:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "valid", recipient_type: "external_partner", recipient_organization_id: "inspection", recipient_branch_id: "inspection-branch", expires_at: "2026-09-14T18:20:00+04:30" },
+    { id: "inspection-incoming-2", beneficiary_name: "Farid Ahmad", origin_location: "Kabul Central", destination_location: "Herat Main", currency_code: "AFN", amount: "50000", fee: "300", reference_code: "HW-4Q9P-2810", status: "acknowledged", created_at: "2026-09-11T17:10:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "valid" },
+    { id: "inspection-outgoing", beneficiary_name: "Maryam Wafa", origin_location: "Kabul Central", destination_location: "Mazar Partner", currency_code: "USD", amount: "200", fee: "3", reference_code: "HW-8B6R-1032", status: "sent", created_at: "2026-09-11T16:00:00+04:30", direction: "outgoing", hawala_partner_id: "inspection-partner", integrity_state: "valid" },
+    { id: "inspection-completed", beneficiary_name: "Sediq Rahmani", origin_location: "Herat Main", destination_location: "Kabul Central", currency_code: "AFN", amount: "25000", fee: "200", reference_code: "HW-2A8N-6604", status: "paid", created_at: "2026-09-10T14:30:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "valid" },
+    { id: "inspection-exception", beneficiary_name: "Laila Azizi", origin_location: "Kandahar Partner", destination_location: "Kabul Central", currency_code: "AFN", amount: "15000", fee: "150", reference_code: "HW-9C3X-4412", status: "ready", created_at: "2026-09-11T13:15:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "review_required" },
+  ] : []);
   const [senderName, setSenderName] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
   const { partnerId: routePartnerId = null, transferId: routeTransferId = null } = useParams<{
     partnerId: string;
     transferId: string;
   }>();
-  const incomingRoute = useMatch("/app/:organizationId/transactions/new/hawala/incoming");
+  const manualIncomingRoute = useMatch("/app/:organizationId/transactions/new/hawala/incoming");
+  const incomingInboxRoute = useMatch("/app/:organizationId/hawala/incoming");
+  const incomingDetailRoute = useMatch("/app/:organizationId/hawala/incoming/:transferId");
+  const outgoingDetailRoute = useMatch("/app/:organizationId/hawala/outgoing/:transferId");
+  const exactPayoutRoute = useMatch("/app/:organizationId/hawala/payout/:transferId");
   const canonicalPayoutRoute = useMatch("/app/:organizationId/hawala/payout");
   const legacyPayoutRoute = useMatch("/app/:organizationId/transactions/new/hawala/payout");
-  const payoutRoute = canonicalPayoutRoute ?? legacyPayoutRoute;
+  const payoutRoute = exactPayoutRoute ?? canonicalPayoutRoute ?? legacyPayoutRoute;
   const partnerListRoute = useMatch("/app/:organizationId/hawala/partners");
   const partnerDetailRoute = useMatch("/app/:organizationId/hawala/partners/:partnerId");
   const partnerSettlementRoute = useMatch("/app/:organizationId/hawala/partners/:partnerId/settle");
@@ -7461,12 +7699,12 @@ function HawalaView({
     ?? partnerSettlementRoute
     ?? legacyPartnerSettlementRoute;
   const sendRoute = useMatch("/app/:organizationId/transactions/new/hawala/send");
-  const hawalaMode = incomingRoute ? "incoming" : payoutRoute ? "payout" : settlementRoute ? "settle" : sendRoute ? "send" : "overview";
+  const hawalaMode = manualIncomingRoute ? "incoming" : payoutRoute ? "payout" : settlementRoute ? "settle" : sendRoute ? "send" : "overview";
   const [origin, setOrigin] = useState("");
   const [selectedSettlementPartnerId, setSelectedSettlementPartnerId] = useState("");
   const settlementPartnerId = routePartnerId ?? selectedSettlementPartnerId;
   const [createPartnerId, setCreatePartnerId] = useState(organizationId === "inspection" ? "inspection-partner" : "");
-  const [partners, setPartners] = useState<HawalaPartnerRecord[]>(organizationId === "inspection" ? [{ id: "inspection-partner", counterparty_id: null, name: "Herat Partner Exchange", active: true }] : []);
+  const [partners, setPartners] = useState<HawalaPartnerRecord[]>(organizationId === "inspection" ? [{ id: "inspection-partner", counterparty_id: null, name: "Herat Partner Exchange", active: true, endpoint_type: "external_partner", recipient_organization_id: "inspection-recipient", recipient_branch_id: "inspection-herat", reciprocal_partner_id: "inspection-reciprocal", endpoint_verified_at: "2026-09-11T08:00:00+04:30", endpoint_active: true }] : []);
   const [statementResult, setStatementResult] = useState<{
     partnerId: string;
     data: HawalaPartnerStatement;
@@ -7476,8 +7714,34 @@ function HawalaView({
     : null;
   const [payoutCode, setPayoutCode] = useState("");
   const [payoutMatch, setPayoutMatch] = useState<HawalaPayoutMatch | null>(null);
+  const routedPayoutMatch = useMemo<HawalaPayoutMatch | null>(() => {
+    if (!exactPayoutRoute || !routeTransferId) return null;
+    const transfer = transfers.find((item) => item.id === routeTransferId);
+    if (!transfer || transfer.direction !== "incoming" || transfer.status !== "ready") return null;
+    return {
+      transfer_id: transfer.id,
+      reference_code: transfer.reference_code,
+      beneficiary_name: transfer.beneficiary_name,
+      destination_location: transfer.destination_location,
+      currency_code: transfer.currency_code,
+      amount: transfer.amount,
+      branch_id: transfer.recipient_branch_id ?? branchId ?? "",
+      hawala_partner_id: transfer.hawala_partner_id ?? "",
+    };
+  }, [branchId, exactPayoutRoute, routeTransferId, transfers]);
+  const activePayoutMatch = payoutMatch ?? routedPayoutMatch;
   const [identityReference, setIdentityReference] = useState("");
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  const [identityFront, setIdentityFront] = useState<File | null>(null);
+  const [identityBack, setIdentityBack] = useState<File | null>(null);
+  const identityFrontPreview = useMemo(() => identityFront ? URL.createObjectURL(identityFront) : "", [identityFront]);
+  const identityBackPreview = useMemo(() => identityBack ? URL.createObjectURL(identityBack) : "", [identityBack]);
+  useEffect(() => () => { if (identityFrontPreview) URL.revokeObjectURL(identityFrontPreview); }, [identityFrontPreview]);
+  useEffect(() => () => { if (identityBackPreview) URL.revokeObjectURL(identityBackPreview); }, [identityBackPreview]);
+  const [hawalaListTab, setHawalaListTab] = useState<"incoming" | "outgoing" | "payout" | "completed" | "exceptions">("incoming");
+  const [hawalaSearch, setHawalaSearch] = useState("");
+  const [hawalaCurrencyFilter, setHawalaCurrencyFilter] = useState("");
+  const [hawalaStatusFilter, setHawalaStatusFilter] = useState("");
   const [settlementAmounts, setSettlementAmounts] = useState<Record<string, string>>({});
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
@@ -7505,9 +7769,9 @@ function HawalaView({
   const [transitionBusy, setTransitionBusy] = useState<string | null>(null);
   useEffect(() => {
     if (organizationId === "inspection") return;
-    if (organizationId)
+    if (organizationId && branchId)
       void Promise.all([
-        listHawalaTransfers(organizationId),
+        listHawalaTransfers(organizationId, branchId),
         listMoneyAccounts(organizationId),
         listCurrencyCatalog(organizationId),
         listHawalaPartners(organizationId),
@@ -7520,10 +7784,10 @@ function HawalaView({
         if (currencyResult.data) setCatalog(currencyResult.data);
         if (partnerResult.data) {
           setPartners(partnerResult.data);
-          setCreatePartnerId((current) => current || partnerResult.data?.[0]?.id || "");
+          setCreatePartnerId((current) => current || partnerResult.data?.find(isHawalaEndpointReady)?.id || "");
         }
       });
-  }, [language, organizationId]);
+  }, [language, organizationId, branchId]);
   useEffect(() => {
     if (!routeTransferId) return;
     const frame = window.requestAnimationFrame(() => {
@@ -7562,7 +7826,7 @@ function HawalaView({
       occurredAt: transfer.created_at || new Date().toISOString(),
       typeLabel,
       repeatPath,
-      detailPath: `${workspaceRoot(organizationId)}/hawala/${transfer.id}`,
+      detailPath: `${workspaceRoot(organizationId)}/hawala/${transfer.direction === "incoming" ? "incoming" : "outgoing"}/${transfer.id}`,
       flowRows: [
         { label: t("referenceCode"), value: transfer.reference_code },
         { label: language === "en" ? "Beneficiary" : language === "fa-AF" ? "مستفید" : "ګټه اخیستونکی", value: transfer.beneficiary_name },
@@ -7574,6 +7838,11 @@ function HawalaView({
     event.preventDefault();
     if (!organizationId || !branchId || !createPartnerId || (hawalaMode === "send" && !moneyAccountId)) {
       onToast(!createPartnerId ? (language === "en" ? "Choose a Hawala partner." : language === "fa-AF" ? "همکار حواله را انتخاب کنید." : "د حوالې همکار وټاکئ.") : moneyAccountId ? u("activeBranchRequired") : u("chooseMoneyAccount"));
+      return;
+    }
+    const selectedPartner = partners.find((partner) => partner.id === createPartnerId);
+    if (!selectedPartner || !isHawalaEndpointReady(selectedPartner)) {
+      onToast(language === "en" ? "This partner needs a verified organization and branch endpoint before Hawala can be sent." : language === "fa-AF" ? "پیش از فرستادن حواله، سازمان و شعبه دقیق این همکار باید تأیید شود." : "د حوالې له لېږلو مخکې د دې همکار کره اداره او څانګه باید تایید شي.");
       return;
     }
     if (currency !== "AFN" && !createRateReady) {
@@ -7618,7 +7887,7 @@ function HawalaView({
       setReference("");
       setCreateRatePublication(undefined);
       if (organizationId) {
-        const refreshed = await listHawalaTransfers(organizationId);
+        const refreshed = await listHawalaTransfers(organizationId, branchId);
         if (refreshed.data) setTransfers(refreshed.data);
       }
     }
@@ -7629,7 +7898,7 @@ function HawalaView({
     setSearchBusy(true);
     if (organizationId === "inspection") {
       setPayoutMatch(payoutCode.trim().toUpperCase() === "INCOMING-1001" ? {
-        reference_code: "INCOMING-1001", beneficiary_name: "Ahmad Rahimi", destination_location: "Kabul",
+        transfer_id: "inspection-incoming", reference_code: "INCOMING-1001", beneficiary_name: "Ahmad Rahimi", destination_location: "Kabul",
         currency_code: "AFN", amount: "25000", branch_id: "inspection-branch", hawala_partner_id: "inspection-partner",
       } : null);
       setSearchBusy(false);
@@ -7641,20 +7910,31 @@ function HawalaView({
     if (result.error) onToast(u("couldNotLoad"));
   };
   const confirmPayout = async () => {
-    if (!organizationId || !payoutMatch || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2) return;
+    const matchedPayout = activePayoutMatch;
+    if (!organizationId || !matchedPayout || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2 || !identityFront || !identityBack) return;
     if (organizationId === "inspection") {
-      const preview = { id: "inspection-incoming", beneficiary_name: payoutMatch.beneficiary_name, origin_location: "—", destination_location: payoutMatch.destination_location, currency_code: payoutMatch.currency_code, amount: payoutMatch.amount, fee: "0", reference_code: payoutMatch.reference_code, status: "paid", created_at: new Date().toISOString(), direction: "incoming" as const, payout_journal_entry_id: "inspection-payout-entry" };
+      const preview = { id: "inspection-incoming", beneficiary_name: matchedPayout.beneficiary_name, origin_location: "—", destination_location: matchedPayout.destination_location, currency_code: matchedPayout.currency_code, amount: matchedPayout.amount, fee: "0", reference_code: matchedPayout.reference_code, status: "paid", created_at: new Date().toISOString(), direction: "incoming" as const, payout_journal_entry_id: "inspection-payout-entry" };
       await completeHawalaTransfer(preview, language === "en" ? "Hawala payout" : language === "fa-AF" ? "دادن پول حواله" : "د حوالې ورکړه", pathname, preview.payout_journal_entry_id);
-      setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
+      setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false); setIdentityFront(null); setIdentityBack(null);
       return;
     }
-    setTransitionBusy(payoutMatch.reference_code);
+    setTransitionBusy(matchedPayout.reference_code);
+    const [frontUpload, backUpload] = await Promise.all([
+      uploadPrivateHawalaIdentityDocument(organizationId, matchedPayout.transfer_id, "tazkira_front", identityFront),
+      uploadPrivateHawalaIdentityDocument(organizationId, matchedPayout.transfer_id, "tazkira_back", identityBack),
+    ]);
+    if (!frontUpload.data || !backUpload.data) {
+      setTransitionBusy(null);
+      onToast(localizedFinancialError(language, frontUpload.error ?? backUpload.error ?? "HAWALA_IDENTITY_DOCUMENTS_REQUIRED", u("couldNotSave")));
+      return;
+    }
     const command = {
       organization_id: organizationId,
-      reference_code: payoutMatch.reference_code,
+      reference_code: matchedPayout.reference_code,
       money_account_id: moneyAccountId,
       identity_confirmed: true as const,
       recipient_identity_reference: identityReference,
+      identity_document_ids: [frontUpload.data.id, backUpload.data.id],
       device_id: deviceId || undefined,
       approval_reason: "Beneficiary payout above the configured approval threshold",
       client_command_id: crypto.randomUUID(),
@@ -7667,8 +7947,8 @@ function HawalaView({
         setTransitionBusy(null);
         if (resumed.error) { onToast(localizedFinancialError(language, resumed.error, u("couldNotSave"))); return; }
         if (resumed.data) await completeHawalaTransfer(resumed.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "دادن پول حواله" : "د حوالې ورکړه", pathname);
-        setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
-        setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
+        setTransfers((current) => current.map((item) => item.reference_code === matchedPayout.reference_code ? { ...item, status: "paid" } : item));
+        setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false); setIdentityFront(null); setIdentityBack(null);
         return;
       }
       setTransitionBusy(null);
@@ -7678,8 +7958,8 @@ function HawalaView({
     setTransitionBusy(null);
     if (result.error) { onToast(localizedFinancialError(language, result.error, u("couldNotSave"))); return; }
     if (result.data) await completeHawalaTransfer(result.data, language === "en" ? "Hawala payout" : language === "fa-AF" ? "دادن پول حواله" : "د حوالې ورکړه", pathname);
-    setTransfers((current) => current.map((item) => item.reference_code === payoutMatch.reference_code ? { ...item, status: "paid" } : item));
-    setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false);
+    setTransfers((current) => current.map((item) => item.reference_code === matchedPayout.reference_code ? { ...item, status: "paid" } : item));
+    setPayoutMatch(null); setPayoutCode(""); setIdentityReference(""); setIdentityConfirmed(false); setIdentityFront(null); setIdentityBack(null);
   };
   const settleLine = async (line: HawalaPartnerStatement["lines"][number]) => {
     const settlementAmount = settlementAmounts[line.id] || line.remaining_amount;
@@ -7733,6 +8013,23 @@ function HawalaView({
       setStatementResult({ partnerId: settlementPartnerId, data: refreshed.data });
     }
   };
+  const advanceHawala = async (transfer: HawalaTransferRecord, status: "acknowledged" | "ready") => {
+    if (!organizationId) return;
+    if (organizationId === "inspection") {
+      setTransfers((current) => current.map((item) => item.id === transfer.id ? { ...item, status } : item));
+      return;
+    }
+    setTransitionBusy(transfer.id);
+    const result = await transitionHawalaStatus({
+      organization_id: organizationId,
+      transfer_id: transfer.id,
+      status,
+      reason: status === "acknowledged" ? "Recipient branch acknowledged the exact transfer" : "Recipient branch completed payout readiness review",
+    });
+    setTransitionBusy(null);
+    if (result.error) { onToast(localizedFinancialError(language, result.error, u("couldNotSave"))); return; }
+    if (result.data) setTransfers((current) => current.map((item) => item.id === result.data?.id ? result.data : item));
+  };
   const canSettle = hasCapability(capabilities, "hawala.settle");
   const settlementRateLine = settlementRateLineId
     ? statement?.lines.find((line) => line.id === settlementRateLineId) ?? null
@@ -7740,10 +8037,27 @@ function HawalaView({
   const selectedTransfer = routeTransferId
     ? transfers.find((transfer) => transfer.id === routeTransferId) ?? null
     : null;
+  const routeHawalaListTab = incomingInboxRoute || incomingDetailRoute
+    ? "incoming"
+    : outgoingDetailRoute
+      ? "outgoing"
+      : hawalaListTab;
+  const normalizedHawalaSearch = hawalaSearch.trim().toLocaleLowerCase();
+  const visibleHawalaTransfers = transfers.filter((transfer) => {
+    const tabMatches = routeHawalaListTab === "incoming" ? transfer.direction === "incoming"
+      : routeHawalaListTab === "outgoing" ? transfer.direction === "outgoing"
+      : routeHawalaListTab === "payout" ? transfer.direction === "incoming" && transfer.status === "ready"
+      : routeHawalaListTab === "completed" ? ["paid", "completed"].includes(transfer.status)
+      : transfer.integrity_state === "review_required" || ["cancelled", "expired", "review_required"].includes(transfer.status);
+    const searchMatches = !normalizedHawalaSearch || `${transfer.reference_code} ${transfer.beneficiary_name} ${transfer.origin_location} ${transfer.destination_location}`.toLocaleLowerCase().includes(normalizedHawalaSearch);
+    return tabMatches && searchMatches
+      && (!hawalaCurrencyFilter || transfer.currency_code === hawalaCurrencyFilter)
+      && (!hawalaStatusFilter || transfer.status === hawalaStatusFilter);
+  });
   const selectedTimeline = selectedTransfer
     ? (selectedTransfer.direction === "incoming"
-      ? ["created", "ready", "paid"]
-      : ["created", "funded", "sent", "paid"])
+      ? ["sent", "acknowledged", "ready", "paid"]
+      : ["draft", "sent", "acknowledged", "ready", "paid"])
     : [];
   const reachedTimelineIndex = selectedTransfer
     ? Math.max(selectedTimeline.indexOf(selectedTransfer.status), selectedTransfer.status === "cancelled" ? 0 : -1)
@@ -7789,21 +8103,22 @@ function HawalaView({
         <section className="financial-task-form hawala-payout-form" aria-labelledby="hawala-payout-title">
           <h2 id="hawala-payout-title">{language === "en" ? "Pay by reference code" : language === "fa-AF" ? "دادن پول با رمز حواله" : "د حوالې په کوډ ورکړه"}</h2>
           <p>{language === "en" ? "Enter the customer’s code. SARAFI shows only the matching ready transfer." : language === "fa-AF" ? "رمز مشتری را وارد کنید. سرافی فقط حواله آماده و مطابق را نشان می‌دهد." : "د پېرېدونکي کوډ ولیکئ. سرافي یوازې برابره چمتو حواله ښيي."}</p>
-          <form className="hawala-code-search" onSubmit={searchPayout}><label>{t("referenceCode")}<input autoFocus required dir="ltr" value={payoutCode} onChange={(event) => { setPayoutCode(event.target.value.trimStart()); setPayoutMatch(null); }} placeholder={u("uniqueReference")} /></label><button className="secondary-action" type="submit" disabled={searchBusy || payoutCode.trim().length < 4}>{searchBusy ? "…" : (language === "en" ? "Find transfer" : language === "fa-AF" ? "یافتن حواله" : "حواله ومومئ")}</button></form>
+          <form className="hawala-code-search" onSubmit={searchPayout}><label>{t("referenceCode")}<input autoFocus required dir="ltr" value={payoutCode || activePayoutMatch?.reference_code || ""} onChange={(event) => { setPayoutCode(event.target.value.trimStart()); setPayoutMatch(null); }} placeholder={u("uniqueReference")} /></label><button className="secondary-action" type="submit" disabled={searchBusy || (payoutCode || activePayoutMatch?.reference_code || "").trim().length < 4}>{searchBusy ? "…" : (language === "en" ? "Find transfer" : language === "fa-AF" ? "یافتن حواله" : "حواله ومومئ")}</button></form>
           <ReferenceScanner language={language} onDetected={(reference) => { setPayoutCode(reference); setPayoutMatch(null); }} />
-          {payoutCode.trim().length >= 4 && !payoutMatch && !searchBusy ? <p className="calm-empty" role="status">{language === "en" ? "Enter the exact code and choose Find transfer." : language === "fa-AF" ? "رمز دقیق را وارد کرده و یافتن حواله را بزنید." : "کره کوډ ولیکئ او حواله ومومئ وټاکئ."}</p> : null}
-          {payoutMatch ? <>
-            <article className="payout-match"><span><strong>{payoutMatch.beneficiary_name}</strong><small>{payoutMatch.destination_location}</small></span><b dir="ltr">{formatFinancialAmount(payoutMatch.amount)} {payoutMatch.currency_code}</b></article>
+          {payoutCode.trim().length >= 4 && !activePayoutMatch && !searchBusy ? <p className="calm-empty" role="status">{language === "en" ? "Enter the exact code and choose Find transfer." : language === "fa-AF" ? "رمز دقیق را وارد کرده و یافتن حواله را بزنید." : "کره کوډ ولیکئ او حواله ومومئ وټاکئ."}</p> : null}
+          {activePayoutMatch ? <>
+            <article className="payout-match"><span><strong>{activePayoutMatch.beneficiary_name}</strong><small>{activePayoutMatch.destination_location}</small></span><b dir="ltr">{formatFinancialAmount(activePayoutMatch.amount)} {activePayoutMatch.currency_code}</b></article>
             <label>{u("destinationAccount")}<select required value={moneyAccountId} onChange={(event) => setMoneyAccountId(event.target.value)}><option value="">{u("chooseDestinationAccount")}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
             <label>{language === "en" ? "Checked identity reference" : language === "fa-AF" ? "مرجع هویت بررسی‌شده" : "کتل شوې پېژندپاڼې مرجع"}<input required value={identityReference} onChange={(event) => setIdentityReference(event.target.value)} placeholder={language === "en" ? "Document type and last digits" : language === "fa-AF" ? "نوع سند و رقم‌های آخر" : "د سند ډول او وروستۍ شمېرې"} /></label>
+            <section className="hawala-identity-capture" aria-labelledby="hawala-identity-title"><h3 id="hawala-identity-title">{language === "en" ? "Tazkira evidence" : language === "fa-AF" ? "سند تذکره" : "د تذکرې ثبوت"}</h3><p>{language === "en" ? "Use a clear, well-lit photo with all four corners visible. Location metadata is removed before upload." : language === "fa-AF" ? "عکس روشن بگیرید و چهار گوشه تذکره را نشان دهید. معلومات موقعیت پیش از بارگذاری پاک می‌شود." : "روښانه انځور واخلئ او څلور واړه کونجونه ښکاره کړئ. د ځای معلومات له پورته کولو مخکې پاکېږي."}</p><div><div className="hawala-identity-side"><label><span>{language === "en" ? "Front side" : language === "fa-AF" ? "روی تذکره" : "مخکنی اړخ"}</span>{identityFrontPreview ? <img src={identityFrontPreview} alt={language === "en" ? "Tazkira front preview" : ""} /> : <b>{language === "en" ? "Take or choose photo" : language === "fa-AF" ? "عکس بگیرید یا انتخاب کنید" : "انځور واخلئ یا وټاکئ"}</b>}<input required type="file" accept="image/*" capture="environment" onChange={(event) => setIdentityFront(event.target.files?.[0] ?? null)} /></label>{identityFront ? <button type="button" className="text-button" onClick={() => setIdentityFront(null)}>{language === "en" ? "Remove and retake" : language === "fa-AF" ? "پاک‌کردن و عکس دوباره" : "لرې کول او بیا انځور"}</button> : null}</div><div className="hawala-identity-side"><label><span>{language === "en" ? "Back side" : language === "fa-AF" ? "پشت تذکره" : "شاتنی اړخ"}</span>{identityBackPreview ? <img src={identityBackPreview} alt={language === "en" ? "Tazkira back preview" : ""} /> : <b>{language === "en" ? "Take or choose photo" : language === "fa-AF" ? "عکس بگیرید یا انتخاب کنید" : "انځور واخلئ یا وټاکئ"}</b>}<input required type="file" accept="image/*" capture="environment" onChange={(event) => setIdentityBack(event.target.files?.[0] ?? null)} /></label>{identityBack ? <button type="button" className="text-button" onClick={() => setIdentityBack(null)}>{language === "en" ? "Remove and retake" : language === "fa-AF" ? "پاک‌کردن و عکس دوباره" : "لرې کول او بیا انځور"}</button> : null}</div></div><small>{language === "en" ? "Private evidence is retained only under the organization’s approved identity-document policy. Access is logged." : language === "fa-AF" ? "سند خصوصی تنها مطابق پالیسی تأییدشده نگهداری می‌شود و هر دسترسی ثبت می‌گردد." : "شخصي سند یوازې د تایید شوې پالیسۍ له مخې ساتل کېږي او هر لاسرسی ثبتېږي."}</small></section>
             <label className="inline-check"><input type="checkbox" checked={identityConfirmed} onChange={(event) => setIdentityConfirmed(event.target.checked)} />{language === "en" ? "I matched the recipient to the transfer beneficiary." : language === "fa-AF" ? "هویت گیرنده را با مستفید حواله مطابقت دادم." : "ما د اخیستونکي هویت د حوالې له ګټه اخیستونکي سره برابر کړ."}</label>
-            <button className="primary-action full" type="button" disabled={transitionBusy === payoutMatch.reference_code || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2} onClick={() => void confirmPayout()}>{transitionBusy === payoutMatch.reference_code ? "…" : (language === "en" ? "Confirm payout" : language === "fa-AF" ? "دادن پول را تأیید کنید" : "ورکړه تایید کړئ")}</button>
+            <button className="primary-action full" type="button" disabled={transitionBusy === activePayoutMatch.reference_code || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2 || !identityFront || !identityBack} onClick={() => void confirmPayout()}>{transitionBusy === activePayoutMatch.reference_code ? "…" : (language === "en" ? `Pay ${formatFinancialAmount(activePayoutMatch.amount)} ${activePayoutMatch.currency_code} and create receipt` : language === "fa-AF" ? `پرداخت ${formatFinancialAmount(activePayoutMatch.amount)} ${activePayoutMatch.currency_code} و ساخت رسید` : `${formatFinancialAmount(activePayoutMatch.amount)} ${activePayoutMatch.currency_code} ورکړئ او رسید جوړ کړئ`)}</button>
           </> : null}
         </section>
       ) : hawalaMode === "send" || hawalaMode === "incoming" ? (
         <form className="financial-task-form" onSubmit={submit}>
           <h2>{hawalaMode === "send" ? (language === "en" ? "Send Hawala" : language === "fa-AF" ? "فرستادن حواله" : "حواله لېږل") : (language === "en" ? "Record incoming instruction" : language === "fa-AF" ? "ثبت حواله رسیده" : "رارسېدلې حواله ثبتول")}</h2>
-          <label>{language === "en" ? "Hawala partner" : language === "fa-AF" ? "همکار حواله" : "د حوالې همکار"}<select required value={createPartnerId} onChange={(event) => setCreatePartnerId(event.target.value)}><option value="">{language === "en" ? "Choose the canonical partner" : language === "fa-AF" ? "همکار اصلی را انتخاب کنید" : "اصلي همکار وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}</select></label>
+          <label>{language === "en" ? "Exact Hawala recipient" : language === "fa-AF" ? "گیرنده دقیق حواله" : "د حوالې کره اخیستونکی"}<select required value={createPartnerId} onChange={(event) => setCreatePartnerId(event.target.value)}><option value="">{language === "en" ? "Choose a verified partner and branch" : language === "fa-AF" ? "همکار و شعبه تأییدشده را انتخاب کنید" : "تایید شوی همکار او څانګه وټاکئ"}</option>{partners.map((partner) => <option key={partner.id} value={partner.id} disabled={!isHawalaEndpointReady(partner)}>{partner.name}{isHawalaEndpointReady(partner) ? ` · ${partner.endpoint_type === "internal_branch" ? (language === "en" ? "internal branch" : language === "fa-AF" ? "شعبه داخلی" : "داخلي څانګه") : (language === "en" ? "partner branch" : language === "fa-AF" ? "شعبه همکار" : "د همکار څانګه")}` : (language === "en" ? " · endpoint setup required" : language === "fa-AF" ? " · نیاز به تنظیم مقصد" : " · د مقصد تنظیم ته اړتیا")}</option>)}</select></label>
           <label>{language === "en" ? "Sender" : language === "fa-AF" ? "فرستنده" : "لېږونکی"}<input required value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder={language === "en" ? "Sender’s full name" : language === "fa-AF" ? "نام کامل فرستنده" : "د لېږونکي بشپړ نوم"} /></label>
           <label>{u("receiver")}<input required value={beneficiary} onChange={(event) => setBeneficiary(event.target.value)} placeholder={u("fullBeneficiaryName")} /></label>
           {hawalaMode === "incoming" ? <label>{language === "en" ? "Origin location" : language === "fa-AF" ? "محل مبدأ" : "د پیل ځای"}<input required value={origin} onChange={(event) => setOrigin(event.target.value)} placeholder={u("cityCountry")} /></label> : null}
@@ -7838,15 +8153,15 @@ function HawalaView({
               <h2 id="hawala-detail-title">{selectedTransfer.beneficiary_name}</h2>
               <p><bdi>{selectedTransfer.reference_code}</bdi></p>
             </div>
-            <button className="text-button" type="button" onClick={() => onRoute(`${workspaceRoot(organizationId)}/hawala`)}>
+            <button className="text-button" type="button" onClick={() => onRoute(`${workspaceRoot(organizationId)}/hawala/${selectedTransfer.direction === "incoming" ? "incoming" : "outgoing"}`)}>
               {language === "en" ? "All Hawalas" : language === "fa-AF" ? "همه حواله‌ها" : "ټولې حوالې"} →
             </button>
           </div>
           <dl className="hawala-detail-grid">
             <div><dt>{t("amount")}</dt><dd><bdi>{formatFinancialAmount(selectedTransfer.amount)} {selectedTransfer.currency_code}</bdi></dd></div>
             <div><dt>{t("fee")}</dt><dd><bdi>{formatFinancialAmount(selectedTransfer.fee)} {selectedTransfer.currency_code}</bdi></dd></div>
-            <div><dt>{language === "en" ? "Direction" : language === "fa-AF" ? "جهت" : "لوری"}</dt><dd>{selectedTransfer.direction ?? "legacy"}</dd></div>
-            <div><dt>{u("status")}</dt><dd><span className={`status-pill status-${selectedTransfer.status}`}>● {selectedTransfer.status}</span></dd></div>
+            <div><dt>{language === "en" ? "Direction" : language === "fa-AF" ? "جهت" : "لوری"}</dt><dd>{hawalaDirectionLabel(selectedTransfer.direction)}</dd></div>
+            <div><dt>{u("status")}</dt><dd><span className={`status-pill status-${selectedTransfer.status}`}>● {hawalaStatusLabel(selectedTransfer.status)}</span></dd></div>
             <div><dt>{language === "en" ? "Origin" : language === "fa-AF" ? "مبدأ" : "پیل"}</dt><dd>{selectedTransfer.origin_location || "—"}</dd></div>
             <div><dt>{t("destination")}</dt><dd>{selectedTransfer.destination_location}</dd></div>
             <div><dt>{language === "en" ? "Created" : language === "fa-AF" ? "زمان ثبت" : "د ثبت وخت"}</dt><dd><bdi>{new Date(selectedTransfer.created_at).toLocaleString(language)}</bdi></dd></div>
@@ -7855,37 +8170,41 @@ function HawalaView({
           <section className="hawala-timeline" aria-label={language === "en" ? "Hawala status timeline" : language === "fa-AF" ? "مسیر وضعیت حواله" : "د حوالې د حالت لړۍ"}>
             <h3>{language === "en" ? "Status timeline" : language === "fa-AF" ? "مسیر وضعیت" : "د حالت لړۍ"}</h3>
             <ol>
-              {selectedTimeline.map((statusItem, index) => <li className={index <= reachedTimelineIndex ? "complete" : "pending"} key={statusItem}><span aria-hidden="true">{index <= reachedTimelineIndex ? "✓" : index + 1}</span><strong>{statusItem}</strong></li>)}
+              {selectedTimeline.map((statusItem, index) => <li className={index <= reachedTimelineIndex ? "complete" : "pending"} key={statusItem}><span aria-hidden="true">{index <= reachedTimelineIndex ? "✓" : index + 1}</span><strong>{hawalaStatusLabel(statusItem)}</strong></li>)}
               {selectedTransfer.status === "cancelled" ? <li className="cancelled"><span aria-hidden="true">×</span><strong>{language === "en" ? "Cancelled" : language === "fa-AF" ? "لغوشده" : "لغوه شوې"}</strong></li> : null}
             </ol>
           </section>
+          {selectedTransfer.direction === "incoming" && selectedTransfer.status === "sent" ? <button className="primary-action" type="button" disabled={transitionBusy === selectedTransfer.id} onClick={() => void advanceHawala(selectedTransfer, "acknowledged")}>{language === "en" ? "Acknowledge at this branch" : language === "fa-AF" ? "تأیید رسیدن به این شعبه" : "دې څانګې ته رسېدل تایید کړئ"}</button> : null}
+          {selectedTransfer.direction === "incoming" && selectedTransfer.status === "acknowledged" ? <button className="primary-action" type="button" disabled={transitionBusy === selectedTransfer.id} onClick={() => void advanceHawala(selectedTransfer, "ready")}>{language === "en" ? "Mark ready for payout" : language === "fa-AF" ? "آماده‌کردن برای پرداخت" : "ورکړې ته چمتو کول"}</button> : null}
+          {selectedTransfer.direction === "incoming" && selectedTransfer.status === "ready" && hasCapability(capabilities, "hawala.payout") ? <button className="primary-action" type="button" onClick={() => onRoute(`${workspaceRoot(organizationId)}/hawala/payout/${selectedTransfer.id}`)}>{language === "en" ? "Verify identity and pay" : language === "fa-AF" ? "بررسی هویت و پرداخت" : "هویت تایید او ورکړه"}</button> : null}
         </article>
       ) : (
         <div className="calm-empty" role="status">{language === "en" ? "This Hawala is unavailable or outside your assigned scope." : language === "fa-AF" ? "این حواله موجود نیست یا بیرون از ساحه تعیین‌شده شما است." : "دا حواله نشته یا ستاسو له ټاکل شوې ساحې بهر ده."}</div>
       ) : null}
-      {hawalaMode === "overview" ? <div className="balance-list">
-        {transfers.length ? (
-          transfers.map((transfer) => (
-            <button type="button" className={`balance-row ${routeTransferId === transfer.id ? "deep-link-focus" : ""}`} id={`hawala-${transfer.id}`} key={transfer.id} onClick={() => onRoute(`${workspaceRoot(organizationId)}/hawala/${transfer.id}`)}>
+      {hawalaMode === "overview" ? <><section className="hawala-inbox-controls"><div className="hawala-inbox-tabs" role="tablist">{([['incoming', language === 'en' ? 'Incoming' : language === 'fa-AF' ? 'ورودی' : 'راتلونکې'],['outgoing', language === 'en' ? 'Outgoing' : language === 'fa-AF' ? 'خروجی' : 'تلونکې'],['payout', language === 'en' ? 'Needs payout' : language === 'fa-AF' ? 'آماده پرداخت' : 'ورکړې ته چمتو'],['completed', language === 'en' ? 'Completed' : language === 'fa-AF' ? 'تکمیل‌شده' : 'بشپړې'],['exceptions', language === 'en' ? 'Exceptions' : language === 'fa-AF' ? 'استثناها' : 'ستونزې']] as const).map(([value,label]) => <button type="button" role="tab" aria-selected={routeHawalaListTab === value} className={routeHawalaListTab === value ? 'active' : ''} key={value} onClick={() => { setHawalaListTab(value); if (incomingInboxRoute || incomingDetailRoute || outgoingDetailRoute) onRoute(`${workspaceRoot(organizationId)}/hawala`); }}>{label}</button>)}</div><div className="hawala-inbox-filters"><label><span className="sr-only">{language === 'en' ? 'Search' : language === 'fa-AF' ? 'جستجو' : 'لټون'}</span><input value={hawalaSearch} onChange={(event) => setHawalaSearch(event.target.value)} placeholder={language === 'en' ? 'Search name, partner, or Hawala number' : language === 'fa-AF' ? 'جستجوی نام، همکار یا شماره حواله' : 'نوم، همکار یا د حوالې شمېره ولټوئ'} /></label><label><span className="sr-only">{t('currency')}</span><select aria-label={t('currency')} value={hawalaCurrencyFilter} onChange={(event) => setHawalaCurrencyFilter(event.target.value)}><option value="">{language === 'en' ? 'All currencies' : language === 'fa-AF' ? 'همه اسعار' : 'ټول اسعار'}</option>{catalog.filter((item) => item.enabled).map((item) => <option key={item.code} value={item.code}>{item.code} · {currencyName(language, item)}</option>)}</select></label><label><span className="sr-only">{u('status')}</span><select aria-label={u('status')} value={hawalaStatusFilter} onChange={(event) => setHawalaStatusFilter(event.target.value)}><option value="">{language === 'en' ? 'All statuses' : language === 'fa-AF' ? 'همه حالت‌ها' : 'ټول حالتونه'}</option>{['draft','sent','acknowledged','ready','paid','cancelled','expired','review_required'].map((status) => <option key={status} value={status}>{hawalaStatusLabel(status)}</option>)}</select></label></div></section><div className="balance-list hawala-inbox-list">
+        {visibleHawalaTransfers.length ? (
+          visibleHawalaTransfers.map((transfer) => (
+            <button type="button" className={`balance-row ${routeTransferId === transfer.id ? "deep-link-focus" : ""}`} id={`hawala-${transfer.id}`} key={transfer.id} onClick={() => onRoute(`${workspaceRoot(organizationId)}/hawala/${transfer.direction === "incoming" ? "incoming" : "outgoing"}/${transfer.id}`)}>
               <span className="currency-badge usd">
-                {transfer.currency_code}
+                {transfer.direction === "incoming" ? "IN" : "OUT"}
               </span>
               <span className="balance-name">
                 <b>{transfer.beneficiary_name}</b>
                 <small>
-                  {transfer.reference_code} · {transfer.destination_location} · {transfer.direction ?? "legacy"}
+                  {transfer.reference_code} · {transfer.destination_location} · {hawalaDirectionLabel(transfer.direction)}
                 </small>
               </span>
-              <strong>{formatFinancialAmount(transfer.amount)}</strong>
+              <strong><bdi>{formatFinancialAmount(transfer.amount)} {transfer.currency_code}</bdi></strong>
               <span className="hawala-status-actions">
-                <small className={`status-pill status-${transfer.status}`}>● {transfer.status}{transfer.integrity_state === "review_required" ? " · review" : ""}</small>
+                <small className={`status-pill status-${transfer.status}`}>● {hawalaStatusLabel(transfer.status)}{transfer.integrity_state === "review_required" ? ` · ${hawalaStatusLabel("review_required")}` : ""}</small>
+                <b>{transfer.direction === "incoming" && transfer.status === "ready" ? (language === "en" ? "Review payout" : language === "fa-AF" ? "بررسی پرداخت" : "ورکړه کتل") : (language === "en" ? "Open" : language === "fa-AF" ? "بازکردن" : "پرانیستل")} →</b>
               </span>
             </button>
           ))
         ) : (
           <div className="empty-live">{u("noHawala")}</div>
         )}
-      </div> : null}
+      </div></> : null}
     </section>
   );
 }

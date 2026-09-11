@@ -9,6 +9,8 @@ export const inlineRatePublicationSchema = z.object({
   target_currency: z.string().length(3).toUpperCase(),
   buy_rate: decimalString.refine((value) => value !== '0', 'Rate must be greater than zero'),
   sell_rate: decimalString.refine((value) => value !== '0', 'Rate must be greater than zero'),
+  reason: z.string().trim().min(3).max(240).optional(),
+  publication_scope: z.enum(['transaction', 'rate_board']).optional(),
 })
 
 export type InlineRatePublication = z.infer<typeof inlineRatePublicationSchema>
@@ -40,6 +42,7 @@ export const fxTradeCommandSchema = z.object({
   approval_id: uuid.optional(),
   publish_rate: inlineRatePublicationSchema.optional(),
   publish_rates: z.array(inlineRatePublicationSchema).max(2).optional(),
+  transaction_rate_resolutions: z.array(inlineRatePublicationSchema).max(2).optional(),
 }).superRefine((command, context) => {
   if (command.sold_currency === command.bought_currency) context.addIssue({ code: 'custom', path: ['bought_currency'], message: 'Trade currencies must differ' })
   if (command.sold_amount === '0' || command.bought_amount === '0') context.addIssue({ code: 'custom', path: ['sold_amount'], message: 'Trade amounts must be greater than zero' })
@@ -86,6 +89,8 @@ export const hawalaPayoutCommandSchema = z.object({
   money_account_id: uuid,
   identity_confirmed: z.literal(true),
   recipient_identity_reference: z.string().trim().min(2).max(120),
+  identity_document_ids: z.array(uuid).length(2),
+  app_unlock_grant: z.string().min(24).max(256).optional(),
   client_command_id: z.string().trim().min(1).max(128),
   device_id: uuid.optional(),
   approval_id: uuid.optional(),

@@ -41,7 +41,10 @@ describe("calm premium capability contract", () => {
     expect(capabilityForFinancialRoute("/money-in/owner-investment")).toBe("owner.capital.post");
     expect(capabilityForFinancialRoute("/hawala/payout")).toBe("hawala.payout");
     expect(capabilityForFinancialRoute("/move/bank-withdrawal")).toBe("financial.post.money");
-    expect(financialRoute("inspection", "/money-in/receive")).toBe("/app/inspection/transactions/new/money-in/receive");
+    expect(financialRoute("inspection", "/money-in/receive")).toBe("/app/inspection/transactions/new/money/receive/customer");
+    expect(financialRoute("inspection", "/move/branch")).toBe("/app/inspection/transactions/new/money/move/branch");
+    expect(financialRoute("inspection", "/hawala/incoming")).toBe("/app/inspection/hawala/incoming");
+    expect(financialRouteSuffix("/app/inspection/transactions/new/money/pay/expense")).toBe("/money-out/expense");
     expect(financialRouteSuffix("/app/inspection/hawala/payout")).toBe("/hawala/payout");
   });
 

@@ -21,13 +21,13 @@ test.describe("accessibility acceptance", () => {
     page,
   }) => {
     await page.goto("/app/inspection/transactions/new?role=cashier");
-    for (const action of [/Currency Exchange/, /Money In/, /Money Out/, /Move Our Money/, /^Debt/, /^Hawala/]) {
+    for (const action of [/Exchange Currency/, /Receive Money/, /Pay Money/, /Move Our Money/, /^Debt/, /^Hawala/]) {
       const control = page.getByRole("button", { name: action }).first();
       await expect(control).toBeVisible();
       await control.focus();
       await expect(control).toBeFocused();
     }
-    await page.getByRole("button", { name: /Currency Exchange/ }).click();
+    await page.getByRole("button", { name: /Exchange Currency/ }).click();
     for (const action of [/Buy currency/, /Sell currency/]) {
       const control = page.getByRole("button", { name: action });
       await expect(control).toBeVisible();
@@ -40,7 +40,7 @@ test.describe("accessibility acceptance", () => {
     page,
   }) => {
     await page.goto("/app/inspection/transactions/new?role=owner");
-    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
+    await page.getByRole("button", { name: /^Exchange Currency/ }).click();
     await page.getByRole("button", { name: "Buy currency", exact: true }).click();
     const form = page.locator(".transaction-page-form");
     await expect(form).toBeVisible();
@@ -61,7 +61,7 @@ test.describe("accessibility acceptance", () => {
     page,
   }) => {
     await page.goto("/app/inspection/transactions/new?role=owner");
-    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
+    await page.getByRole("button", { name: /^Exchange Currency/ }).click();
     await page.getByRole("button", { name: "Buy currency", exact: true }).click();
     const results = await new AxeBuilder({ page })
       .include(".financial-task-form")

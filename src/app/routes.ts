@@ -32,7 +32,7 @@ export type LegacyFinancialRoute =
   | "/debts/settle"
   | "/hawala/settlement";
 
-export type FinancialDestination = FinancialRoute | "/debts" | "/hawala/partners";
+export type FinancialDestination = FinancialRoute | LegacyFinancialRoute | "/debts" | "/hawala/partners";
 type RecognizedFinancialRoute = FinancialRoute | LegacyFinancialRoute;
 
 export function workspaceRoot(organizationId: string | null): string {
@@ -45,9 +45,9 @@ export function workspaceSectionPath(organizationId: string | null, section: str
     Dashboard: `${root}/home`,
     Trade: `${root}/transactions/new`,
     "Transaction FX": `${root}/transactions/new/fx/buy`,
-    "Transaction Money In": `${root}/transactions/new/money-in/receive`,
-    "Transaction Money Out": `${root}/transactions/new/money-out/pay`,
-    "Transaction Move Money": `${root}/transactions/new/move/transfer`,
+    "Transaction Money In": `${root}/transactions/new/money/receive/customer`,
+    "Transaction Money Out": `${root}/transactions/new/money/pay/customer`,
+    "Transaction Move Money": `${root}/transactions/new/money/move/cashbox`,
     "Transaction Debt": `${root}/transactions/new/debt/receivable`,
     "Transaction Hawala": `${root}/transactions/new/hawala/send`,
     "Transaction Correction": `${root}/transactions/new/correction`,
@@ -76,6 +76,24 @@ export function workspaceSectionPath(organizationId: string | null, section: str
 
 export function financialRoute(organizationId: string | null, route: RecognizedFinancialRoute): string {
   const root = workspaceRoot(organizationId);
+  const canonicalPaths: Partial<Record<RecognizedFinancialRoute, string>> = {
+    "/money-in/receive": "/transactions/new/money/receive/customer",
+    "/money-in/customer": "/transactions/new/money/receive/customer",
+    "/money-in/debt-payment": "/transactions/new/money/receive/debt",
+    "/money-in/income": "/transactions/new/money/receive/income",
+    "/money-out/pay": "/transactions/new/money/pay/customer",
+    "/money-out/customer": "/transactions/new/money/pay/customer",
+    "/money-out/debt-payment": "/transactions/new/money/pay/debt",
+    "/money-out/expense": "/transactions/new/money/pay/expense",
+    "/move/transfer": "/transactions/new/money/move/cashbox",
+    "/move/cashbox": "/transactions/new/money/move/cashbox",
+    "/move/branch": "/transactions/new/money/move/branch",
+    "/move/bank": "/transactions/new/money/move/bank",
+    "/move/bank-deposit": "/transactions/new/money/move/bank?action=BANK_DEPOSIT",
+    "/move/bank-withdrawal": "/transactions/new/money/move/bank?action=BANK_WITHDRAWAL",
+    "/hawala/incoming": "/hawala/incoming",
+  };
+  if (canonicalPaths[route]) return `${root}${canonicalPaths[route]}`;
   if (route === "/hawala/payout" || route === "/debts/settle") return `${root}${route}`;
   return `${root}/transactions/new${route}`;
 }
@@ -84,6 +102,15 @@ const routePatterns: Array<{ pattern: string; route: RecognizedFinancialRoute }>
   { pattern: "/app/:organizationId/transactions/new/fx/buy", route: "/fx/buy" },
   { pattern: "/app/:organizationId/transactions/new/fx/sell", route: "/fx/sell" },
   { pattern: "/app/:organizationId/transactions/new/fx/exchange", route: "/fx/exchange" },
+  { pattern: "/app/:organizationId/transactions/new/money/receive/customer", route: "/money-in/receive" },
+  { pattern: "/app/:organizationId/transactions/new/money/receive/debt", route: "/money-in/debt-payment" },
+  { pattern: "/app/:organizationId/transactions/new/money/receive/income", route: "/money-in/income" },
+  { pattern: "/app/:organizationId/transactions/new/money/pay/customer", route: "/money-out/pay" },
+  { pattern: "/app/:organizationId/transactions/new/money/pay/debt", route: "/money-out/debt-payment" },
+  { pattern: "/app/:organizationId/transactions/new/money/pay/expense", route: "/money-out/expense" },
+  { pattern: "/app/:organizationId/transactions/new/money/move/cashbox", route: "/move/transfer" },
+  { pattern: "/app/:organizationId/transactions/new/money/move/branch", route: "/move/branch" },
+  { pattern: "/app/:organizationId/transactions/new/money/move/bank", route: "/move/bank" },
   { pattern: "/app/:organizationId/transactions/new/money-in/receive", route: "/money-in/receive" },
   { pattern: "/app/:organizationId/transactions/new/money-in/income", route: "/money-in/income" },
   { pattern: "/app/:organizationId/transactions/new/money-in/owner-investment", route: "/money-in/owner-investment" },
@@ -97,6 +124,7 @@ const routePatterns: Array<{ pattern: string; route: RecognizedFinancialRoute }>
   { pattern: "/app/:organizationId/transactions/new/debt/payable", route: "/debt/payable" },
   { pattern: "/app/:organizationId/transactions/new/hawala/send", route: "/hawala/send" },
   { pattern: "/app/:organizationId/transactions/new/hawala/incoming", route: "/hawala/incoming" },
+  { pattern: "/app/:organizationId/hawala/incoming", route: "/hawala/incoming" },
   { pattern: "/app/:organizationId/hawala/payout", route: "/hawala/payout" },
   { pattern: "/app/:organizationId/transactions/new/money-in/customer", route: "/money-in/customer" },
   { pattern: "/app/:organizationId/transactions/new/money-in/debt-payment", route: "/money-in/debt-payment" },

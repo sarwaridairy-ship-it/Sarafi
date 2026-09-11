@@ -32,6 +32,16 @@ const allowedLatinWords = new Set([
   "PDF",
   "WhatsApp",
   "AI",
+  "Ahmad",
+  "Rahimi",
+  "Farid",
+  "Sediq",
+  "Rahmani",
+  "Laila",
+  "Azizi",
+  "Herat",
+  "Main",
+  "INCOMING",
 ]);
 
 async function visibleLatinWords(page: Page) {
@@ -57,7 +67,7 @@ const locales = [
     languageLabel: "Change language",
     home: "خانه",
     moneyNav: "پول من",
-    moneyHeading: "صندوق‌ها",
+    moneyHeading: "پول من",
     peopleNav: "مشتریان، طلب و قرض",
     peopleHeading: "مشتریان و صرافان",
     transactionsNav: "معاملات",
@@ -85,7 +95,7 @@ const locales = [
     languageLabel: "Change language",
     home: "کور",
     moneyNav: "زما پیسې",
-    moneyHeading: "صندوقونه",
+    moneyHeading: "زما پیسې",
     peopleNav: "پېرودونکي او پورونه",
     peopleHeading: "پېرودونکي او صرافان",
     transactionsNav: "معاملې",
@@ -220,7 +230,7 @@ for (const locale of [
   {
     code: "fa-AF",
     money: "پول من",
-    cashboxes: "صندوق‌ها",
+    cashboxes: "موجودی صندوق‌ها",
     currenciesTab: "اسعار",
     currencies: "اسعار مورد استفاده صرافی",
     search: "جستجوی اسعار",
@@ -228,7 +238,7 @@ for (const locale of [
   {
     code: "ps-AF",
     money: "زما پیسې",
-    cashboxes: "صندوقونه",
+    cashboxes: "د صندوقونو پیسې",
     currenciesTab: "اسعار",
     currencies: "د صرافۍ کارېدونکي اسعار",
     search: "اسعار ولټوئ",
@@ -241,6 +251,7 @@ for (const locale of [
       .getByRole("combobox", { name: "Change language" })
       .selectOption(locale.code);
     await page.goto("/app/inspection/money");
+    await expect(page.getByRole("heading", { name: locale.money, exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: locale.cashboxes, exact: true })).toBeVisible();
     await expect(page.locator(".account-card")).toHaveCount(1);
     await expectNoEnglishLeak(page, `${locale.code} money controls`);

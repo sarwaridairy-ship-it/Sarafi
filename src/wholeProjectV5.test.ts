@@ -28,6 +28,8 @@ const ids = {
   partner: "33333333-3333-4333-8333-333333333333",
   account: "44444444-4444-4444-8444-444444444444",
   line: "55555555-5555-4555-8555-555555555555",
+  front: "66666666-6666-4666-8666-666666666666",
+  back: "77777777-7777-4777-8777-777777777777",
 };
 
 describe("whole-project v5 command validation", () => {
@@ -57,6 +59,7 @@ describe("whole-project v5 command validation", () => {
       money_account_id: ids.account,
       identity_confirmed: true,
       recipient_identity_reference: "Tazkira · 1234",
+      identity_document_ids: [ids.front, ids.back],
       client_command_id: "cmd-2",
     }).reference_code).toBe("INCOMING-1001");
     expect(() => parseHawalaPayoutCommand({
@@ -65,6 +68,7 @@ describe("whole-project v5 command validation", () => {
       money_account_id: ids.account,
       identity_confirmed: false,
       recipient_identity_reference: "Tazkira · 1234",
+      identity_document_ids: [ids.front, ids.back],
       client_command_id: "cmd-2",
     })).toThrow();
     expect(parseHawalaSettlementCommand({

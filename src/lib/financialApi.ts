@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabase'
+import { getActiveAppUnlockGrant } from './appLock'
 import { releaseVersion } from './telemetry'
 import {
   parseDebtCreateCommand,
@@ -10,7 +11,7 @@ import {
   parseHawalaSettlementCommand,
   type FxTradeCommand,
 } from '../domain/commands'
-import { validateDocumentFile, type DocumentType } from './integrations'
+import { sanitizeIdentityImage, validateDocumentFile, type DocumentType } from './integrations'
 
 export type RpcResult<T> = { data: T | null; error: string | null }
 
@@ -39,9 +40,9 @@ export async function recordClientError(input: {
 export type DashboardSnapshot = { role_code?: string; profit_hidden?: boolean; transaction_count: number; buy_count: number; sell_count: number; exchange_count: number; volume_base: string; realized_profit: string; commission_income: string; expenses: string; net_result: string; net_position_base: string; reconciliation_differences: string; pending_approvals: number; fresh_at: string; positions: Array<{ currency: string; quantity: string; carrying_base_value: string }>; locations: Array<{ location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string; currency: string; quantity: string }>; receivables: Array<{ currency: string; amount: string }>; payables: Array<{ currency: string; amount: string }>; activity: Array<{ id: string; reference: string; type: string; occurred_at: string; status: string }> }
 export type DebtRecord = { id: string; branch_id?: string; counterparty_id: string; counterparty_name?: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null; created_at?: string }
 export type CounterpartyRecord = { id: string; customer_number?: number; customer_reference?: string; branch_id?: string | null; display_name: string; counterparty_type: string; risk_status: string; phone?: string | null; notes?: string | null }
-export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string; direction?: 'incoming' | 'outgoing'; workflow_type?: string; hawala_partner_id?: string | null; integrity_state?: 'valid' | 'review_required'; journal_entry_id?: string | null; payout_journal_entry_id?: string | null; payout_receipt_id?: string | null }
-export type HawalaPartnerRecord = { id: string; counterparty_id: string | null; name: string; active: boolean }
-export type HawalaPayoutMatch = { reference_code: string; beneficiary_name: string; destination_location: string; currency_code: string; amount: string; branch_id: string; hawala_partner_id: string }
+export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string; direction?: 'incoming' | 'outgoing'; workflow_type?: string; hawala_partner_id?: string | null; integrity_state?: 'valid' | 'review_required'; journal_entry_id?: string | null; payout_journal_entry_id?: string | null; payout_receipt_id?: string | null; sender_organization_id?: string | null; sender_branch_id?: string | null; recipient_type?: 'internal_branch' | 'external_partner' | null; recipient_organization_id?: string | null; recipient_partner_id?: string | null; recipient_branch_id?: string | null; expires_at?: string | null }
+export type HawalaPartnerRecord = { id: string; counterparty_id: string | null; name: string; active: boolean; endpoint_type?: 'internal_branch' | 'external_partner' | null; recipient_organization_id?: string | null; recipient_branch_id?: string | null; reciprocal_partner_id?: string | null; endpoint_verified_at?: string | null; endpoint_active?: boolean }
+export type HawalaPayoutMatch = { transfer_id: string; reference_code: string; beneficiary_name: string; destination_location: string; currency_code: string; amount: string; branch_id: string; hawala_partner_id: string }
 export type HawalaPartnerStatement = { partner_id: string; totals: Array<{ currency_code: string; payable: string; receivable: string; net_receivable: string }>; lines: Array<{ id: string; transfer_id: string; branch_id?: string; reference_code: string; beneficiary_name: string; direction: 'payable' | 'receivable'; currency_code: string; original_amount: string; settled_amount: string; remaining_amount: string; status: string; created_at: string }> }
 export type JournalRecord = { id: string; transaction_number?: number; transaction_reference?: string; customer_number?: number; customer_reference?: string; receipt_number?: string | null; customer_rate?: string | null; fee_amount?: string | null; fee_currency?: string | null; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null; counterparty_name?: string | null; employee_name?: string | null; given_amount?: string | null; given_currency?: string | null; received_amount?: string | null; received_currency?: string | null }
 export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string }
@@ -51,6 +52,49 @@ export type RateHistoryRecord = { id: string; from_currency: string; to_currency
 export type OperationRateContext = { rate_id?: string; rate_group_id?: string; context_id?: string; from_currency: string; to_currency: string; buy_rate?: string; sell_rate?: string; spread_tolerance?: string; tolerance_bps?: string; effective_from?: string; expires_at?: string; age_seconds?: number; max_age_minutes?: number; branch_id?: string | null; source?: string; stale: boolean; missing: boolean; approval_required?: boolean }
 export type CurrencyCatalogRecord = { code: string; name_en: string; name_dari: string; name_pashto: string; symbol: string; minor_unit: number; enabled: boolean; display_order?: number }
 export type MoneyAccountRecord = { id: string; name: string; account_type: 'cashbox' | 'safe' | 'bank' | 'mobile_money' | 'partner' | 'other'; branch_id: string | null; cashbox_id: string | null; reference_label: string | null; active: boolean; balances: Array<{ currency: string; amount: string }> }
+export type MoneyValuationSnapshot = {
+  snapshot_id: string
+  snapshot_sha256: string
+  snapshot_date: string
+  captured_at: string
+  base_currency: string
+  comparison_currency: string
+  valuation_rate_set_id: string | null
+  valuation_effective_at: string | null
+  quality: 'current' | 'partial'
+  excluded_currency_count: number
+  totals: {
+    available_base: string
+    receivables_base: string
+    payables_base: string
+    hawala_net_base: string
+    net_position_base: string
+    book_value_base: string
+    valuation_difference_base: string
+    comparison_value: string | null
+    comparison_rate: string | null
+  }
+  currencies: Array<{
+    currency_code: string
+    available: string
+    receivable: string
+    payable: string
+    hawala_net: string
+    native_net: string
+    rate: string | null
+    rate_status: 'current' | 'stale' | 'missing'
+    current_base: string | null
+    book_base: string
+  }>
+  locations: Array<{
+    money_account_id: string
+    name: string
+    account_type: MoneyAccountRecord['account_type']
+    branch_id: string | null
+    cashbox_id: string | null
+    balances: Array<{ currency_code: string; amount: string }>
+  }>
+}
 export type TeamScopeRecord = { id: string; name: string; branch_id?: string }
 export type TeamMemberRecord = { id: string; display_name: string; email: string; role_code: string; active: boolean; mfa_required: boolean; joined_at: string; is_current_user: boolean; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
 export type TeamInvitationRecord = { id: string; display_name: string; email: string; role_code: string; mfa_required: boolean; status: string; created_at: string; expires_at: string; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[] }
@@ -531,6 +575,21 @@ export async function listMoneyAccounts(organizationId: string): Promise<RpcResu
   return { data: result.data as MoneyAccountRecord[] | null, error: result.error?.message ?? null }
 }
 
+export async function getMoneyValuationSnapshot(input: { organizationId: string; businessDate?: string; comparisonCurrency?: string; branchId?: string | null; cashboxId?: string | null }): Promise<RpcResult<MoneyValuationSnapshot>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_money_valuation_snapshot', {
+    target_org: input.organizationId,
+    target_business_date: input.businessDate ?? new Date().toISOString().slice(0, 10),
+    target_comparison_currency: input.comparisonCurrency ?? 'USD',
+    target_scope: {
+      ...(input.branchId ? { branch_id: input.branchId } : {}),
+      ...(input.cashboxId ? { cashbox_id: input.cashboxId } : {}),
+    },
+  })
+  return { data: result.data as MoneyValuationSnapshot | null, error: result.error?.message ?? null }
+}
+
 export async function createMoneyAccount(input: { organizationId: string; name: string; accountType: Exclude<MoneyAccountRecord['account_type'], 'cashbox'>; branchId?: string | null; reference?: string }): Promise<RpcResult<MoneyAccountRecord>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
@@ -706,14 +765,14 @@ export async function recordHawalaSend(command: unknown): Promise<RpcResult<Hawa
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('record_hawala_send_v6', { command: parsed })
+  const result = await client.rpc('record_hawala_send_v7', { command: parsed })
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
-export async function listHawalaTransfers(organizationId: string): Promise<RpcResult<HawalaTransferRecord[]>> {
+export async function listHawalaTransfers(organizationId: string, branchId: string): Promise<RpcResult<HawalaTransferRecord[]>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.rpc('list_hawala_transfers_v6', { target_org: organizationId })
+  const result = await client.rpc('list_hawala_transfers_v7', { target_org: organizationId, target_branch: branchId })
   return { data: result.data as HawalaTransferRecord[] | null, error: result.error?.message ?? null }
 }
 
@@ -752,7 +811,7 @@ export async function transitionHawalaStatus(command: Record<string, unknown>): 
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('transition_hawala_status', { command })
+  const result = await client.rpc('transition_hawala_status_v7', { command })
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
@@ -762,12 +821,13 @@ export async function recordHawalaIncoming(command: unknown): Promise<RpcResult<
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
   if (!session.data.session) return { data: null, error: 'Authentication required' }
-  const result = await client.rpc('record_hawala_incoming', { command: parsed })
+  const result = await client.rpc('record_hawala_incoming_v7', { command: parsed })
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
 export async function payHawalaBeneficiary(command: unknown): Promise<RpcResult<HawalaTransferRecord>> {
-  const parsed = parseHawalaPayoutCommand(command)
+  const input = command as Record<string, unknown>
+  const parsed = parseHawalaPayoutCommand({ ...input, app_unlock_grant: getActiveAppUnlockGrant(String(input.organization_id ?? ''), String(input.device_id ?? '')) })
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const session = await client.auth.getSession()
@@ -1123,4 +1183,24 @@ export async function getPrivateDocumentUrl(organizationId: string, documentId: 
   const signedUrl = (result.data as { signedUrl?: string } | null)?.signedUrl
   if (result.error || !signedUrl) return { data: null, error: result.error?.message ?? 'Document access denied' }
   return { data: signedUrl, error: null }
+}
+
+export async function uploadPrivateHawalaIdentityDocument(organizationId: string, transferId: string, side: 'tazkira_front' | 'tazkira_back', file: File): Promise<RpcResult<PrivateDocumentRecord>> {
+  const sanitized = await sanitizeIdentityImage(file)
+  if (!sanitized.file) return { data: null, error: sanitized.error ?? 'Image could not be processed safely' }
+  const safeFile = sanitized.file
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const documentId = crypto.randomUUID()
+  const digest = await crypto.subtle.digest('SHA-256', await safeFile.arrayBuffer())
+  const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  const storagePath = `${organizationId}/${transferId}/${documentId}.jpg`
+  const upload = await client.storage.from('sarafi-private-documents').upload(storagePath, safeFile, { contentType: safeFile.type, upsert: false })
+  if (upload.error) return { data: null, error: upload.error.message }
+  const inserted = await client.from('attachments').insert({ id: documentId, organization_id: organizationId, entity_type: `hawala:${side}`, entity_id: transferId, storage_path: storagePath, content_type: safeFile.type, size_bytes: safeFile.size, sha256, uploaded_by: session.data.session.user.id }).select('id,organization_id,entity_id,entity_type,storage_path,content_type,size_bytes,sha256,uploaded_by,created_at').single()
+  if (inserted.error) { await client.storage.from('sarafi-private-documents').remove([storagePath]); return { data: null, error: inserted.error.message } }
+  await client.rpc('record_sensitive_document_access', { target_org: organizationId, target_entity: documentId, action: 'upload' })
+  return { data: inserted.data as PrivateDocumentRecord, error: null }
 }

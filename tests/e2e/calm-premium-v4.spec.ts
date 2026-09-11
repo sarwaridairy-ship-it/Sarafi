@@ -10,9 +10,9 @@ test.describe("calm premium v4 objective acceptance", () => {
     const families = page.locator(".transaction-family-grid > button");
     await expect(families).toHaveCount(6);
     await expect(families).toHaveText([
-      /Currency Exchange/,
-      /Money In/,
-      /Money Out/,
+      /Exchange Currency/,
+      /Receive Money/,
+      /Pay Money/,
       /Move Our Money/,
       /^Debt/,
       /^Hawala/,
@@ -20,13 +20,13 @@ test.describe("calm premium v4 objective acceptance", () => {
     expect(await page.locator(".quick-actions button").count()).toBeLessThanOrEqual(4);
 
     const journeys = [
-      ["Currency Exchange", "Buy currency", "/transactions/new/fx/buy"],
-      ["Money In", "From a customer", "/transactions/new/money-in/receive"],
-      ["Money Out", "To a customer", "/transactions/new/money-out/pay"],
-      ["Move Our Money", "Between cashboxes", "/transactions/new/move/transfer"],
+      ["Exchange Currency", "Buy currency", "/transactions/new/fx/buy"],
+      ["Receive Money", "From a customer", "/transactions/new/money/receive/customer"],
+      ["Pay Money", "To a customer", "/transactions/new/money/pay/customer"],
+      ["Move Our Money", "Between cashboxes", "/transactions/new/money/move/cashbox"],
       ["Debt", "They owe us", "/transactions/new/debt/receivable"],
       ["Debt", "Settle a debt", "/debts"],
-      ["Hawala", "Pay beneficiary", "/hawala/payout"],
+      ["Hawala", "Hawala Inbox", "/hawala/incoming"],
     ] as const;
     for (const [family, action, route] of journeys) {
       await page.goto(`${workspace}/transactions/new?role=owner`);
@@ -46,7 +46,7 @@ test.describe("calm premium v4 objective acceptance", () => {
       expect(await page.locator(".calm-attention .calm-list button").count()).toBeLessThanOrEqual(5);
       expect(await page.locator(".calm-recent .calm-activity-list article").count()).toBeLessThanOrEqual(5);
       await expect(page.locator(".calm-home table, .calm-home .export-button, .calm-home .rate-strip")).toHaveCount(0);
-      await expect(page.locator(".mobile-nav > *")).toHaveCount(["owner", "business_admin", "manager"].includes(role) ? 6 : 5);
+      await expect(page.locator(".mobile-nav > *")).toHaveCount(5);
       if (role === "accountant") await expect(page.locator(".calm-primary")).toContainText("daily summary");
     });
   }
@@ -56,7 +56,10 @@ test.describe("calm premium v4 objective acceptance", () => {
     const form = page.locator(".financial-task-form");
     await expect(form).toBeVisible();
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
-    await form.getByRole("textbox", { name: "Transaction rate" }).fill("70.50");
+    await expect(form.locator(".compact-rate-row")).toBeVisible();
+    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.25");
+    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveAttribute("readonly", "");
+    await expect(form).not.toContainText("Rate for this transaction");
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
   });
 
@@ -69,7 +72,7 @@ test.describe("calm premium v4 objective acceptance", () => {
     await buyForm.getByRole("button", { name: "Edit transaction" }).click();
 
     await page.locator(".sidebar nav").getByRole("button", { name: "Make a Transaction", exact: true }).click();
-    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
+    await page.getByRole("button", { name: /^Exchange Currency/ }).click();
     await page.getByRole("button", { name: "Sell currency", exact: true }).click();
 
     await expect(page).toHaveURL(/\/transactions\/new\/fx\/sell$/);
@@ -106,8 +109,8 @@ test.describe("calm premium v4 objective acceptance", () => {
 
   test("Business Administrator receives operations but never owner-capital actions", async ({ page }) => {
     await page.goto(`${workspace}/transactions/new?role=business_admin`);
-    await expect(page.getByRole("button", { name: /^Currency Exchange/ })).toBeVisible();
-    await page.getByRole("button", { name: /^Money In/ }).click();
+    await expect(page.getByRole("button", { name: /^Exchange Currency/ })).toBeVisible();
+    await page.getByRole("button", { name: /^Receive Money/ }).click();
     await expect(page.getByRole("button", { name: /Owner capital/i })).toHaveCount(0);
     await page.goto(`${workspace}/transactions/new/money-in/owner-investment?role=business_admin`);
     await expect(page.getByRole("heading", { name: "Access not allowed" })).toBeVisible();
@@ -147,7 +150,7 @@ test.describe("calm premium v4 objective acceptance", () => {
       await page.goto(`${workspace}/home?role=owner`);
       const primary = page.locator(".calm-primary");
       const mobileNav = page.locator(".mobile-nav");
-      await expect(mobileNav.locator(":scope > *")).toHaveCount(6);
+      await expect(mobileNav.locator(":scope > *")).toHaveCount(5);
       const primaryBox = await primary.boundingBox();
       const navBox = await mobileNav.boundingBox();
       expect(primaryBox).not.toBeNull();
@@ -163,8 +166,8 @@ test.describe("calm premium v4 objective acceptance", () => {
       await page.setViewportSize({ width, height: 900 });
       for (const [path, selector] of [
         ["/transactions/new/fx/buy?role=owner", ".exchange-entry-row"],
-        ["/transactions/new/money-in/receive?role=owner", ".operation-entry-form"],
-        ["/transactions/new/money-out/expense?role=owner", ".operation-entry-form"],
+        ["/transactions/new/money/receive/customer?role=owner", ".operation-entry-form"],
+        ["/transactions/new/money/pay/expense?role=owner", ".operation-entry-form"],
         ["/money?role=owner", ".cashbox-only-panel"],
         ["/control/rates?role=owner", ".market-rate-table"],
         ["/control/business?role=owner", ".currency-settings-list"],
@@ -184,7 +187,7 @@ test.describe("calm premium v4 objective acceptance", () => {
 
   test("captures the required desktop and mobile visual evidence", async ({ page, browserName }) => {
     test.skip(browserName !== "chromium", "One deterministic browser produces the audit screenshots");
-    const output = path.join(process.cwd(), "artifacts", "calm-premium-v4", "screenshots");
+    const output = path.join(process.cwd(), "artifacts", "whole-project-v7", "e2e-screenshots");
     await mkdir(output, { recursive: true });
     for (const [language, label] of [["en", "en"], ["fa-AF", "dari"], ["ps-AF", "pashto"]] as const) {
       await page.addInitScript((value) => localStorage.setItem("sarafi-language", value), language);

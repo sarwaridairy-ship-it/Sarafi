@@ -48,12 +48,15 @@ describe("whole-web v6 acceptance contracts", () => {
     expect((transactionCenter.match(/id: "(fx|money-in|money-out|move|debt|hawala)"/g) ?? [])).toHaveLength(6);
     expect(transactionCenter).not.toContain("quickActions");
     for (const route of [
-      "/money-in/receive",
+      "/money-in/customer",
+      "/money-in/debt-payment",
       "/money-in/owner-investment",
-      "/money-out/pay",
-      "/move/bank-deposit",
-      "/move/bank-withdrawal",
-      "/hawala/payout",
+      "/money-out/customer",
+      "/money-out/debt-payment",
+      "/move/cashbox",
+      "/move/branch",
+      "/move/bank",
+      "/hawala/incoming",
     ]) expect(transactionCenter).toContain(route);
   });
 
@@ -195,7 +198,7 @@ describe("whole-web v6 acceptance contracts", () => {
     }
     expect(financialApi).toContain("client.rpc('search_counterparties_v7'");
     expect(financialApi).toContain("client.rpc('get_counterparty_statement_v6'");
-    expect(financialApi).toContain("client.rpc('list_hawala_transfers_v6'");
+    expect(financialApi).toMatch(/client\.rpc\('list_hawala_transfers_v[67]'/);
     expect(migration).toContain("revoke select on table");
   });
 
@@ -210,7 +213,7 @@ describe("whole-web v6 acceptance contracts", () => {
   });
 
   it("issues outgoing Hawala references on the server and records purpose-specific events", () => {
-    expect(financialApi).toContain("client.rpc('record_hawala_send_v6'");
+    expect(financialApi).toMatch(/client\.rpc\('record_hawala_send_v[67]'/);
     expect(hawalaMigration).toContain("reference_source', 'server'");
     for (const eventType of ["hawala_outgoing_funded", "hawala_incoming_recorded", "hawala_beneficiary_paid", "hawala_partner_paid", "hawala_partner_collected"]) {
       expect(hawalaEventTypes).toContain(eventType);

@@ -25,7 +25,7 @@ test.describe("Stage 9 browser matrix", () => {
     await expect(
       page.getByRole("navigation", { name: "Workspace" }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /Make a Transaction/ })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: /Make a Transaction/ })).toBeVisible();
   });
 
   for (const viewport of [
@@ -93,13 +93,14 @@ test.describe("Stage 9 browser matrix", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
     await expect(page.getByRole("button", { name: "More", exact: true })).toHaveCount(0);
-    await expect(page.locator(".mobile-nav button")).toHaveCount(6);
+    await expect(page.locator(".mobile-nav button")).toHaveCount(5);
   });
 
   test("tablet view fits without horizontal overflow", async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto("/");
-    await expect(page.locator(".sidebar")).toBeVisible();
+    await expect(page.locator(".sidebar")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /Open navigation/i })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,

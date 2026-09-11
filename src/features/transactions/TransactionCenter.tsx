@@ -12,7 +12,7 @@ type Family = { id: FamilyId; label: Localized; intro: Localized; icon: AppIconN
 const families: Family[] = [
   {
     id: "fx",
-    label: { en: "Currency Exchange", "fa-AF": "خرید و فروش اسعار", "ps-AF": "د اسعارو تبادله" },
+    label: { en: "Exchange Currency", "fa-AF": "خرید و فروش اسعار", "ps-AF": "د اسعارو پېر او پلور" },
     intro: { en: "Buy or sell any two currencies.", "fa-AF": "هر دو اسعار را بخرید یا بفروشید.", "ps-AF": "هر دوه اسعار وپېرئ یا وپلورئ." },
     icon: "trade",
     actions: [
@@ -22,24 +22,24 @@ const families: Family[] = [
   },
   {
     id: "money-in",
-    label: { en: "Money In", "fa-AF": "پول می‌گیریم", "ps-AF": "د پیسو داخل" },
+    label: { en: "Receive Money", "fa-AF": "پول می‌گیریم", "ps-AF": "پیسې اخلو" },
     intro: { en: "Why is money coming in?", "fa-AF": "پول را از کجا می‌گیریم؟", "ps-AF": "پیسې ولې راځي؟" },
     icon: "receive",
     actions: [
-      { label: { en: "From a customer", "fa-AF": "از مشتری پول می‌گیریم", "ps-AF": "له پېرېدونکي" }, route: "/money-in/receive", capability: "financial.post.money" },
-      { label: { en: "Debt payment", "fa-AF": "پول طلب را می‌گیریم", "ps-AF": "د طلب ورکړه" }, route: "/debts", capability: "debt.settle.receivable" },
+      { label: { en: "From a customer", "fa-AF": "از مشتری پول می‌گیریم", "ps-AF": "له پېرېدونکي" }, route: "/money-in/customer", capability: "financial.post.money" },
+      { label: { en: "Debt payment", "fa-AF": "پول طلب را می‌گیریم", "ps-AF": "د طلب ورکړه" }, route: "/money-in/debt-payment", capability: "debt.settle.receivable" },
       { label: { en: "Business income", "fa-AF": "عاید صرافی", "ps-AF": "د صرافۍ عاید" }, route: "/money-in/income", capability: "financial.post.money" },
       { label: { en: "Owner capital", "fa-AF": "سرمایه مالک", "ps-AF": "د مالک پانګه" }, route: "/money-in/owner-investment", capability: "owner.capital.post" },
     ],
   },
   {
     id: "money-out",
-    label: { en: "Money Out", "fa-AF": "پول می‌دهیم", "ps-AF": "د پیسو وتل" },
+    label: { en: "Pay Money", "fa-AF": "پول می‌دهیم", "ps-AF": "پیسې ورکوو" },
     intro: { en: "Why is money going out?", "fa-AF": "پول را به کی می‌دهیم؟", "ps-AF": "پیسې ولې وځي؟" },
     icon: "pay",
     actions: [
-      { label: { en: "To a customer", "fa-AF": "به مشتری پول می‌دهیم", "ps-AF": "پېرېدونکي ته" }, route: "/money-out/pay", capability: "financial.post.money" },
-      { label: { en: "Debt payment", "fa-AF": "پول قرض را می‌دهیم", "ps-AF": "د پور ورکړه" }, route: "/debts", capability: "debt.settle.payable" },
+      { label: { en: "To a customer", "fa-AF": "به مشتری پول می‌دهیم", "ps-AF": "پېرېدونکي ته" }, route: "/money-out/customer", capability: "financial.post.money" },
+      { label: { en: "Debt payment", "fa-AF": "پول قرض را می‌دهیم", "ps-AF": "د پور ورکړه" }, route: "/money-out/debt-payment", capability: "debt.settle.payable" },
       { label: { en: "Business expense", "fa-AF": "مصرف صرافی", "ps-AF": "د صرافۍ لګښت" }, route: "/money-out/expense", capability: "financial.post.money" },
       { label: { en: "Owner withdrawal", "fa-AF": "برداشت مالک", "ps-AF": "د مالک ایستل" }, route: "/money-out/owner-withdrawal", capability: "owner.capital.post" },
     ],
@@ -50,9 +50,9 @@ const families: Family[] = [
     intro: { en: "Move money without changing profit.", "fa-AF": "پول را بدون تغییر مفاد انتقال دهید.", "ps-AF": "پیسې بې له دې چې ګټه بدله شي ولېږدوئ." },
     icon: "transfer",
     actions: [
-      { label: { en: "Between cashboxes", "fa-AF": "بین صندوق‌ها", "ps-AF": "د صندوقونو ترمنځ" }, route: "/move/transfer", capability: "financial.post.money" },
-      { label: { en: "Deposit to bank", "fa-AF": "گذاشتن پول در بانک", "ps-AF": "بانک ته جمع" }, route: "/move/bank-deposit", capability: "financial.post.money" },
-      { label: { en: "Withdraw from bank", "fa-AF": "برداشت از بانک", "ps-AF": "له بانک څخه ایستل" }, route: "/move/bank-withdrawal", capability: "financial.post.money" },
+      { label: { en: "Between cashboxes", "fa-AF": "بین صندوق‌ها", "ps-AF": "د صندوقونو ترمنځ" }, route: "/move/cashbox", capability: "financial.post.money" },
+      { label: { en: "Between branches", "fa-AF": "بین شعبه‌ها", "ps-AF": "د څانګو ترمنځ" }, route: "/move/branch", capability: "financial.post.money" },
+      { label: { en: "Bank account", "fa-AF": "حساب بانکی", "ps-AF": "بانکي حساب" }, route: "/move/bank", capability: "financial.post.money" },
     ],
   },
   {
@@ -73,8 +73,7 @@ const families: Family[] = [
     icon: "hawala",
     actions: [
       { label: { en: "Send Hawala", "fa-AF": "فرستادن حواله", "ps-AF": "حواله لېږل" }, route: "/hawala/send", capability: "hawala.send" },
-      { label: { en: "Incoming instruction", "fa-AF": "حواله رسیده", "ps-AF": "رارسېدلې حواله" }, route: "/hawala/incoming", capability: "hawala.incoming" },
-      { label: { en: "Pay beneficiary", "fa-AF": "دادن پول به گیرنده", "ps-AF": "ګټه‌اخیستونکي ته ورکول" }, route: "/hawala/payout", capability: "hawala.payout" },
+      { label: { en: "Hawala Inbox", "fa-AF": "صندوق حواله‌ها", "ps-AF": "د حوالو صندوق" }, route: "/hawala/incoming", capability: "hawala.incoming" },
       { label: { en: "Settle partner", "fa-AF": "تصفیه همکار", "ps-AF": "له همکار سره تصفیه" }, route: "/hawala/partners", capability: "hawala.settle" },
     ],
   },
