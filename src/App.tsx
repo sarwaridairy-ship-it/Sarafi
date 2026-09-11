@@ -1043,11 +1043,32 @@ function App() {
     });
   }, [counterpartyRefresh, language, organizationId]);
 
-  const enabledCurrencies = currencyCatalog.filter((item) => item.enabled);
-  const enabledCurrencyCodes = enabledCurrencies.length
-    ? enabledCurrencies.map((item) => item.code)
-    : ["AFN", "USD", "EUR"];
+  const enabledCurrencies = useMemo(
+    () => currencyCatalog.filter((item) => item.enabled),
+    [currencyCatalog],
+  );
+  const enabledCurrencyCodes = useMemo(
+    () => enabledCurrencies.length
+      ? enabledCurrencies.map((item) => item.code)
+      : ["AFN", "USD", "EUR"],
+    [enabledCurrencies],
+  );
   const tradeCurrencies = enabledCurrencyCodes;
+  useEffect(() => {
+    if (tradeCurrencies.length < 2) return;
+    const nextPrimary = tradeCurrencies.includes(tradeCurrency)
+      ? tradeCurrency
+      : tradeCurrencies.find((currency) => currency !== "AFN") ?? tradeCurrencies[0];
+    if (nextPrimary !== tradeCurrency) {
+      // oxlint-disable-next-line react/set-state-in-effect -- The server-managed currency catalog is the source of truth for valid trade pairs.
+      setTradeCurrency(nextPrimary);
+      return;
+    }
+    if (!tradeCurrencies.includes(tradeReceiveCurrency) || tradeReceiveCurrency === nextPrimary) {
+      // oxlint-disable-next-line react/set-state-in-effect -- Keep both trade legs distinct after the enabled-currency catalog changes.
+      setTradeReceiveCurrency(tradeCurrencies.find((currency) => currency !== nextPrimary) ?? "");
+    }
+  }, [tradeCurrencies, tradeCurrency, tradeReceiveCurrency]);
   const currencyOptionLabel = (code: string) => {
     const item = currencyCatalog.find((currency) => currency.code === code);
     return item ? `${item.code} · ${item.name_dari} · ${item.symbol}` : code;
