@@ -39,7 +39,7 @@ Security design denials are encoded in v7 SQL and static contract tests: transac
 - Deployed source SHA metadata: `89149616e807588b85b5d1cfe40d876eb54d6de7`.
 - Vercel remote build: successful.
 
-The preview is protected by Vercel authentication. An unauthenticated remote Playwright smoke reached the Vercel login page rather than SARAFI, so no remote application smoke result is claimed. Local application browser evidence remains the accepted UI evidence. Production was not promoted.
+The preview is protected by Vercel authentication. After the owner granted access, a remote browser smoke reached the deployed SARAFI application. The business sign-in and separate platform-administrator sign-in gates rendered correctly at a 639 px viewport, the document had no horizontal overflow, and the browser console reported no warnings or errors. No SARAFI account credentials were entered, so authenticated workspace behavior is not claimed by this smoke. Local inspection-mode browser evidence remains the workspace UI evidence. Production was not promoted.
 
 ## Production decision
 
