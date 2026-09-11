@@ -25,8 +25,10 @@ The migration is additive or uses forward replacement of server functions. It do
 ## Verification state
 
 - Linked project: `vbvwuqzqtcorassvotke`.
-- `supabase db push --linked --dry-run --include-all`: successful; v7 is the only pending migration at the recorded check.
-- No v7 migration was applied to the linked production database.
+- The first production push was rejected transactionally because an existing helper parameter name must be preserved; no partial migration was recorded.
+- The helper signature was corrected in commit `7153e5e9040654778497947fb8a7aee716f6206d` and the production push then completed successfully.
+- `supabase db push --linked --dry-run --include-all` after deployment: successful and reports the remote database is up to date.
+- The `app-lock` Edge Function version 1 is ACTIVE with JWT verification enabled.
 - A fresh linked `supabase db lint` could not authenticate because this workstation has no `SUPABASE_DB_PASSWORD`. No database-lint result is claimed.
 - A zero-to-latest isolated reset, authenticated RLS suite, and provider backup/PITR restore drill remain release gates.
 

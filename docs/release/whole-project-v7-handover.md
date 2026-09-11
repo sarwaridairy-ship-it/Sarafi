@@ -39,11 +39,26 @@ Security design denials are encoded in v7 SQL and static contract tests: transac
 - Deployed source SHA metadata: `89149616e807588b85b5d1cfe40d876eb54d6de7`.
 - Vercel remote build: successful.
 
-The preview is protected by Vercel authentication. After the owner granted access, a remote browser smoke reached the deployed SARAFI application. The business sign-in and separate platform-administrator sign-in gates rendered correctly at a 639 px viewport, the document had no horizontal overflow, and the browser console reported no warnings or errors. No SARAFI account credentials were entered, so authenticated workspace behavior is not claimed by this smoke. Local inspection-mode browser evidence remains the workspace UI evidence. Production was not promoted.
+The preview is protected by Vercel authentication. After the owner granted access, a remote browser smoke reached the deployed SARAFI application. The business sign-in and separate platform-administrator sign-in gates rendered correctly at a 639 px viewport, the document had no horizontal overflow, and the browser console reported no warnings or errors. No SARAFI account credentials were entered, so authenticated workspace behavior is not claimed by this smoke. Local inspection-mode browser evidence remains the workspace UI evidence.
 
-## Production decision
+## Production deployment
 
-**NO-SHIP for v7 production promotion.** The source implementation can be committed and reviewed, but production promotion is blocked by:
+The owner explicitly requested production deployment after the preview and open release gates were reported.
+
+- Supabase project: `vbvwuqzqtcorassvotke` (`ACTIVE_HEALTHY`).
+- Database migration: `20260911195348_whole_project_v7_authority.sql` applied successfully; the follow-up dry run reports the remote database is up to date.
+- Edge Function: `app-lock` version 1 is ACTIVE with JWT verification enabled; an unauthenticated probe returned HTTP 401.
+- Vercel production deployment: `dpl_49cRmbxFi29egb5TSF9GhpDgYZL4` (`READY`).
+- Production URL: `https://sarafi-swart.vercel.app`.
+- Promoted frontend artifact source SHA: `89149616e807588b85b5d1cfe40d876eb54d6de7`.
+- Migration compatibility correction SHA: `7153e5e9040654778497947fb8a7aee716f6206d`.
+- Public production smoke: business and platform-administrator sign-in gates rendered in Pashto/RTL at 639 px with no horizontal overflow or browser console errors.
+- Market API smoke: two markets returned, with 20 Sarai Shahzada rows and 5 Khorasan rows.
+- Vercel production error scan immediately after deployment: no error logs found.
+
+## Open assurance gates
+
+Production is deployed, but the following assurance work remains open and must not be reported as passed:
 
 1. A clean zero-to-latest Supabase reset and SQL lint.
 2. Authenticated multi-tenant/branch RLS, storage, Edge Function, payout, accounting, approval, idempotency, and concurrency tests with no security skips.
@@ -51,6 +66,6 @@ The preview is protected by Vercel authentication. After the owner granted acces
 4. Provider backup/PITR evidence and a successful isolated restore/reconciliation drill.
 5. Afghan Dari/Pashto human review and the documented multi-persona UAT threshold.
 6. Physical receipt/PDF checks and legal retention/compliance approval.
-7. A signed release tag, authenticated preview smoke, rollback rehearsal, and post-deploy smoke evidence.
+7. A signed release tag, authenticated workspace smoke, and rollback rehearsal.
 
-No v7 production migration or deployment is claimed in this record. The rollback plan is previous immutable frontend artifact plus forward-only database correction; never delete financial evidence with a down migration.
+The rollback plan is the previous immutable frontend deployment `dpl_HC69FKWmi2W2MjPJJ63dc4rRrmtr` plus forward-only database correction; never delete financial evidence with a down migration.
