@@ -31,6 +31,16 @@ The final local candidate checks were clean: lint passed; 140 unit/static contra
 
 Security design denials are encoded in v7 SQL and static contract tests: transaction-only rates do not publish; unrelated Hawala branch scopes do not match; generic status cannot produce Paid; payout requires both private identity documents; app-lock browser storage contains no PIN/grant persistence. These are implementation assertions, not a substitute for authenticated linked-database denial tests.
 
+## Immutable preview
+
+- Vercel deployment: `dpl_AeRiyHWSRzhnza8GxN1QaknQDRQ8`.
+- URL: `https://sarafi-1str3ztmz-shafiullah-s-projects1.vercel.app`.
+- Target/status: Preview / READY.
+- Deployed source SHA metadata: `89149616e807588b85b5d1cfe40d876eb54d6de7`.
+- Vercel remote build: successful.
+
+The preview is protected by Vercel authentication. An unauthenticated remote Playwright smoke reached the Vercel login page rather than SARAFI, so no remote application smoke result is claimed. Local application browser evidence remains the accepted UI evidence. Production was not promoted.
+
 ## Production decision
 
 **NO-SHIP for v7 production promotion.** The source implementation can be committed and reviewed, but production promotion is blocked by:
@@ -41,6 +51,6 @@ Security design denials are encoded in v7 SQL and static contract tests: transac
 4. Provider backup/PITR evidence and a successful isolated restore/reconciliation drill.
 5. Afghan Dari/Pashto human review and the documented multi-persona UAT threshold.
 6. Physical receipt/PDF checks and legal retention/compliance approval.
-7. A signed release tag, exact Git/deployment SHA attestation, immutable preview, rollback rehearsal, and post-deploy smoke evidence.
+7. A signed release tag, authenticated preview smoke, rollback rehearsal, and post-deploy smoke evidence.
 
 No v7 production migration or deployment is claimed in this record. The rollback plan is previous immutable frontend artifact plus forward-only database correction; never delete financial evidence with a down migration.
