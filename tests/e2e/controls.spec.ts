@@ -7,12 +7,11 @@ const productionCsp =
 
 async function openFxForm(
   page: Page,
-  side: "Buy currency" | "Sell currency" | "Exchange currency" = "Buy currency",
+  side: "Buy currency" | "Sell currency" = "Buy currency",
 ) {
   const route = {
     "Buy currency": "buy",
     "Sell currency": "sell",
-    "Exchange currency": "exchange",
   }[side];
   await page.goto(`/app/inspection/transactions/new/fx/${route}`);
   await expect(page.locator(".financial-task-form")).toBeVisible();
@@ -146,7 +145,7 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/control/rates?role=owner");
     await expect(page.getByRole("heading", { name: "Market rates" })).toBeVisible();
     await expect(page.getByRole("table", { name: "Market rates" })).toContainText("USD");
-    await expect(page.getByRole("table", { name: "Market rates" })).toContainText("United States Dollar");
+    await expect(page.getByRole("table", { name: "Market rates" })).toContainText("دالر امریکایی");
     await expect(page.getByRole("table", { name: "Market rates" })).toContainText("64.25");
     await expect(page.getByRole("columnheader", { name: "Change" })).toBeVisible();
     await expect(page.locator('.rates-market-only a[href*="sarafi.af"]')).toHaveCount(0);
@@ -200,7 +199,7 @@ test.describe("workspace controls", () => {
       ["/app/inspection/transactions/new", "Make a Transaction"],
       ["/app/inspection/transactions/new/fx/buy", /Buy currency/],
       ["/app/inspection/transactions/new/fx/sell", /Sell currency/],
-      ["/app/inspection/transactions/new/fx/exchange", /Exchange/],
+      ["/app/inspection/transactions/new/fx/exchange", /Buy currency/],
       ["/app/inspection/transactions/new/money-in/receive", "Receive money"],
       ["/app/inspection/transactions/new/money-out/pay", "Pay money"],
       ["/app/inspection/transactions/new/move/transfer", "Transfer cash"],
@@ -751,6 +750,9 @@ test.describe("workspace controls", () => {
   test("platform administrator preview exposes plans and security history", async ({ page }) => {
     await page.goto("/platform-admin?preview=1");
     await expect(page.getByText("SARAFI administrator", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kabul Central Exchange" })).toBeVisible();
+    await expect(page.getByText("SARAFI-001042", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Team members" })).toBeVisible();
     await page.getByRole("button", { name: "Plans", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Plan catalog" })).toBeVisible();
     await page.getByRole("button", { name: "Security history", exact: true }).click();
@@ -758,13 +760,12 @@ test.describe("workspace controls", () => {
     await expect(page.getByText("Payment approved")).toBeVisible();
   });
 
-  test("Buy, Sell, and Exchange open distinct FX forms", async ({ page }) => {
+  test("Buy and Sell open focused FX forms with two changeable currencies", async ({ page }) => {
     await page.goto("/");
     for (const action of [
       "Buy currency",
       "Sell currency",
-      "Exchange currency",
-    ]) {
+    ] as const) {
       await openFxForm(page, action);
       await expect(
         page.getByRole("heading", {
@@ -776,6 +777,10 @@ test.describe("workspace controls", () => {
       await expect(page.getByRole("textbox", { name: /Note/ })).toBeVisible();
       await page.getByRole("button", { name: "Close trade" }).click();
     }
+    await openFxForm(page);
+    await expect(page.getByRole("tab", { name: /Exchange/ })).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "Currency", exact: true })).toBeEnabled();
+    await expect(page.getByRole("combobox", { name: "Currency 2", exact: true })).toBeEnabled();
   });
 
   test("live buy and sell rates are open between the two currencies", async ({ page }) => {
@@ -925,20 +930,20 @@ test.describe("workspace controls", () => {
     await expect(confirmation).toContainText("70.35 AFN");
   });
 
-  test("Exchange derives two authoritative legs and reveals a reasoned customer override", async ({
+  test("Buy derives two authoritative currency legs and permits a clear customer rate override", async ({
     page,
   }) => {
     await page.goto("/");
     await openFxForm(page);
-    await page.getByRole("tab", { name: "Exchange currency" }).click();
     const dialog = page.locator(".financial-task-form");
+    await dialog.getByRole("combobox", { name: "Currency 2" }).selectOption("EUR");
     await expect(dialog.getByRole("textbox", { name: "Transaction rate" })).toBeVisible();
     await expect(dialog.locator(".inline-rate-resolver")).toHaveCount(2);
-    await dialog.getByRole("textbox", { name: "We give" }).fill("100");
-    await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("93.68");
+    await dialog.getByRole("textbox", { name: "We receive USD" }).fill("100");
+    await expect(dialog.getByRole("textbox", { name: "We give EUR" })).toHaveValue("93.42");
     await dialog.getByRole("textbox", { name: "Transaction rate" }).fill("0.92");
     await expect(dialog.getByRole("textbox", { name: "Reason for the rate decision" })).toHaveCount(0);
-    await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("92.00");
+    await expect(dialog.getByRole("textbox", { name: "We give EUR" })).toHaveValue("92.00");
     await dialog.getByRole("button", { name: "Review transaction" }).click();
     const confirmation = dialog.locator(".trade-confirmation");
     await expect(confirmation).toContainText("100.00 USD");
@@ -946,11 +951,12 @@ test.describe("workspace controls", () => {
     await expect(confirmation).toContainText("0.92 EUR");
   });
 
-  test("Exchange keeps the draft blocked until both missing AFN legs are resolved in place", async ({ page }) => {
-    await page.goto("/app/inspection/transactions/new/fx/exchange?rate=missing");
+  test("a cross-currency Buy stays blocked until both missing AFN legs are resolved in place", async ({ page }) => {
+    await page.goto("/app/inspection/transactions/new/fx/buy?rate=missing");
     await expect(page.locator(".financial-task-form")).toBeVisible();
     const dialog = page.locator(".financial-task-form");
-    await dialog.getByRole("textbox", { name: "We give" }).fill("100");
+    await dialog.getByRole("combobox", { name: "Currency 2" }).selectOption("EUR");
+    await dialog.getByRole("textbox", { name: "We receive USD" }).fill("100");
     const review = dialog.getByRole("button", { name: "Review transaction" });
     await expect(review).toBeDisabled();
     const resolvers = dialog.locator(".inline-rate-resolver");
@@ -959,7 +965,7 @@ test.describe("workspace controls", () => {
     await resolvers.nth(0).getByRole("textbox", { name: "Shop sell rate" }).fill("70.35");
     await resolvers.nth(1).getByRole("textbox", { name: "Shop buy rate" }).fill("75.10");
     await resolvers.nth(1).getByRole("textbox", { name: "Shop sell rate" }).fill("75.20");
-    await expect(dialog.getByRole("textbox", { name: "We receive" })).toHaveValue("93.68");
+    await expect(dialog.getByRole("textbox", { name: "We give EUR" })).toHaveValue("93.42");
     await expect(review).toBeEnabled();
   });
 

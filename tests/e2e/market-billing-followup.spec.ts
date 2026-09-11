@@ -18,11 +18,14 @@ test('rates expose only the two markets and respect the shop currency selection 
   await expect(page.locator('.market-rate-row').filter({ hasText: 'USD' })).toBeVisible()
 
   await page.locator('.rate-currency-picker > summary').click()
+  await page.getByRole('combobox', { name: 'Add currency' }).selectOption('IRR')
+  await page.getByRole('button', { name: 'Add currency' }).click()
   const eurChoice = page.locator('.rate-currency-choice-list article').filter({ hasText: 'EUR' })
-  await eurChoice.getByRole('checkbox').uncheck()
+  await eurChoice.getByRole('button', { name: 'Remove currency EUR' }).click()
   await page.getByRole('button', { name: 'Save currency list' }).click()
   await market.selectOption('sarai-shahzada')
   await expect(page.locator('.market-rate-row').filter({ hasText: 'EUR' })).toHaveCount(0)
+  await expect(page.locator('.market-rate-row').filter({ hasText: 'IRR' })).toContainText('ریال ایرانی')
 
   await page.getByRole('button', { name: 'Move down USD' }).click()
   await page.getByRole('button', { name: 'Save currency list' }).click()

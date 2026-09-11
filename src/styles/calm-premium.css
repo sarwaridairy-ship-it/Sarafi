@@ -561,6 +561,7 @@
     inset-inline-start: 0;
     padding: 12px 12px calc(84px + env(safe-area-inset-bottom));
   }
+  .transaction-page-form { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
   .calm-home,
   .calm-page { gap: 15px; padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .calm-home-header,
@@ -580,9 +581,9 @@
   .financial-task-form > button[type="submit"]:last-of-type {
     bottom: calc(72px + env(safe-area-inset-bottom));
     box-shadow: 0 10px 28px rgba(23, 107, 91, 0.24);
-    inset-inline: 16px;
-    position: fixed;
-    width: calc(100% - 32px);
+    inset-inline: auto;
+    position: sticky;
+    width: 100%;
     z-index: 41;
   }
   .mobile-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom); }
@@ -918,16 +919,18 @@
 .rate-currency-picker { border-top: 1px solid #dce5e1; padding: 0 18px 16px; }
 .rate-currency-picker > summary { color: #164f45; cursor: pointer; font-weight: 800; padding: 14px 0; }
 .rate-currency-picker > p { color: var(--calm-muted, #61736c); margin: 0 0 12px; }
-.rate-currency-choice-list { display: grid; gap: 7px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 12px; }
+.rate-currency-add-row { align-items:end; display:grid; gap:8px; grid-template-columns:minmax(0, 360px) auto; margin-bottom:12px; }
+.rate-currency-add-row label { color:var(--calm-muted, #61736c); display:grid; font-size:.75rem; font-weight:750; gap:5px; }
+.rate-currency-add-row select { box-sizing:border-box; min-height:42px; min-width:0; width:100%; border:1px solid #cfdbd6; border-radius:9px; background:#fff; padding:7px 10px; }
+.rate-currency-choice-list { display: grid; gap: 7px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 12px; }
 .rate-currency-choice-list article { align-items: center; border: 1px solid #d9e3df; border-radius: 10px; display: flex; gap: 8px; justify-content: space-between; min-width: 0; padding: 8px 10px; }
 .rate-currency-choice-list article.selected { background: #eef8f3; border-color: #72a995; }
-.rate-currency-choice-list label { align-items: center; cursor: pointer; display: flex; gap: 8px; min-width: 0; }
-.rate-currency-choice-list label > span { display: grid; min-width: 0; }
-.rate-currency-choice-list label b { overflow-wrap: anywhere; }
-.rate-currency-choice-list label small { color: var(--calm-muted, #61736c); }
-.rate-currency-choice-list input { flex: 0 0 auto; height: 18px; width: 18px; }
+.rate-selected-currency { display:grid; min-width:0; }
+.rate-selected-currency b { overflow-wrap:anywhere; }
+.rate-selected-currency small { color:var(--calm-muted, #61736c); }
 .currency-order-actions { display: flex; flex: 0 0 auto; gap: 4px; }
 .currency-order-actions button { background: #fff; border: 1px solid #cddbd5; border-radius: 7px; height: 30px; width: 30px; }
+.currency-order-actions .currency-remove { color:#963d3d; }
 
 .money-workspace .account-control-panel { border: 0; padding: 0; }
 .money-workspace .account-card-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
@@ -980,6 +983,7 @@
 .platform-mfa-enrollment { align-items: center; background: #f7f9f8; border: 1px solid #dce5e1; border-radius: 10px; display: grid; gap: 14px; grid-column: 1 / -1; grid-template-columns: 140px minmax(0, 1fr); padding: 12px; }
 .platform-mfa-enrollment img { background: #fff; border-radius: 8px; height: 140px; width: 140px; }
 .platform-mfa-enrollment > div { display: grid; gap: 10px; min-width: 0; }
+.platform-header .text-button { color: #fff; }
 
 .transaction-receipt { max-width: 720px; }
 .transaction-receipt { width: 100%; }
@@ -1059,6 +1063,7 @@
   .cashbox-create-actions button { justify-content: center; width: 100%; }
   .currency-setting { gap: 8px; grid-template-columns: 42px minmax(0, 1fr) minmax(68px, auto); padding: 7px 9px; }
   .rate-currency-picker { padding-inline: 12px; }
+  .rate-currency-add-row { grid-template-columns: 1fr auto; }
   .rate-currency-choice-list { grid-template-columns: 1fr; }
   .platform-plan-editor .plan-term-editor form { grid-template-columns: 1fr 1fr; }
   .platform-plan-editor .plan-term-editor form > b,
@@ -1074,6 +1079,8 @@
   .operation-primary-grid { grid-template-columns: 1fr; gap: 0; }
   .transaction-receipt .transaction-detail-grid { grid-template-columns: 1fr; }
   .customer-search-row { grid-template-columns: 1fr; }
+  .rate-currency-add-row { grid-template-columns: 1fr; }
+  .rate-currency-add-row .text-button { width: 100%; }
   .customer-search-row .text-button { width: 100%; }
   .payment-history .balance-row { grid-template-columns: auto minmax(0, 1fr); }
   .payment-history-actions { grid-column: 2; justify-items: start; }
@@ -1085,7 +1092,7 @@
 }
 
 @media (max-width: 560px) {
-  .transaction-page-form { overflow: hidden; padding: 16px; width: 100%; }
+  .transaction-page-form { overflow: hidden; padding: 16px 16px calc(150px + env(safe-area-inset-bottom)); width: 100%; }
   .transaction-page-form .modal-head { align-items: start; display: grid; grid-template-columns: 1fr; gap: 7px; }
   .transaction-page-form .modal-head h2 { margin-bottom: 0; }
   .transaction-page-form .transaction-back { justify-self: start; max-width: 100%; text-align: start; }

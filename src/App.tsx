@@ -364,15 +364,48 @@ const inspectionCurrencies: CurrencyCatalogRecord[] = [
   ["SAR", "Saudi Riyal", "ریال سعودی", "سعودي ریال", "﷼"],
   ["CNY", "Chinese Yuan", "یوان چین", "چینايي یوان", "¥"],
   ["INR", "Indian Rupee", "روپیه هندی", "هندي روپۍ", "₹"],
-].map(([code, name_en, name_dari, name_pashto, symbol]) => ({
+  ["IRR", "Iranian Rial", "ریال ایرانی", "ایراني ریال", "﷼"],
+  ["CHF", "Swiss Franc", "فرانک سویس", "سویسي فرانک", "Fr"],
+  ["AUD", "Australian Dollar", "دالر استرالیا", "اسټرالیايي ډالر", "A$"],
+  ["CAD", "Canadian Dollar", "دالر کانادا", "کاناډايي ډالر", "C$"],
+  ["RUB", "Russian Ruble", "روبل روسیه", "روسي روبل", "₽"],
+  ["TRY", "Turkish Lira", "لیره ترکیه", "ترکي لیره", "₺"],
+  ["KWD", "Kuwaiti Dinar", "دینار کویت", "کویټي دینار", "د.ك"],
+  ["QAR", "Qatari Riyal", "ریال قطر", "قطري ریال", "ر.ق"],
+  ["BHD", "Bahraini Dinar", "دینار بحرین", "بحریني دینار", "د.ب"],
+  ["JPY", "Japanese Yen", "ین جاپان", "جاپاني ین", "¥"],
+].map(([code, name_en, name_dari, name_pashto, symbol], index) => ({
   code,
   name_en,
   name_dari,
   name_pashto,
   symbol,
   minor_unit: 2,
-  enabled: true,
+  enabled: index < 9,
+  display_order: index,
 }));
+
+const inspectionFxRates: Record<string, { buy: string; sell: string }> = {
+  AFN: { buy: "1", sell: "1" },
+  USD: { buy: "70.25", sell: "70.35" },
+  EUR: { buy: "75.10", sell: "75.20" },
+  AED: { buy: "19.10", sell: "19.18" },
+  PKR: { buy: "0.25", sell: "0.255" },
+  GBP: { buy: "86.10", sell: "86.35" },
+  SAR: { buy: "18.70", sell: "18.76" },
+  CNY: { buy: "9.70", sell: "9.78" },
+  INR: { buy: "0.84", sell: "0.86" },
+  IRR: { buy: "0.0015", sell: "0.0016" },
+  CHF: { buy: "79.40", sell: "79.46" },
+  AUD: { buy: "46.36", sell: "46.40" },
+  CAD: { buy: "46.62", sell: "46.66" },
+  RUB: { buy: "0.75", sell: "0.76" },
+  TRY: { buy: "1.33", sell: "1.35" },
+  KWD: { buy: "208", sell: "208.5" },
+  QAR: { buy: "17.66", sell: "17.67" },
+  BHD: { buy: "171", sell: "171.5" },
+  JPY: { buy: "0.419", sell: "0.421" },
+};
 
 function currencyName(language: Language, currency: CurrencyCatalogRecord) {
   return localCurrencyName(language, currency.code, currency);
@@ -538,10 +571,12 @@ function App() {
     "BUY_FX" | "SELL_FX" | "EXCHANGE_FX"
   >("BUY_FX");
   const [tradeCurrency, setTradeCurrency] = useState("USD");
-  const [tradeReceiveCurrency, setTradeReceiveCurrency] = useState("EUR");
-  const [tradeExchangeRate, setTradeExchangeRate] = useState("");
+  const [tradeReceiveCurrency, setTradeReceiveCurrency] = useState("AFN");
   const [tradeReceiveBuyRate, setTradeReceiveBuyRate] = useState(
-    inspectionMode && inspectionRateScenario !== "missing" ? "75.10" : "",
+    inspectionMode ? "1" : "",
+  );
+  const [tradeReceiveSellRate, setTradeReceiveSellRate] = useState(
+    inspectionMode ? "1" : "",
   );
   const [exchangeSourceRatePublication, setExchangeSourceRatePublication] =
     useState<InlineRatePublication>();
@@ -557,6 +592,9 @@ function App() {
   const [tradeNote, setTradeNote] = useState("");
   const [tradeCounterparty, setTradeCounterparty] = useState("");
   const [tradeCounterparties, setTradeCounterparties] = useState<CounterpartyRecord[]>([]);
+  const [currencyAddTarget, setCurrencyAddTarget] = useState<"primary" | "counter" | null>(null);
+  const [currencyToAdd, setCurrencyToAdd] = useState("");
+  const [currencyAdding, setCurrencyAdding] = useState(false);
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
   const [counterpartyRefresh, setCounterpartyRefresh] = useState(0);
   const [tradeBusy, setTradeBusy] = useState(false);
@@ -655,13 +693,20 @@ function App() {
   const [loadedCurrencyCatalog, setCurrencyCatalog] = useState<
     CurrencyCatalogRecord[]
   >([]);
+  const [inspectionCurrencyCatalog, setInspectionCurrencyCatalog] = useState<
+    CurrencyCatalogRecord[]
+  >(() => inspectionCurrencies);
   const [loadedMoneyAccounts, setMoneyAccounts] = useState<MoneyAccountRecord[]>([]);
   const [enabledFeatureCodes, setEnabledFeatureCodes] = useState<string[]>(
     inspectionMode ? ["hawala"] : [],
   );
   const currencyCatalog = inspectionMode
-    ? inspectionCurrencies
+    ? inspectionCurrencyCatalog
     : loadedCurrencyCatalog;
+  const updateCurrencyCatalog = useCallback((currencies: CurrencyCatalogRecord[]) => {
+    if (inspectionMode) setInspectionCurrencyCatalog(currencies);
+    else setCurrencyCatalog(currencies);
+  }, [inspectionMode]);
   const moneyAccounts = useMemo(
     () => inspectionMode
       ? inspectionMoneyAccounts(language)
@@ -934,11 +979,10 @@ function App() {
       if (result.data) {
         setCurrencyCatalog(result.data);
         const codes = result.data.filter((item) => item.enabled).map((item) => item.code);
-        const foreignCodes = codes.filter((code) => code !== "AFN");
         setOperationCurrency((current) => codes.includes(current) ? current : codes[0] ?? "AFN");
         setOpeningCurrency((current) => codes.includes(current) ? current : codes[0] ?? "AFN");
-        setTradeCurrency((current) => foreignCodes.includes(current) ? current : foreignCodes[0] ?? "USD");
-        setTradeReceiveCurrency((current) => foreignCodes.includes(current) ? current : foreignCodes[1] ?? foreignCodes[0] ?? "USD");
+        setTradeCurrency((current) => codes.includes(current) ? current : codes.find((code) => code !== "AFN") ?? "AFN");
+        setTradeReceiveCurrency((current) => codes.includes(current) ? current : codes.includes("AFN") ? "AFN" : codes[1] ?? codes[0] ?? "AFN");
       }
       if (result.error && organizationId) setToast(ux(language, "couldNotLoad"));
     });
@@ -1003,9 +1047,11 @@ function App() {
   const enabledCurrencyCodes = enabledCurrencies.length
     ? enabledCurrencies.map((item) => item.code)
     : ["AFN", "USD", "EUR"];
-  const tradeCurrencies = enabledCurrencyCodes.filter(
-    (currency) => currency !== "AFN",
-  );
+  const tradeCurrencies = enabledCurrencyCodes;
+  const currencyOptionLabel = (code: string) => {
+    const item = currencyCatalog.find((currency) => currency.code === code);
+    return item ? `${item.code} · ${item.name_dari} · ${item.symbol}` : code;
+  };
   const branchMoneyAccounts = useMemo(
     () => moneyAccounts.filter(
       (account) => !account.branch_id || !branchId || account.branch_id === branchId,
@@ -1044,54 +1090,78 @@ function App() {
   ]);
 
   useEffect(() => {
-    if (inspectionMode || !organizationId) return;
+    if (!organizationId) return;
     if (!branchId) return;
+    const contextForInspection = (currency: string) => {
+      if (currency === "AFN") return { buy: "1", sell: "1", stale: false, missing: false };
+      const fixture = inspectionFxRates[currency];
+      return {
+        buy: inspectionRateScenario === "missing" ? "" : fixture?.buy ?? "",
+        sell: inspectionRateScenario === "missing" ? "" : fixture?.sell ?? "",
+        stale: inspectionRateScenario === "stale",
+        missing: inspectionRateScenario === "missing" || !fixture,
+      };
+    };
+    if (inspectionMode) {
+      const source = contextForInspection(tradeCurrency);
+      const target = contextForInspection(tradeReceiveCurrency);
+      const effectiveFrom = inspectionRateScenario === "missing"
+        ? undefined
+        : new Date(inspectionRateScenario === "stale" ? Date.now() - 48 * 60 * 60 * 1000 : Date.now()).toISOString();
+      // oxlint-disable-next-line react/set-state-in-effect -- Inspection mode mirrors deterministic server rate fixtures for the selected pair.
+      setRateState(source.buy);
+      setSellRate(source.sell);
+      setTradeReceiveBuyRate(target.buy);
+      setTradeReceiveSellRate(target.sell);
+      setRateContext({ stale: source.stale, missing: source.missing, effectiveFrom, tolerance: "0.10", toleranceBps: "50" });
+      setTradeReceiveRateContext({ stale: target.stale, missing: target.missing, effectiveFrom, toleranceBps: "50" });
+      setExchangeSourceRateReady(!source.missing);
+      setExchangeTargetRateReady(!target.missing);
+      setRateOverrideEnabled(false);
+      setRateOverride("");
+      setPublishRate(false);
+      setAllowStaleRate(false);
+      return;
+    }
     const requests = [
-      getTransactionRateContext(organizationId, branchId, tradeCurrency, "AFN"),
-      tradeSide === "EXCHANGE_FX"
-        ? getTransactionRateContext(organizationId, branchId, tradeReceiveCurrency, "AFN")
-        : Promise.resolve(null),
+      tradeCurrency === "AFN" ? Promise.resolve(null) : getTransactionRateContext(organizationId, branchId, tradeCurrency, "AFN"),
+      tradeReceiveCurrency === "AFN" ? Promise.resolve(null) : getTransactionRateContext(organizationId, branchId, tradeReceiveCurrency, "AFN"),
     ] as const;
     void Promise.all(requests).then(([sourceResult, targetResult]) => {
-        if (sourceResult.error || targetResult?.error) {
+        if (sourceResult?.error || targetResult?.error) {
           setToast(ux(language, "couldNotLoad"));
           return;
         }
-        const current = sourceResult.data;
-        if (current) {
-          setRateState(current.buy_rate ?? "");
-          setSellRate(current.sell_rate ?? "");
-          setRateContext({
-            stale: Boolean(current.stale),
-            missing: !current.buy_rate || !current.sell_rate,
-            effectiveFrom: current.effective_from,
-            tolerance: current.spread_tolerance ?? "0",
-            toleranceBps: current.tolerance_bps ?? "50",
-          });
-          setRateOverrideEnabled(false);
-          setRateOverride("");
-          setPublishRate(false);
-          setAllowStaleRate(false);
-          if (current.stale) setToast(language === "en" ? "The approved rate is older than one day; review it before posting." : language === "fa-AF" ? "نرخ تأییدشده بیشتر از یک روز قدیمی است؛ پیش از ثبت آن را بررسی کنید." : "تایید شوی نرخ له یوې ورځې زوړ دی؛ له ثبت مخکې یې وګورئ.");
-        } else {
-          setRateState("");
-          setSellRate("");
-          setRateContext({ stale: true, missing: true, tolerance: "0", toleranceBps: "50" });
-        }
-        if (targetResult) {
-          const target = targetResult.data;
-          setTradeReceiveBuyRate(target?.buy_rate ?? "");
-          setTradeReceiveRateContext({
-            stale: Boolean(target?.stale),
-            missing: !target?.buy_rate || !target?.sell_rate,
-            effectiveFrom: target?.effective_from,
-            toleranceBps: target?.tolerance_bps ?? "50",
-          });
-        }
+        const source = sourceResult?.data;
+        const target = targetResult?.data;
+        setRateState(tradeCurrency === "AFN" ? "1" : source?.buy_rate ?? "");
+        setSellRate(tradeCurrency === "AFN" ? "1" : source?.sell_rate ?? "");
+        setTradeReceiveBuyRate(tradeReceiveCurrency === "AFN" ? "1" : target?.buy_rate ?? "");
+        setTradeReceiveSellRate(tradeReceiveCurrency === "AFN" ? "1" : target?.sell_rate ?? "");
+        setRateContext({
+          stale: tradeCurrency === "AFN" ? false : Boolean(source?.stale),
+          missing: tradeCurrency === "AFN" ? false : !source?.buy_rate || !source?.sell_rate,
+          effectiveFrom: source?.effective_from,
+          tolerance: source?.spread_tolerance ?? "0",
+          toleranceBps: source?.tolerance_bps ?? "50",
+        });
+        setTradeReceiveRateContext({
+          stale: tradeReceiveCurrency === "AFN" ? false : Boolean(target?.stale),
+          missing: tradeReceiveCurrency === "AFN" ? false : !target?.buy_rate || !target?.sell_rate,
+          effectiveFrom: target?.effective_from,
+          toleranceBps: target?.tolerance_bps ?? "50",
+        });
+        setExchangeSourceRateReady(tradeCurrency === "AFN" || Boolean(source?.buy_rate && source?.sell_rate));
+        setExchangeTargetRateReady(tradeReceiveCurrency === "AFN" || Boolean(target?.buy_rate && target?.sell_rate));
+        setRateOverrideEnabled(false);
+        setRateOverride("");
+        setPublishRate(false);
+        setAllowStaleRate(false);
+        if (source?.stale || target?.stale) setToast(language === "en" ? "An approved rate is older than one day; review it before posting." : language === "fa-AF" ? "یک نرخ تأییدشده بیشتر از یک روز قدیمی است؛ پیش از ثبت آن را بررسی کنید." : "یو تایید شوی نرخ له یوې ورځې زوړ دی؛ له ثبت مخکې یې وګورئ.");
         setExchangeSourceRatePublication(undefined);
         setExchangeTargetRatePublication(undefined);
       });
-  }, [branchId, inspectionMode, language, organizationId, tradeCurrency, tradeReceiveCurrency, tradeSide]);
+  }, [branchId, inspectionMode, inspectionRateScenario, language, organizationId, tradeCurrency, tradeReceiveCurrency]);
 
   const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1201,34 +1271,27 @@ function App() {
   const addTrade = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (tradeBusy) return;
-    if (tradeSide === "EXCHANGE_FX" && (
-      !exchangeSourceRateReady
-      || !exchangeTargetRateReady
-      || !effectiveTradeRate
-      || !new Decimal(effectiveTradeRate).isFinite()
-      || new Decimal(effectiveTradeRate).lte(0)
-      || !exchangeSourceValuationRate
-      || !exchangeTargetValuationRate
-    )) {
-      setToast(u("pairRateUnavailable"));
-      return;
-    }
-    const shopRate = tradeSide === "BUY_FX" ? rate : sellRate;
-    const appliedRate = rateOverrideEnabled ? rateOverride : shopRate;
-    if (tradeSide !== "EXCHANGE_FX" && (!appliedRate || !new Decimal(appliedRate).isFinite() || new Decimal(appliedRate).lte(0))) {
-      setToast(u("pairRateUnavailable"));
-      return;
-    }
-    if (tradeSide !== "EXCHANGE_FX" && rateContext.stale && !rateOverrideEnabled && !allowStaleRate) {
-      setToast(language === "en" ? "Choose how to handle the old shop rate before continuing." : language === "fa-AF" ? "پیش از ادامه، روش استفاده از نرخ قدیمی را انتخاب کنید." : "له دوام مخکې د زاړه نرخ د کارولو لاره وټاکئ.");
-      return;
-    }
     if (
       !amount ||
       !new Decimal(amount).isFinite() ||
       new Decimal(amount).lte(0)
     ) {
       setToast(u("amountGreaterZero"));
+      return;
+    }
+    if (
+      tradeCurrency === tradeReceiveCurrency
+      || !tradePairRateReady
+      || !effectiveTradeRate
+      || !new Decimal(effectiveTradeRate).isFinite()
+      || new Decimal(effectiveTradeRate).lte(0)
+      || !tradePreview
+    ) {
+      setToast(u("pairRateUnavailable"));
+      return;
+    }
+    if (tradeRateStale && !rateOverrideEnabled && !allowStaleRate) {
+      setToast(language === "en" ? "Choose how to handle the old shop rate before continuing." : language === "fa-AF" ? "پیش از ادامه، روش استفاده از نرخ قدیمی را انتخاب کنید." : "له دوام مخکې د زاړه نرخ د کارولو لاره وټاکئ.");
       return;
     }
     if (!tradeReviewing) {
@@ -1246,21 +1309,12 @@ function App() {
     setTradeBusy(true);
     let sessionCheck: Awaited<ReturnType<typeof postFxTrade>>;
     try {
-      const soldCurrency = tradeSide === "BUY_FX" ? "AFN" : tradeCurrency;
-      const boughtCurrency = tradeSide === "BUY_FX" ? tradeCurrency : tradeSide === "EXCHANGE_FX" ? tradeReceiveCurrency : "AFN";
-      const pricing = tradeSide === "EXCHANGE_FX"
-        ? {
-            rate: effectiveTradeRate,
-            soldAmount: new Decimal(amount).toFixed(12),
-            boughtAmount: new Decimal(amount).times(effectiveTradeRate).toFixed(12),
-            soldBaseValue: new Decimal(amount).times(exchangeSourceValuationRate).toFixed(12),
-            boughtBaseValue: new Decimal(amount).times(effectiveTradeRate).times(exchangeTargetValuationRate).toFixed(12),
-          }
-        : deriveTradeAmounts(tradeSide, amount, appliedRate, appliedRate);
-      const { rate: effectiveRate, soldAmount, boughtAmount, soldBaseValue, boughtBaseValue } = pricing;
+      const soldCurrency = tradeGivenCurrency;
+      const boughtCurrency = tradeReceivedCurrency;
+      const { soldAmount, boughtAmount, soldBaseValue, boughtBaseValue } = tradePreview;
       const rateDecisionReason = rateOverrideEnabled
         ? "Customer rate confirmed in transaction review"
-        : allowStaleRate || rateContext.stale || tradeReceiveRateContext.stale
+        : allowStaleRate || tradeRateStale
           ? "Existing shop rate confirmed in transaction review"
           : undefined;
       const exchangeRatePublications = [exchangeSourceRatePublication, exchangeTargetRatePublication]
@@ -1270,7 +1324,7 @@ function App() {
         branch_id: branchId,
         cashbox_id: cashboxId,
         client_command_id: tradeCommandId,
-        side: tradeSide,
+        side: tradeBackendSide,
         sold_currency: soldCurrency,
         sold_amount: soldAmount,
         bought_currency: boughtCurrency,
@@ -1278,8 +1332,8 @@ function App() {
         base_currency: "AFN",
         sold_base_value: soldBaseValue,
         bought_base_value: boughtBaseValue,
-        customer_rate: effectiveRate,
-        rate_source: rateOverrideEnabled ? "transaction_override" as const : (rateContext.stale || (tradeSide === "EXCHANGE_FX" && tradeReceiveRateContext.stale)) ? "approved_stale_shop_rate" as const : "shop_rate" as const,
+        customer_rate: tradeBackendCustomerRate,
+        rate_source: rateOverrideEnabled ? "transaction_override" as const : tradeRateStale ? "approved_stale_shop_rate" as const : "shop_rate" as const,
         override_reason: rateDecisionReason,
         approval_reason: rateDecisionReason,
         allow_stale_rate: allowStaleRate || undefined,
@@ -1288,31 +1342,25 @@ function App() {
         fee_currency: "AFN",
         counterparty_id: tradeCounterparty || undefined,
         memo: tradeNote || undefined,
-        publish_rate: publishRate && rateOverrideEnabled && tradeSide !== "EXCHANGE_FX"
+        publish_rate: publishRate && rateOverrideEnabled && tradeCurrency !== "AFN" && tradeReceiveCurrency === "AFN"
           ? {
               branch_id: branchId,
               source_currency: tradeCurrency,
               target_currency: "AFN",
-              buy_rate: tradeSide === "BUY_FX" ? appliedRate : rate || appliedRate,
-              sell_rate: tradeSide === "SELL_FX" ? appliedRate : sellRate || appliedRate,
+              buy_rate: tradeSide === "BUY_FX" ? effectiveTradeRate : rate || effectiveTradeRate,
+              sell_rate: tradeSide === "SELL_FX" ? effectiveTradeRate : sellRate || effectiveTradeRate,
             }
           : undefined,
-        publish_rates: tradeSide === "EXCHANGE_FX" && exchangeRatePublications.length
+        publish_rates: exchangeRatePublications.length
           ? exchangeRatePublications
           : undefined,
       };
 
-      const outsideTolerance = tradeSide !== "EXCHANGE_FX" && Boolean(shopRate)
-        && new Decimal(appliedRate).sub(shopRate || appliedRate).abs().div(shopRate || appliedRate).times(10000).gt(rateContext.toleranceBps || "50");
-      const exchangeOutsideTolerance = tradeSide === "EXCHANGE_FX" && rateOverrideEnabled && Boolean(impliedExchangeRate)
+      const outsideTolerance = rateOverrideEnabled && Boolean(impliedExchangeRate)
         && new Decimal(effectiveTradeRate).sub(impliedExchangeRate).abs().div(impliedExchangeRate).times(10000).gt(
           Decimal.max(rateContext.toleranceBps || "50", tradeReceiveRateContext.toleranceBps || "50"),
         );
-      const cashierNeedsApproval = workspaceRole === "cashier" && (
-        tradeSide === "EXCHANGE_FX"
-          ? exchangeOutsideTolerance
-          : rateContext.missing || rateContext.stale || outsideTolerance
-      );
+      const cashierNeedsApproval = workspaceRole === "cashier" && (tradeRateMissing || tradeRateStale || outsideTolerance);
       if (cashierNeedsApproval) {
         if (organizationId === "inspection") {
           setTradeBusy(false);
@@ -1372,7 +1420,6 @@ function App() {
     setDashboardRefresh((value) => value + 1);
     setAmount("");
     setTradeFee("");
-    setTradeExchangeRate("");
     setTradeNote("");
     setTradeCounterparty("");
     setTradeCommandId(crypto.randomUUID());
@@ -1445,10 +1492,10 @@ function App() {
   const openTrade = (
     side?: typeof tradeSide,
   ) => {
-    if (side) setTradeSide(side);
+    const nextSide = side === "EXCHANGE_FX" ? "BUY_FX" : side ?? (tradeSide === "EXCHANGE_FX" ? "BUY_FX" : tradeSide);
+    setTradeSide(nextSide);
     setAmount("");
     setTradeFee("");
-    setTradeExchangeRate("");
     setTradeNote("");
     setTradeCounterparty("");
     setTradeCommandId(crypto.randomUUID());
@@ -1458,8 +1505,7 @@ function App() {
     setAllowStaleRate(false);
     setTradeReviewing(false);
     setTradeBusy(false);
-    const nextSide = side ?? tradeSide;
-    navigate(financialRoute(organizationId, nextSide === "BUY_FX" ? "/fx/buy" : nextSide === "SELL_FX" ? "/fx/sell" : "/fx/exchange"));
+    navigate(financialRoute(organizationId, nextSide === "BUY_FX" ? "/fx/buy" : "/fx/sell"));
   };
 
   const submitOperation = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1687,8 +1733,11 @@ function App() {
       // oxlint-disable-next-line react/set-state-in-effect
       if (activeFinancialRoute === "/fx/buy") setTradeSide("BUY_FX");
       else if (activeFinancialRoute === "/fx/sell") setTradeSide("SELL_FX");
-      else if (activeFinancialRoute === "/fx/exchange") setTradeSide("EXCHANGE_FX");
-      else if (side === "BUY_FX" || side === "SELL_FX" || side === "EXCHANGE_FX") setTradeSide(side);
+      else if (activeFinancialRoute === "/fx/exchange") {
+        setTradeSide("BUY_FX");
+        navigate(financialRoute(organizationId, "/fx/buy"), { replace: true });
+      }
+      else if (side === "BUY_FX" || side === "SELL_FX") setTradeSide(side);
       setOperationKind(null);
       return;
     }
@@ -1719,7 +1768,7 @@ function App() {
             : null);
     if (["RECEIVE_MONEY", "PAY_MONEY", "TRANSFER_CASH", "RECORD_EXPENSE", "RECORD_INCOME", "OWNER_INVESTMENT", "OWNER_WITHDRAWAL", "BANK_DEPOSIT", "BANK_WITHDRAWAL"].includes(action ?? ""))
       setOperationKind(action as OperationKind);
-  }, [activeFinancialRoute, fxFormActive, location.pathname, location.search, openingFormActive, transactionFormActive]);
+  }, [activeFinancialRoute, fxFormActive, location.pathname, location.search, navigate, openingFormActive, organizationId, transactionFormActive]);
   useEffect(() => {
     const approvalId = new URLSearchParams(location.search).get("approval");
     if (!fxFormActive || !approvalId || inspectionMode) {
@@ -1852,28 +1901,40 @@ function App() {
     "RECORD_EXPENSE",
     "OWNER_WITHDRAWAL",
   ].includes(operationKind));
-  const shopTradeRate = tradeSide === "BUY_FX" ? rate : sellRate;
-  const exchangeSourceValuationRate =
-    exchangeSourceRatePublication?.sell_rate || sellRate;
-  const exchangeTargetValuationRate =
-    exchangeTargetRatePublication?.buy_rate || tradeReceiveBuyRate;
+  const sourceBuyRate = tradeCurrency === "AFN" ? "1" : exchangeSourceRatePublication?.buy_rate || rate;
+  const sourceSellRate = tradeCurrency === "AFN" ? "1" : exchangeSourceRatePublication?.sell_rate || sellRate;
+  const targetBuyRate = tradeReceiveCurrency === "AFN" ? "1" : exchangeTargetRatePublication?.buy_rate || tradeReceiveBuyRate;
+  const targetSellRate = tradeReceiveCurrency === "AFN" ? "1" : exchangeTargetRatePublication?.sell_rate || tradeReceiveSellRate;
   let impliedExchangeRate = "";
   try {
-    if (exchangeSourceValuationRate && exchangeTargetValuationRate) {
-      impliedExchangeRate = new Decimal(exchangeSourceValuationRate)
-        .div(exchangeTargetValuationRate)
-        .toFixed(12);
+    const sourceValuationRate = tradeSide === "BUY_FX" ? sourceBuyRate : sourceSellRate;
+    const targetValuationRate = tradeSide === "BUY_FX" ? targetSellRate : targetBuyRate;
+    if (sourceValuationRate && targetValuationRate) {
+      impliedExchangeRate = new Decimal(sourceValuationRate)
+        .div(targetValuationRate)
+        .toDecimalPlaces(12)
+        .toString();
     }
   } catch {
     impliedExchangeRate = "";
   }
-  const effectiveTradeRate = tradeSide === "EXCHANGE_FX"
-    ? rateOverrideEnabled
-      ? tradeExchangeRate
-      : impliedExchangeRate
-    : rateOverrideEnabled
-      ? rateOverride
-      : shopTradeRate;
+  const shopTradeRate = impliedExchangeRate;
+  const effectiveTradeRate = rateOverrideEnabled ? rateOverride : impliedExchangeRate;
+  const singleAfnPair = (tradeCurrency === "AFN") !== (tradeReceiveCurrency === "AFN");
+  const sourceBuyValuationRate = sourceBuyRate || (rateOverrideEnabled && tradeSide === "BUY_FX" && tradeReceiveCurrency === "AFN" ? effectiveTradeRate : "");
+  const sourceSellValuationRate = sourceSellRate || (rateOverrideEnabled && tradeSide === "SELL_FX" && tradeReceiveCurrency === "AFN" ? effectiveTradeRate : "");
+  let inverseOverrideRate = "";
+  try {
+    if (rateOverrideEnabled && effectiveTradeRate) inverseOverrideRate = new Decimal(1).div(effectiveTradeRate).toString();
+  } catch {
+    inverseOverrideRate = "";
+  }
+  const targetBuyValuationRate = targetBuyRate || (rateOverrideEnabled && tradeSide === "SELL_FX" && tradeCurrency === "AFN" ? inverseOverrideRate : "");
+  const targetSellValuationRate = targetSellRate || (rateOverrideEnabled && tradeSide === "BUY_FX" && tradeCurrency === "AFN" ? inverseOverrideRate : "");
+  const tradePairRateReady = Boolean(effectiveTradeRate) && (
+    (exchangeSourceRateReady && exchangeTargetRateReady)
+    || (rateOverrideEnabled && singleAfnPair)
+  );
   const canPublishTransactionRate = capability("rates.manage");
   const rateWorkflowCopy = language === "en"
     ? {
@@ -1890,6 +1951,11 @@ function App() {
         feeAfn: "Commission (AFN)",
         noteOptional: "Add a note (optional)",
         exchangeBasis: "How this cross-rate is calculated",
+        addCurrency: "Add currency",
+        chooseCurrency: "Choose a currency",
+        currencyAdded: "Currency added to this shop.",
+        currencyAddFailed: "The currency could not be added.",
+        cancel: "Cancel",
       }
     : language === "fa-AF"
       ? {
@@ -1906,6 +1972,11 @@ function App() {
           feeAfn: "کمیشن (AFN)",
           noteOptional: "یادداشت (اختیاری)",
           exchangeBasis: "این نرخ چگونه حساب شده؟",
+          addCurrency: "افزودن اسعار",
+          chooseCurrency: "یک اسعار را انتخاب کنید",
+          currencyAdded: "اسعار به فهرست صرافی افزوده شد.",
+          currencyAddFailed: "اسعار افزوده نشد.",
+          cancel: "لغو",
         }
       : {
           noRate: "د دې اسعارو لپاره د دوکان نرخ نه دی خپور شوی.",
@@ -1921,13 +1992,49 @@ function App() {
           feeAfn: "کمېشن (AFN)",
           noteOptional: "یادښت (اختیاري)",
           exchangeBasis: "دا نرخ څنګه حساب شوی؟",
+          addCurrency: "اسعار زیاتول",
+          chooseCurrency: "اسعار وټاکئ",
+          currencyAdded: "اسعار د صرافۍ لېست ته زیات شول.",
+          currencyAddFailed: "اسعار زیات نه شول.",
+          cancel: "لغوه",
         };
-  const tradeRateTargetCurrency = tradeSide === "EXCHANGE_FX" ? tradeReceiveCurrency : "AFN";
-  const displayedTradeRate = tradeSide === "EXCHANGE_FX"
-    ? (rateOverrideEnabled ? tradeExchangeRate : impliedExchangeRate)
-    : (rateOverrideEnabled ? rateOverride : shopTradeRate);
-  const tradeRateMissing = rateContext.missing || (tradeSide === "EXCHANGE_FX" && tradeReceiveRateContext.missing);
-  const tradeRateStale = rateContext.stale || (tradeSide === "EXCHANGE_FX" && tradeReceiveRateContext.stale);
+  const disabledTradeCurrencies = currencyCatalog.filter((currency) => !currency.enabled);
+  const canManageTradeCurrencies = capability("rates.manage") || capability("money_accounts.manage");
+  const addCurrencyToTrade = async () => {
+    if (!currencyToAdd || !organizationId || currencyAdding) return;
+    setCurrencyAdding(true);
+    let nextCatalog: CurrencyCatalogRecord[] | null = null;
+    if (inspectionMode) {
+      nextCatalog = currencyCatalog
+        .map((item) => item.code === currencyToAdd ? { ...item, enabled: true, display_order: enabledCurrencies.length } : item)
+        .toSorted((left, right) => (left.display_order ?? 999) - (right.display_order ?? 999));
+    } else {
+      const selectedCodes = enabledCurrencyCodes.filter((code) => code !== "AFN");
+      const result = await setOrganizationRateCurrencies(organizationId, [...selectedCodes, currencyToAdd]);
+      if (!result.error) {
+        const refreshed = await listCurrencyCatalog(organizationId);
+        nextCatalog = refreshed.data;
+      }
+    }
+    setCurrencyAdding(false);
+    if (!nextCatalog) {
+      setToast(rateWorkflowCopy.currencyAddFailed);
+      return;
+    }
+    updateCurrencyCatalog(nextCatalog);
+    if (currencyAddTarget === "primary") setTradeCurrency(currencyToAdd);
+    if (currencyAddTarget === "counter") setTradeReceiveCurrency(currencyToAdd);
+    setCurrencyToAdd("");
+    setCurrencyAddTarget(null);
+    setTradeReviewing(false);
+    setToast(rateWorkflowCopy.currencyAdded);
+  };
+  const tradeRateTargetCurrency = tradeReceiveCurrency;
+  const displayedTradeRate = effectiveTradeRate;
+  const tradeRateMissing = (tradeCurrency !== "AFN" && rateContext.missing)
+    || (tradeReceiveCurrency !== "AFN" && tradeReceiveRateContext.missing);
+  const tradeRateStale = (tradeCurrency !== "AFN" && rateContext.stale)
+    || (tradeReceiveCurrency !== "AFN" && tradeReceiveRateContext.stale);
   const tradeRateStatus = rateOverrideEnabled
     ? rateWorkflowCopy.custom
     : tradeRateMissing
@@ -1937,8 +2044,7 @@ function App() {
         : rateWorkflowCopy.current;
   const changeDisplayedTradeRate = (next: string) => {
     setRateOverrideEnabled(true);
-    if (tradeSide === "EXCHANGE_FX") setTradeExchangeRate(next);
-    else setRateOverride(next);
+    setRateOverride(next);
     setAllowStaleRate(false);
     setPublishRate(false);
     setTradeReviewing(false);
@@ -1946,36 +2052,48 @@ function App() {
   const restoreApprovedTradeRate = () => {
     setRateOverrideEnabled(false);
     setRateOverride("");
-    setTradeExchangeRate("");
     setPublishRate(false);
     setTradeReviewing(false);
   };
   let tradePreview: ReturnType<typeof deriveTradeAmounts> | null = null;
   try {
-    if (amount && tradeSide === "EXCHANGE_FX" && effectiveTradeRate && exchangeSourceValuationRate && exchangeTargetValuationRate)
+    const soldValuationRate = tradeSide === "BUY_FX" ? targetSellValuationRate : sourceSellValuationRate;
+    const boughtValuationRate = tradeSide === "BUY_FX" ? sourceBuyValuationRate : targetBuyValuationRate;
+    if (amount && effectiveTradeRate && soldValuationRate && boughtValuationRate) {
+      const primaryAmount = new Decimal(amount);
+      const counterAmount = primaryAmount.times(effectiveTradeRate);
+      const soldAmount = tradeSide === "BUY_FX" ? counterAmount : primaryAmount;
+      const boughtAmount = tradeSide === "BUY_FX" ? primaryAmount : counterAmount;
       tradePreview = {
         rate: effectiveTradeRate,
-        soldAmount: new Decimal(amount).toFixed(12),
-        boughtAmount: new Decimal(amount).times(effectiveTradeRate).toFixed(12),
-        soldBaseValue: new Decimal(amount).times(exchangeSourceValuationRate).toFixed(12),
-        boughtBaseValue: new Decimal(amount).times(effectiveTradeRate).times(exchangeTargetValuationRate).toFixed(12),
+        soldAmount: soldAmount.toFixed(12),
+        boughtAmount: boughtAmount.toFixed(12),
+        soldBaseValue: soldAmount.times(soldValuationRate).toFixed(12),
+        boughtBaseValue: boughtAmount.times(boughtValuationRate).toFixed(12),
       };
-    else if (amount && tradeSide !== "EXCHANGE_FX" && effectiveTradeRate)
-      tradePreview = deriveTradeAmounts(tradeSide, amount, effectiveTradeRate, effectiveTradeRate);
+    }
   } catch {
     tradePreview = null;
   }
-  const tradeGivenAmount =
-    tradeSide === "BUY_FX" ? tradePreview?.soldAmount : amount;
-  const tradeGivenCurrency = tradeSide === "BUY_FX" ? "AFN" : tradeCurrency;
-  const tradeReceivedAmount =
-    tradeSide === "BUY_FX" ? amount : tradePreview?.boughtAmount;
-  const tradeReceivedCurrency =
-    tradeSide === "BUY_FX"
-      ? tradeCurrency
-      : tradeSide === "EXCHANGE_FX"
-        ? tradeReceiveCurrency
-        : "AFN";
+  const tradeGivenAmount = tradePreview?.soldAmount;
+  const tradeGivenCurrency = tradeSide === "BUY_FX" ? tradeReceiveCurrency : tradeCurrency;
+  const tradeReceivedAmount = tradePreview?.boughtAmount;
+  const tradeReceivedCurrency = tradeSide === "BUY_FX" ? tradeCurrency : tradeReceiveCurrency;
+  const tradeBackendSide: "BUY_FX" | "SELL_FX" | "EXCHANGE_FX" = tradeGivenCurrency === "AFN" && tradeReceivedCurrency !== "AFN"
+    ? "BUY_FX"
+    : tradeGivenCurrency !== "AFN" && tradeReceivedCurrency === "AFN"
+      ? "SELL_FX"
+      : "EXCHANGE_FX";
+  let tradeBackendCustomerRate = "";
+  try {
+    if (tradePreview) {
+      tradeBackendCustomerRate = tradeBackendSide === "BUY_FX"
+        ? new Decimal(tradePreview.soldAmount).div(tradePreview.boughtAmount).toFixed(12)
+        : new Decimal(tradePreview.boughtAmount).div(tradePreview.soldAmount).toFixed(12);
+    }
+  } catch {
+    tradeBackendCustomerRate = "";
+  }
   const activeMoneyAccountName =
     moneyAccounts.find((account) => account.cashbox_id === cashboxId)?.name ??
     moneyAccounts.find((account) => account.account_type === "cashbox")?.name ??
@@ -2358,7 +2476,6 @@ function App() {
                   onOpen={(route) => {
                     if (route === "/fx/buy") openTrade("BUY_FX");
                     else if (route === "/fx/sell") openTrade("SELL_FX");
-                    else if (route === "/fx/exchange") openTrade("EXCHANGE_FX");
                     else if (route === "/debts" || route === "/hawala/partners") navigate(`${workspaceRoot(organizationId)}${route}`);
                     else navigate(financialRoute(organizationId, route));
                   }}
@@ -2397,7 +2514,7 @@ function App() {
                   onRoute={(path) => navigate(path)}
                   onToast={setToast}
                   onFinancialCompleted={setCompletedTrade}
-                  onCurrencyCatalogChange={setCurrencyCatalog}
+                  onCurrencyCatalogChange={updateCurrencyCatalog}
                   onCounterpartyChanged={(person) => {
                     if (person) setTradeCounterparties((current) => current.some((item) => item.id === person.id) ? current : [...current, person]);
                     setCounterpartyRefresh((value) => value + 1);
@@ -2450,11 +2567,7 @@ function App() {
               <div>
                 <p className="kicker">{t("newTransaction")}</p>
                 <h2 id="trade-dialog-title">
-                  {tradeSide === "BUY_FX"
-                    ? t("buy")
-                    : tradeSide === "SELL_FX"
-                      ? t("sell")
-                      : t("exchange")}{" "}
+                  {tradeSide === "BUY_FX" ? t("buy") : t("sell")}{" "}
                   · {t("recordTrade")}
                 </h2>
               </div>
@@ -2474,7 +2587,6 @@ function App() {
               {([
                 ["BUY_FX", t("buy")],
                 ["SELL_FX", t("sell")],
-                ["EXCHANGE_FX", t("exchange")],
               ] as const).map(([side, label]) => (
                 <button
                   key={side}
@@ -2517,13 +2629,17 @@ function App() {
                     value={tradeCurrency}
                     onChange={(event) => {
                       const nextCurrency = event.target.value;
+                      if (nextCurrency === "__add_currency__") {
+                        setCurrencyAddTarget("primary");
+                        setCurrencyToAdd(disabledTradeCurrencies[0]?.code ?? "");
+                        return;
+                      }
                       setTradeCurrency(nextCurrency);
                       if (nextCurrency === tradeReceiveCurrency) {
                         setTradeReceiveCurrency(tradeCurrencies.find((item) => item !== nextCurrency) ?? "");
                       }
                       setRateState("");
                       setSellRate("");
-                      setTradeExchangeRate("");
                       setRateOverrideEnabled(false);
                       setRateOverride("");
                       setExchangeSourceRatePublication(undefined);
@@ -2532,8 +2648,9 @@ function App() {
                     }}
                   >
                     {tradeCurrencies.map((currency) => (
-                      <option key={currency}>{currency}</option>
+                      <option key={currency} value={currency}>{currencyOptionLabel(currency)}</option>
                     ))}
+                    {canManageTradeCurrencies && disabledTradeCurrencies.length ? <option value="__add_currency__">＋ {rateWorkflowCopy.addCurrency}</option> : null}
                   </select>
                 </label>
 
@@ -2579,31 +2696,42 @@ function App() {
                     placeholder="0.00"
                     aria-label={`${tradeSide === "BUY_FX" ? t("sellAmount") : t("buyAmount")} ${tradeRateTargetCurrency}`}
                   />
-                  {tradeSide === "EXCHANGE_FX" ? (
-                    <select
-                      aria-label={t("currency")}
-                      value={tradeReceiveCurrency}
-                      onChange={(event) => {
-                        setTradeReceiveCurrency(event.target.value);
-                        setTradeExchangeRate("");
-                        setRateOverrideEnabled(false);
-                        setExchangeTargetRatePublication(undefined);
-                        setTradeReviewing(false);
-                      }}
-                    >
-                      {tradeCurrencies
-                        .filter((currency) => currency !== tradeCurrency)
-                        .map((currency) => (
-                          <option key={currency}>{currency}</option>
-                        ))}
-                    </select>
-                  ) : (
-                    <select aria-label={t("currency")} value="AFN" disabled>
-                      <option>AFN</option>
-                    </select>
-                  )}
+                  <select
+                    aria-label={`${t("currency")} 2`}
+                    value={tradeReceiveCurrency}
+                    onChange={(event) => {
+                      const nextCurrency = event.target.value;
+                      if (nextCurrency === "__add_currency__") {
+                        setCurrencyAddTarget("counter");
+                        setCurrencyToAdd(disabledTradeCurrencies[0]?.code ?? "");
+                        return;
+                      }
+                      setTradeReceiveCurrency(nextCurrency);
+                      setRateOverrideEnabled(false);
+                      setExchangeTargetRatePublication(undefined);
+                      setTradeReviewing(false);
+                    }}
+                  >
+                    {tradeCurrencies
+                      .filter((currency) => currency !== tradeCurrency)
+                      .map((currency) => (
+                        <option key={currency} value={currency}>{currencyOptionLabel(currency)}</option>
+                      ))}
+                    {canManageTradeCurrencies && disabledTradeCurrencies.length ? <option value="__add_currency__">＋ {rateWorkflowCopy.addCurrency}</option> : null}
+                  </select>
                 </label>
               </div>
+              {currencyAddTarget ? <section className="trade-currency-add-panel" aria-label={rateWorkflowCopy.addCurrency}>
+                <label>{rateWorkflowCopy.chooseCurrency}
+                  <select value={currencyToAdd} onChange={(event) => setCurrencyToAdd(event.target.value)}>
+                    {disabledTradeCurrencies.map((currency) => <option key={currency.code} value={currency.code}>{currency.code} · {currency.name_dari} · {currency.symbol}</option>)}
+                  </select>
+                </label>
+                <div className="inline-actions">
+                  <button type="button" className="primary-action" disabled={!currencyToAdd || currencyAdding} onClick={() => void addCurrencyToTrade()}>{currencyAdding ? t("working") : rateWorkflowCopy.addCurrency}</button>
+                  <button type="button" className="text-button" onClick={() => { setCurrencyAddTarget(null); setCurrencyToAdd(""); }}>{rateWorkflowCopy.cancel}</button>
+                </div>
+              </section> : null}
               <div className="trade-quick-fields">
                 <CustomerSelector
                   language={language}
@@ -2613,7 +2741,7 @@ function App() {
                   onAddRequested={capability("customers.manage") ? () => setQuickCustomerOpen(true) : undefined}
                   allowWalkIn
                 />
-                <label>
+                <label className="trade-commission-field">
                   {rateWorkflowCopy.feeAfn}
                   <input
                     min="0"
@@ -2637,13 +2765,13 @@ function App() {
                 </label>
               </details>
             </fieldset>
-            {tradeSide === "EXCHANGE_FX" && (
+            {(tradeRateMissing || tradeRateStale || (tradeCurrency !== "AFN" && tradeReceiveCurrency !== "AFN")) && (
               <details
-                className={`rate-governance exchange-rate-governance ${!exchangeSourceRateReady || !exchangeTargetRateReady ? "needs-attention" : ""}`}
-                open={!exchangeSourceRateReady || !exchangeTargetRateReady || rateOverrideEnabled}
+                className={`rate-governance exchange-rate-governance ${tradeRateMissing || tradeRateStale ? "needs-attention" : ""}`}
+                open={tradeRateMissing || tradeRateStale}
               >
                 <summary>{rateWorkflowCopy.exchangeBasis}</summary>
-                <InlineRateResolver
+                {tradeCurrency !== "AFN" ? <InlineRateResolver
                   organizationId={organizationId}
                   branchId={branchId}
                   currency={tradeCurrency}
@@ -2652,8 +2780,8 @@ function App() {
                   value={exchangeSourceRatePublication}
                   onChange={(value) => { setExchangeSourceRatePublication(value); setTradeReviewing(false); }}
                   onReadyChange={setExchangeSourceRateReady}
-                />
-                <InlineRateResolver
+                /> : null}
+                {tradeReceiveCurrency !== "AFN" ? <InlineRateResolver
                   organizationId={organizationId}
                   branchId={branchId}
                   currency={tradeReceiveCurrency}
@@ -2662,30 +2790,30 @@ function App() {
                   value={exchangeTargetRatePublication}
                   onChange={(value) => { setExchangeTargetRatePublication(value); setTradeReviewing(false); }}
                   onReadyChange={setExchangeTargetRateReady}
-                />
+                /> : null}
                 {rateOverrideEnabled && capability("approval.request") && !capability("approval.decide") ? <p>{rateWorkflowCopy.approval}</p> : null}
               </details>
             )}
-            {tradeSide !== "EXCHANGE_FX" && (rateContext.missing || rateContext.stale || rateOverrideEnabled || allowStaleRate) && (
-              <section className={`rate-governance ${rateContext.missing || rateContext.stale ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
+            {(tradeRateStale || rateOverrideEnabled || allowStaleRate) && (
+              <section className={`rate-governance ${tradeRateStale ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
                 {rateContext.effectiveFrom ? (
                   <div className="applied-rate-row">
                     <small>{new Date(rateContext.effectiveFrom).toLocaleString(language)}</small>
                   </div>
                 ) : null}
-                {rateContext.stale && !rateContext.missing && (
+                {tradeRateStale && !tradeRateMissing && (
                   <label className="choice-row">
                     <input type="checkbox" checked={allowStaleRate} disabled={tradeReviewing || tradeBusy || rateOverrideEnabled} onChange={(event) => { setAllowStaleRate(event.target.checked); setTradeReviewing(false); }} />
                     <span>{rateWorkflowCopy.continueStale}</span>
                   </label>
                 )}
-                {rateOverrideEnabled && canPublishTransactionRate && (
+                {rateOverrideEnabled && canPublishTransactionRate && tradeCurrency !== "AFN" && tradeReceiveCurrency === "AFN" && (
                   <label className="choice-row">
                     <input type="checkbox" checked={publishRate} disabled={tradeReviewing || tradeBusy} onChange={(event) => { setPublishRate(event.target.checked); setTradeReviewing(false); }} />
                     <span>{rateWorkflowCopy.publish}</span>
                   </label>
                 )}
-                {capability("approval.request") && !capability("approval.decide") && (rateOverrideEnabled || allowStaleRate || rateContext.missing) && <p>{rateWorkflowCopy.approval}</p>}
+                {capability("approval.request") && !capability("approval.decide") && (rateOverrideEnabled || allowStaleRate || tradeRateMissing) && <p>{rateWorkflowCopy.approval}</p>}
               </section>
             )}
             {(
@@ -2699,7 +2827,7 @@ function App() {
                   <strong aria-hidden="true">→</strong>
                   <span>
                     <small>{u("destinationAccount")}</small>
-                    <b>{tradeSide === "BUY_FX" ? activeMoneyAccountName : tradeSide === "EXCHANGE_FX" ? activeMoneyAccountName : u("customerOutside")}</b>
+                    <b>{tradeSide === "BUY_FX" ? activeMoneyAccountName : u("customerOutside")}</b>
                   </span>
                 </div>
                 <p>{u("tradeHasTwoMoneySides")}</p>
@@ -2724,7 +2852,7 @@ function App() {
                   <span>{t("exchangeRate")}</span>
                   <b dir="ltr">
                     {effectiveTradeRate}{" "}
-                    {tradeSide === "EXCHANGE_FX" ? tradeReceiveCurrency : "AFN"}
+                    {tradeReceiveCurrency}
                   </b>
                   <span>{t("marketRate")}</span>
                   <b>✓</b>
@@ -2739,7 +2867,7 @@ function App() {
             {!tradeReviewing && <button
               className="primary-action full"
               type="submit"
-              disabled={tradeBusy || (tradeSide === "EXCHANGE_FX" && (!exchangeSourceRateReady || !exchangeTargetRateReady || !effectiveTradeRate))}
+              disabled={tradeBusy || !tradePairRateReady || tradeCurrency === tradeReceiveCurrency}
             >
               {tradeBusy ? t("working") : u("reviewTransaction")}{" "}
               <span>→</span>
@@ -5859,6 +5987,8 @@ function RatesView({
       back: "Back to Home",
       chooseCurrencies: "Currencies shown on this page",
       chooseCurrenciesIntro: "Choose and order the currencies your shop uses. The same order is used in transactions.",
+      addCurrency: "Add currency",
+      removeCurrency: "Remove currency",
       saveCurrencies: "Save currency list",
       saving: "Saving…",
       selected: "selected",
@@ -5881,6 +6011,8 @@ function RatesView({
       back: "بازگشت به خانه",
       chooseCurrencies: "اسعار نمایشی در این صفحه",
       chooseCurrenciesIntro: "اسعار مورد استفاده صرافی را انتخاب و مرتب کنید. همین ترتیب در معاملات نیز استفاده می‌شود.",
+      addCurrency: "افزودن اسعار",
+      removeCurrency: "حذف اسعار",
       saveCurrencies: "ذخیره فهرست اسعار",
       saving: "در حال ذخیره…",
       selected: "انتخاب‌شده",
@@ -5903,6 +6035,8 @@ function RatesView({
       back: "کور ته ستنېدل",
       chooseCurrencies: "په دې پاڼه کې ښکاره کېدونکي اسعار",
       chooseCurrenciesIntro: "هغه اسعار وټاکئ او ترتیب یې کړئ چې صرافي یې کاروي. همدا ترتیب په معاملو کې هم کارېږي.",
+      addCurrency: "اسعار زیاتول",
+      removeCurrency: "اسعار لرې کول",
       saveCurrencies: "د اسعارو لېست ساتل",
       saving: "ساتل کېږي…",
       selected: "ټاکل شوي",
@@ -5919,6 +6053,7 @@ function RatesView({
   const [selectedCodes, setSelectedCodes] = useState<string[]>(() => inspectionCurrencies.filter((item) => item.enabled && item.code !== 'AFN').map((item) => item.code));
   const [busy, setBusy] = useState(false);
   const [selectionBusy, setSelectionBusy] = useState(false);
+  const [currencyToAdd, setCurrencyToAdd] = useState("");
   const [error, setError] = useState("");
   const loadRates = useCallback(async () => {
     setBusy(true);
@@ -6015,9 +6150,12 @@ function RatesView({
     ? (language === 'en' ? 'Sarai Shahzada' : language === 'fa-AF' ? 'سرای شهزاده' : 'سرای شهزاده')
     : (language === 'en' ? 'Khorasan Market' : language === 'fa-AF' ? 'مارکیت خراسان' : 'خراسان مارکېټ');
 
-  const toggleCurrency = (code: string) => setSelectedCodes((current) => current.includes(code)
-    ? current.filter((item) => item !== code)
-    : [...current, code]);
+  const addCurrency = () => {
+    if (!currencyToAdd) return;
+    setSelectedCodes((current) => current.includes(currencyToAdd) ? current : [...current, currencyToAdd]);
+    setCurrencyToAdd("");
+  };
+  const removeCurrency = (code: string) => setSelectedCodes((current) => current.filter((item) => item !== code));
   const moveCurrency = (code: string, offset: -1 | 1) => setSelectedCodes((current) => {
     const index = current.indexOf(code);
     const destination = index + offset;
@@ -6095,12 +6233,24 @@ function RatesView({
         {canManage ? <details className="rate-currency-picker">
           <summary>{copy.chooseCurrencies} · {selectedCodes.length} {copy.selected}</summary>
           <p>{copy.chooseCurrenciesIntro}</p>
+          <div className="rate-currency-add-row">
+            <label>{copy.addCurrency}
+              <select aria-label={copy.addCurrency} value={currencyToAdd} onChange={(event) => setCurrencyToAdd(event.target.value)}>
+                <option value="">—</option>
+                {catalog.filter((currency) => currency.code !== 'AFN' && !selectedCodes.includes(currency.code)).map((currency) => (
+                  <option key={currency.code} value={currency.code}>{currency.code} · {currency.name_dari} · {currency.symbol}</option>
+                ))}
+              </select>
+            </label>
+            <button className="text-button" type="button" disabled={!currencyToAdd} onClick={addCurrency}>{copy.addCurrency}</button>
+          </div>
           <div className="rate-currency-choice-list">
-            {catalog.filter((currency) => currency.code !== 'AFN').map((currency) => {
-              const selectedIndex = selectedCodes.indexOf(currency.code);
-              return <article className={selectedIndex >= 0 ? 'selected' : ''} key={currency.code}>
-                <label><input type="checkbox" checked={selectedIndex >= 0} onChange={() => toggleCurrency(currency.code)} /><span><b>{currency.code} · {currencyName(language, currency)}</b><small>{currency.symbol}</small></span></label>
-                {selectedIndex >= 0 ? <span className="currency-order-actions"><button type="button" aria-label={`${copy.moveUp} ${currency.code}`} disabled={selectedIndex === 0} onClick={() => moveCurrency(currency.code, -1)}>↑</button><button type="button" aria-label={`${copy.moveDown} ${currency.code}`} disabled={selectedIndex === selectedCodes.length - 1} onClick={() => moveCurrency(currency.code, 1)}>↓</button></span> : null}
+            {selectedCodes.map((code, selectedIndex) => {
+              const currency = catalog.find((item) => item.code === code);
+              if (!currency) return null;
+              return <article className="selected" key={currency.code}>
+                <span className="rate-selected-currency"><b>{currency.code} · {currency.name_dari}</b><small>{currency.symbol}</small></span>
+                <span className="currency-order-actions"><button type="button" aria-label={`${copy.moveUp} ${currency.code}`} disabled={selectedIndex === 0} onClick={() => moveCurrency(currency.code, -1)}>↑</button><button type="button" aria-label={`${copy.moveDown} ${currency.code}`} disabled={selectedIndex === selectedCodes.length - 1} onClick={() => moveCurrency(currency.code, 1)}>↓</button><button type="button" className="currency-remove" aria-label={`${copy.removeCurrency} ${currency.code}`} disabled={selectedCodes.length === 1} onClick={() => removeCurrency(currency.code)}>×</button></span>
               </article>;
             })}
           </div>
@@ -6122,7 +6272,7 @@ function RatesView({
               return <div className="market-rate-row" role="row" key={`${activeMarket?.marketCode}-${item.currency}`}>
                 <span className="market-currency-cell" role="cell">
                   <span className="market-currency-mark" aria-hidden="true">{currency?.symbol ?? currencySymbols[item.currency] ?? item.currency.slice(0, 1)}</span>
-                  <span><strong>{item.currency}{item.quotedUnits > 1 ? " 1K" : ""}</strong><small>{localCurrencyName(language, item.currency)}</small></span>
+                  <span><strong>{item.currency}{item.quotedUnits > 1 ? " 1K" : ""}</strong><small>{currency?.name_dari ?? localCurrencyName("fa-AF", item.currency)}</small></span>
                 </span>
                 <bdi role="cell">{displayedRate(item.buy, item.quotedUnits)}</bdi>
                 <bdi role="cell">{displayedRate(item.sell, item.quotedUnits)}</bdi>

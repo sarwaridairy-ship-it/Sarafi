@@ -13,12 +13,11 @@ const families: Family[] = [
   {
     id: "fx",
     label: { en: "Currency Exchange", "fa-AF": "خرید و فروش اسعار", "ps-AF": "د اسعارو تبادله" },
-    intro: { en: "Buy, sell, or exchange currency.", "fa-AF": "اسعار را بخرید، بفروشید یا تبدیل کنید.", "ps-AF": "اسعار وپېرئ، وپلورئ یا بدل یې کړئ." },
+    intro: { en: "Buy or sell any two currencies.", "fa-AF": "هر دو اسعار را بخرید یا بفروشید.", "ps-AF": "هر دوه اسعار وپېرئ یا وپلورئ." },
     icon: "trade",
     actions: [
       { label: { en: "Buy currency", "fa-AF": "خرید اسعار", "ps-AF": "اسعار پېرل" }, route: "/fx/buy", capability: "financial.post.fx" },
       { label: { en: "Sell currency", "fa-AF": "فروش اسعار", "ps-AF": "اسعار پلورل" }, route: "/fx/sell", capability: "financial.post.fx" },
-      { label: { en: "Exchange currencies", "fa-AF": "تبدیل دو اسعار", "ps-AF": "دوه اسعار بدلول" }, route: "/fx/exchange", capability: "financial.post.fx" },
     ],
   },
   {
