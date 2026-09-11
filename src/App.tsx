@@ -1971,7 +1971,6 @@ function App() {
         useShop: "Use shop rate",
         feeAfn: "Commission (AFN)",
         noteOptional: "Add a note (optional)",
-        exchangeBasis: "How this cross-rate is calculated",
         addCurrency: "Add currency",
         chooseCurrency: "Choose a currency",
         currencyAdded: "Currency added to this shop.",
@@ -1992,7 +1991,6 @@ function App() {
           useShop: "گذاشتن نرخ صرافی",
           feeAfn: "کمیشن (AFN)",
           noteOptional: "یادداشت (اختیاری)",
-          exchangeBasis: "این نرخ چگونه حساب شده؟",
           addCurrency: "افزودن اسعار",
           chooseCurrency: "یک اسعار را انتخاب کنید",
           currencyAdded: "اسعار به فهرست صرافی افزوده شد.",
@@ -2012,7 +2010,6 @@ function App() {
           useShop: "د صرافۍ نرخ وکاروئ",
           feeAfn: "کمېشن (AFN)",
           noteOptional: "یادښت (اختیاري)",
-          exchangeBasis: "دا نرخ څنګه حساب شوی؟",
           addCurrency: "اسعار زیاتول",
           chooseCurrency: "اسعار وټاکئ",
           currencyAdded: "اسعار د صرافۍ لېست ته زیات شول.",
@@ -2787,11 +2784,10 @@ function App() {
               </details>
             </fieldset>
             {(tradeRateMissing || tradeRateStale || (tradeCurrency !== "AFN" && tradeReceiveCurrency !== "AFN")) && (
-              <details
+              <section
                 className={`rate-governance exchange-rate-governance ${tradeRateMissing || tradeRateStale ? "needs-attention" : ""}`}
-                open={tradeRateMissing || tradeRateStale}
+                aria-label={t("exchangeRate")}
               >
-                <summary>{rateWorkflowCopy.exchangeBasis}</summary>
                 {tradeCurrency !== "AFN" ? <InlineRateResolver
                   organizationId={organizationId}
                   branchId={branchId}
@@ -2813,7 +2809,7 @@ function App() {
                   onReadyChange={setExchangeTargetRateReady}
                 /> : null}
                 {rateOverrideEnabled && capability("approval.request") && !capability("approval.decide") ? <p>{rateWorkflowCopy.approval}</p> : null}
-              </details>
+              </section>
             )}
             {(tradeRateStale || rateOverrideEnabled || allowStaleRate) && (
               <section className={`rate-governance ${tradeRateStale ? "needs-attention" : ""}`} aria-label={t("exchangeRate")}>
@@ -3439,6 +3435,12 @@ function SecurityOverviewView({
         devicesCopy: "Review trusted devices, invitations, roles, and pending approvals.",
         controls: "Security controls and history",
         controlsCopy: "Review two-step requirements, support access, and recorded control changes.",
+        protected: "Protected workspace",
+        protectedCopy: "Sensitive actions are checked against role, device, and approval rules before they are accepted.",
+        accessLayer: "Access",
+        approvalLayer: "Approvals",
+        auditLayer: "Audit trail",
+        choose: "Choose an area to review",
       }
     : language === "fa-AF"
       ? {
@@ -3449,6 +3451,12 @@ function SecurityOverviewView({
           devicesCopy: "دستگاه‌ها، دعوت‌ها، وظایف و درخواست‌های منتظر را بررسی کنید.",
           controls: "کنترول‌ها و تاریخچه امنیت",
           controlsCopy: "شرایط امنیت دومرحله‌ای، دسترسی پشتیبانی و تغییرات ثبت‌شده را ببینید.",
+          protected: "محیط کاری حفاظت‌شده",
+          protectedCopy: "کارهای مهم پیش از ثبت، بر اساس وظیفه، دستگاه و اجازه بررسی می‌شوند.",
+          accessLayer: "دسترسی",
+          approvalLayer: "تأییدها",
+          auditLayer: "تاریخچه",
+          choose: "یک بخش را برای بررسی انتخاب کنید",
         }
       : {
           kicker: "د کنټرول مرکز",
@@ -3458,13 +3466,34 @@ function SecurityOverviewView({
           devicesCopy: "وسایل، بلنې، دندې او منتظرې غوښتنې وګورئ.",
           controls: "امنیتي کنټرولونه او تاریخ",
           controlsCopy: "دوه پړاوه شرطونه، د ملاتړ لاسرسی او ثبت شوي بدلونونه وګورئ.",
+          protected: "خوندي کاري چاپېریال",
+          protectedCopy: "مهم کارونه تر ثبت مخکې د دندې، وسیلې او اجازې له مخې کتل کېږي.",
+          accessLayer: "لاس‌رسی",
+          approvalLayer: "تاییدونه",
+          auditLayer: "تاریخ",
+          choose: "د کتنې لپاره یوه برخه وټاکئ",
         };
   return (
-    <section className="panel control-center-panel">
-      <div className="panel-header"><div><p className="kicker">{copy.kicker}</p><h1>{copy.title}</h1><p>{copy.intro}</p></div></div>
+    <section className="professional-workspace security-overview">
+      <header className="security-overview-hero">
+        <div className="security-overview-heading">
+          <span className="security-overview-shield"><AppIcon name="shield" size={28} /></span>
+          <div><p className="kicker">{copy.kicker}</p><h1>{copy.title}</h1><p>{copy.intro}</p></div>
+        </div>
+        <div className="security-overview-assurance">
+          <span><AppIcon name="check" size={17} /></span>
+          <div><b>{copy.protected}</b><small>{copy.protectedCopy}</small></div>
+        </div>
+        <div className="security-layer-strip" aria-label={copy.protected}>
+          <span><AppIcon name="people" size={17} /><b>{copy.accessLayer}</b></span>
+          <span><AppIcon name="check" size={17} /><b>{copy.approvalLayer}</b></span>
+          <span><AppIcon name="transactions" size={17} /><b>{copy.auditLayer}</b></span>
+        </div>
+      </header>
+      <p className="security-overview-prompt">{copy.choose}</p>
       <div className="control-center-grid">
         <button className="control-center-card" onClick={() => onNavigate("Team & Devices")}><AppIcon name="people" /><span><strong>{copy.devices}</strong><small>{copy.devicesCopy}</small></span><span aria-hidden="true">→</span></button>
-        <button className="control-center-card" onClick={() => onNavigate("Business Settings")}><AppIcon name="shield" /><span><strong>{copy.controls}</strong><small>{copy.controlsCopy}</small></span><span aria-hidden="true">→</span></button>
+        <button className="control-center-card" onClick={() => { window.sessionStorage.setItem("sarafi-settings-section", "security"); onNavigate("Business Settings"); }}><AppIcon name="shield" /><span><strong>{copy.controls}</strong><small>{copy.controlsCopy}</small></span><span aria-hidden="true">→</span></button>
       </div>
     </section>
   );
@@ -6106,7 +6135,13 @@ function RatesView({
         ];
         setMarkets([
           { market: 'Sarai Shahzada', marketCode: 'sarai-shahzada', quoteCurrency: 'AFN', fetchedAt, rates: shahzadaRates },
-          { market: 'Khorasan Market', marketCode: 'khorasan-market', quoteCurrency: 'IRR', fetchedAt, rates: [{ currency: 'USD', buy: '232500', sell: '233000', quotedUnits: 1, updatedAt: '10:33 AM', changePercent: '5.43%' }] },
+          { market: 'Khorasan Market', marketCode: 'khorasan-market', quoteCurrency: 'AFN', fetchedAt, rates: [
+            { currency: 'USD', buy: '65.35', sell: '65.40', quotedUnits: 1, updatedAt: '10:33 AM', changePercent: '0.10%' },
+            { currency: 'EUR', buy: '74.50', sell: '74.70', quotedUnits: 1, updatedAt: '10:31 AM', changePercent: '0.05%' },
+            { currency: 'GBP', buy: '85.40', sell: '85.80', quotedUnits: 1, updatedAt: '10:31 AM', changePercent: '-0.08%' },
+            { currency: 'IRR', buy: '0.00035', sell: '0.00036', quotedUnits: 1000, updatedAt: '10:30 AM', changePercent: '-0.15%' },
+            { currency: 'PKR', buy: '0.227', sell: '0.228', quotedUnits: 1000, updatedAt: '10:29 AM', changePercent: '0.12%' },
+          ] },
         ]);
         return;
       }
@@ -6742,15 +6777,11 @@ function DebtsView({
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("AFN");
-  const [createRatePublication, setCreateRatePublication] = useState<InlineRatePublication>();
-  const [createRateReady, setCreateRateReady] = useState(false);
   const [moneyAccountId, setMoneyAccountId] = useState(inspection ? "inspection-cashbox" : "");
   const [accounts, setAccounts] = useState<MoneyAccountRecord[]>(() => inspection ? inspectionMoneyAccounts(language) : []);
   const [catalog, setCatalog] = useState<CurrencyCatalogRecord[]>(() => inspection ? inspectionCurrencies : []);
   const [selectedDebtChoice, setSelectedDebt] = useState<DebtRecord | null>(null);
   const [settlementAmount, setSettlementAmount] = useState("");
-  const [settlementRatePublication, setSettlementRatePublication] = useState<InlineRatePublication>();
-  const [settlementRateReady, setSettlementRateReady] = useState(false);
   const [settlementAccountId, setSettlementAccountId] = useState(inspection ? "inspection-cashbox" : "");
   const [busy, setBusy] = useState(false);
   const [confirmingCreate, setConfirmingCreate] = useState(false);
@@ -6830,10 +6861,6 @@ function DebtsView({
       );
       return;
     }
-    if (currency !== "AFN" && !createRateReady) {
-      onToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
-      return;
-    }
     if (insufficientCreateBalance) {
       onToast(language === "en" ? "The selected shop account does not have enough money." : language === "fa-AF" ? "در حساب انتخاب‌شده صرافی پول کافی نیست." : "د صرافۍ په ټاکلي حساب کې کافي پیسې نشته.");
       return;
@@ -6889,7 +6916,6 @@ function DebtsView({
       cashbox_id: selectedCreateAccount?.cashbox_id || undefined,
       device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
-      publish_rate: createRatePublication,
     });
     setBusy(false);
     if (result.error) onToast(localizedFinancialError(language, result.error, u("couldNotSave")));
@@ -6918,7 +6944,6 @@ function DebtsView({
       });
       setCounterpartyId("");
       setAmount("");
-      setCreateRatePublication(undefined);
       setConfirmingCreate(false);
     }
   };
@@ -6927,10 +6952,6 @@ function DebtsView({
     if (!selectedDebt || !organizationId) return;
     if (!settlementAccountId) {
       onToast(u("chooseMoneyAccount"));
-      return;
-    }
-    if (selectedDebt.currency_code !== "AFN" && !settlementRateReady) {
-      onToast(language === "en" ? "Choose the rate on this page before saving." : language === "fa-AF" ? "پیش از ثبت، نرخ همین معامله را در این صفحه آماده کنید." : "له ثبت مخکې د همدې معاملې نرخ په دې پاڼه کې چمتو کړئ.");
       return;
     }
     if (!confirmingSettlement) {
@@ -6974,7 +6995,6 @@ function DebtsView({
       cashbox_id: selectedSettlementAccount?.cashbox_id || undefined,
       device_id: deviceId || undefined,
       client_command_id: crypto.randomUUID(),
-      publish_rate: settlementRatePublication,
     });
     setBusy(false);
     if (result.error) onToast(localizedFinancialError(language, result.error, u("couldNotSave")));
@@ -7003,7 +7023,6 @@ function DebtsView({
       });
       setSelectedDebt(null);
       setSettlementAmount("");
-      setSettlementRatePublication(undefined);
       setConfirmingSettlement(false);
       if (organizationId) {
         const refreshed = await listDebts(organizationId);
@@ -7056,8 +7075,6 @@ function DebtsView({
             <select value={currency} onChange={(event) => {
               const next = event.target.value;
               setCurrency(next);
-              setCreateRatePublication(undefined);
-              setCreateRateReady(next === "AFN");
               setConfirmingCreate(false);
             }}>
               {catalog.filter((item) => item.enabled).map((item) => (
@@ -7068,16 +7085,6 @@ function DebtsView({
             </select>
           </label>
         </div>
-        <InlineRateResolver
-          organizationId={organizationId}
-          branchId={branchId}
-          currency={currency}
-          language={language}
-          canPublish={hasCapability(capabilities, "rates.manage")}
-          value={createRatePublication}
-          onChange={(value) => { setCreateRatePublication(value); setConfirmingCreate(false); }}
-          onReadyChange={setCreateRateReady}
-        />
         <label>
           {direction === "receivable"
             ? (language === "en" ? "Which shop account paid the money?" : language === "fa-AF" ? "پول از کدام حساب صرافی بیرون شد؟" : "پیسې د صرافۍ له کوم حسابه ووتلې؟")
@@ -7095,7 +7102,7 @@ function DebtsView({
           <span><small>{direction === "payable" ? (language === "en" ? "To the shop account" : language === "fa-AF" ? "به حساب صرافی" : "د صرافۍ حساب ته") : (language === "en" ? "To the person" : language === "fa-AF" ? "به حساب شخص" : "کس ته")}</small><b>{direction === "payable" ? accounts.find((account) => account.id === moneyAccountId)?.name ?? u("chooseDestinationAccount") : people.find((person) => person.id === counterpartyId)?.display_name ?? u("choosePerson")}</b></span>
         </div>
         {insufficientCreateBalance && <p className="field-error" role="alert">{language === "en" ? "Not enough money in this shop account." : language === "fa-AF" ? "در این حساب صرافی پول کافی نیست." : "د صرافۍ په دې حساب کې کافي پیسې نشته."}</p>}
-        {!confirmingCreate && <button className="primary-action full" type="submit" disabled={busy || insufficientCreateBalance || (currency !== "AFN" && !createRateReady)}>
+        {!confirmingCreate && <button className="primary-action full" type="submit" disabled={busy || insufficientCreateBalance}>
           {busy
             ? u("posting")
             : direction === "receivable"
@@ -7128,8 +7135,6 @@ function DebtsView({
                 setSelectedDebt(debt);
                 setSelectedDebtResult(debt);
                 setSettlementAmount(debt.outstanding_amount);
-                setSettlementRatePublication(undefined);
-                setSettlementRateReady(debt.currency_code === "AFN");
                 onRoute(`${workspaceRoot(organizationId)}/debts/${debt.id}${journey === "settle" ? "/settle" : ""}`);
               }}
             >
@@ -7210,17 +7215,7 @@ function DebtsView({
               ))}
             </select>
           </label>
-          <InlineRateResolver
-            organizationId={organizationId}
-            branchId={selectedDebt.branch_id ?? branchId}
-            currency={selectedDebt.currency_code}
-            language={language}
-            canPublish={hasCapability(capabilities, "rates.manage")}
-            value={settlementRatePublication}
-            onChange={(value) => { setSettlementRatePublication(value); setConfirmingSettlement(false); }}
-            onReadyChange={setSettlementRateReady}
-          />
-          {!confirmingSettlement && <button className="primary-action full" type="submit" disabled={busy || (selectedDebt.currency_code !== "AFN" && !settlementRateReady)}>
+          {!confirmingSettlement && <button className="primary-action full" type="submit" disabled={busy}>
             {busy
               ? u("settling")
               : selectedDebt.direction === "receivable"

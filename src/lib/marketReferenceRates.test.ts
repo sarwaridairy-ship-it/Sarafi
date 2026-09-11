@@ -15,10 +15,11 @@ describe('parseMarketReferenceRates', () => {
     expect(parseMarketReferenceRates(html)).toHaveLength(1)
   })
 
-  it('reads the Khorasan Market board quoted in Iranian rial', () => {
-    const html = `<h5 class="marketTitle">Khorasan Market <b>IRR</b> Rates</h5><table><tr><td><a href="/exchange-rates/khorasan-market/USD-IRR">USD - US Dollar</a></td><td><b class="buyRate">232500.00</b></td><td><b class="sellRate">233000.00</b></td><td class="time">10:33 AM</td><td><b class="up">5.43%</b></td></tr></table>`
-    expect(parseMarketReferenceRates(html, 'khorasan-market', 'IRR')).toEqual([
-      { currency: 'USD', buy: '232500', sell: '233000', quotedUnits: 1, updatedAt: '10:33 AM', changePercent: '5.43%' },
+  it('reads the complete Khorasan Market board quoted in afghanis', () => {
+    const html = `<h5 class="marketTitle">Khorasan Market <b>AFN</b> Rates</h5><table><tr><td><a href="/exchange-rates/khorasan-market/USD-AFN">USD - US Dollar</a></td><td><b class="buyRate">65.35</b></td><td><b class="sellRate">65.40</b></td><td class="time">10:33 AM</td><td><b class="up">0.10%</b></td></tr><tr><td><a href="/exchange-rates/khorasan-market/IRR-AFN">IRR - Iranian Rial</a> 1K</td><td><b class="buyRate">0.35</b></td><td><b class="sellRate">0.36</b></td><td class="time">10:30 AM</td><td><b class="down">-0.15%</b></td></tr></table><h5 class="marketTitle">Khorasan Market <b>IRR</b> Rates</h5><table><tr><td><a href="/exchange-rates/khorasan-market/USD-IRR">USD - US Dollar</a></td><td><b class="buyRate">232500</b></td><td><b class="sellRate">233000</b></td></tr></table>`
+    expect(parseMarketReferenceRates(html, 'khorasan-market', 'AFN')).toEqual([
+      { currency: 'USD', buy: '65.35', sell: '65.4', quotedUnits: 1, updatedAt: '10:33 AM', changePercent: '0.10%' },
+      { currency: 'IRR', buy: '0.00035', sell: '0.00036', quotedUnits: 1000, updatedAt: '10:30 AM', changePercent: '-0.15%' },
     ])
   })
 })

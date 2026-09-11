@@ -436,6 +436,10 @@ const controlCopy: Record<Language, Record<string, string>> = {
 
 export function SettingsView({ language, organizationId, organizationName, branchName, roleLabel, canManage, onDashboard }: { language: Language; organizationId: string | null; organizationName: string; branchName: string; roleLabel: string; canManage: boolean; onDashboard: () => void }) {
   const c = controlCopy[language];
+  const [settingsSection, setSettingsSection] = useState<"business" | "currencies" | "security">(() => {
+    const requested = window.sessionStorage.getItem("sarafi-settings-section");
+    return requested === "currencies" || requested === "security" ? requested : "business";
+  });
   const [settings, setSettings] = useState<WorkspaceSettingsRecord | null>(null);
   const [controls, setControls] = useState<OrganizationControlPlane | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error" | "preview">(organizationId === "inspection" ? "preview" : "loading");
@@ -490,6 +494,9 @@ export function SettingsView({ language, organizationId, organizationName, branc
     ["JPY", "Japanese Yen", "ین جاپان", "جاپاني ین", "¥"],
   ].map(([code, name_en, name_dari, name_pashto, symbol]) => ({ code, name_en, name_dari, name_pashto, symbol, minor_unit: 2, enabled: true })) : []);
   const [currencySearch, setCurrencySearch] = useState("");
+  useEffect(() => {
+    window.sessionStorage.removeItem("sarafi-settings-section");
+  }, []);
   const reloadControls = async () => {
     if (!organizationId || organizationId === "inspection") return;
     const result = await getOrganizationControlPlane(organizationId);
@@ -677,14 +684,64 @@ export function SettingsView({ language, organizationId, organizationName, branc
     { value: "UTC", label: language === "en" ? "Universal time" : language === "fa-AF" ? "زمان جهانی" : "نړیوال وخت" },
   ];
   const cashRule = settings ? (settings.negative_cash_allowed ? p(language, "negativeCashAllowed") : p(language, "noNegativeCash")) : "—";
+  const enabledCurrencyCount = currencies.filter((currency) => currency.enabled).length;
+  const settingsNavigation = language === "en"
+    ? {
+        label: "Settings areas",
+        business: "Business",
+        businessIntro: "Identity, branches, cashboxes, and operating rules",
+        currencies: "Currencies",
+        currenciesIntro: "Choose the money your team can use",
+        security: "Security",
+        securityIntro: "Access, alerts, support, and audit history",
+        enabled: "enabled",
+      }
+    : language === "fa-AF"
+      ? {
+          label: "بخش‌های تنظیمات",
+          business: "صرافی",
+          businessIntro: "مشخصات، شعبه‌ها، صندوق‌ها و اصول کاری",
+          currencies: "اسعار",
+          currenciesIntro: "پول‌هایی را انتخاب کنید که تیم استفاده می‌کند",
+          security: "امنیت",
+          securityIntro: "دسترسی، خبرها، پشتیبانی و تاریخچه",
+          enabled: "فعال",
+        }
+      : {
+          label: "د تنظیماتو برخې",
+          business: "صرافي",
+          businessIntro: "معلومات، څانګې، صندوقونه او کاري اصول",
+          currencies: "اسعار",
+          currenciesIntro: "هغه پیسې وټاکئ چې ډله یې کاروي",
+          security: "امنیت",
+          securityIntro: "لاس‌رسی، خبرتیاوې، ملاتړ او تاریخ",
+          enabled: "فعال",
+        };
   return (
     <section className="professional-workspace">
       <WorkspaceHeader icon="settings" kicker={p(language, "operatingContext")} title={p(language, "settingsTitle")} intro={p(language, "settingsIntro")} backLabel={p(language, "backHome")} onBack={onDashboard} />
       {state === "loading" ? <div className="professional-state" role="status">{p(language, "loading")}</div> : null}
       {state === "error" ? <div className="professional-state error" role="alert">{p(language, "unavailable")}</div> : null}
       {state === "preview" ? <div className="professional-state"><b>{p(language, "preview")}</b><span>{p(language, "previewNote")}</span></div> : null}
+      <div className="settings-section-rail" role="tablist" aria-label={settingsNavigation.label}>
+        <button type="button" role="tab" aria-selected={settingsSection === "business"} className={settingsSection === "business" ? "active" : ""} onClick={() => setSettingsSection("business")}>
+          <span className="settings-section-icon"><AppIcon name="home" /></span>
+          <span><b>{settingsNavigation.business}</b><small>{settingsNavigation.businessIntro}</small></span>
+          <em>{branchName || "—"}</em>
+        </button>
+        <button type="button" role="tab" aria-selected={settingsSection === "currencies"} className={settingsSection === "currencies" ? "active" : ""} onClick={() => setSettingsSection("currencies")}>
+          <span className="settings-section-icon"><AppIcon name="rates" /></span>
+          <span><b>{settingsNavigation.currencies}</b><small>{settingsNavigation.currenciesIntro}</small></span>
+          <em>{enabledCurrencyCount} {settingsNavigation.enabled}</em>
+        </button>
+        <button type="button" role="tab" aria-selected={settingsSection === "security"} className={settingsSection === "security" ? "active" : ""} onClick={() => setSettingsSection("security")}>
+          <span className="settings-section-icon"><AppIcon name="shield" /></span>
+          <span><b>{settingsNavigation.security}</b><small>{settingsNavigation.securityIntro}</small></span>
+          <em>{roleLabel}</em>
+        </button>
+      </div>
       <div className="settings-grid">
-        <article className="settings-card">
+        <article className="settings-card settings-command-card" hidden={settingsSection !== "business"}>
           <div className="settings-card-title"><AppIcon name="home" /><div><h2>{p(language, "operatingContext")}</h2><p>{organizationName}</p></div></div>
           <div className="detail-list">
             <DetailRow label={p(language, "organization")} value={organizationName || "—"} />
@@ -712,7 +769,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
             <button className="primary-action" disabled={saving}>{saving ? p(language, "savingSettings") : p(language, "saveSettings")}</button>
           </form> : <p className="muted-copy">{p(language, "ownerSettingsOnly")}</p>}
         </article>
-        <article className="settings-card">
+        <article className="settings-card" hidden={settingsSection !== "business"}>
           <div className="settings-card-title"><AppIcon name="wallet" /><div><h2>{p(language, "cashRule")}</h2><p>{cashRule}</p></div></div>
           <div className={`security-callout ${settings ? "good" : ""}`}><AppIcon name="shield" /><span>{cashRule}</span></div>
           <h3>{p(language, "enabledServices")}</h3>
@@ -720,7 +777,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
             {settings?.features.filter((feature) => feature.enabled).length ? settings.features.filter((feature) => feature.enabled).map((feature) => <span className="feature-chip" key={feature.feature_code}><AppIcon name="check" size={15} />{serviceLabel(language, feature.feature_code)} · {p(language, "enabled")}</span>) : <p className="muted-copy">{settings ? p(language, "noExtraServices") : "—"}</p>}
           </div>
         </article>
-        <article className="settings-card settings-card-wide">
+        <article className="settings-card settings-card-wide" hidden={settingsSection !== "security"}>
           <div className="settings-card-title"><AppIcon name="check" /><div><h2>{p(language, "notificationChoices")}</h2><p>{p(language, "notificationIntro")}</p></div></div>
           <div className="notification-preferences">
             {preferenceTypes.map((type) => {
@@ -730,7 +787,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
           </div>
           {preferenceMessage && <div className={`settings-save-message ${preferenceMessage}`} role="status">{p(language, preferenceMessage === "saved" ? "notificationSaved" : "notificationFailed")}</div>}
         </article>
-        <article className="settings-card settings-card-wide currency-settings-card">
+        <article className="settings-card settings-card-wide currency-settings-card" hidden={settingsSection !== "currencies"}>
           <div className="settings-card-title"><AppIcon name="rates" /><div><h2>{c.currencies}</h2><p>{c.currenciesIntro}</p></div></div>
           <label className="currency-settings-search">{c.searchCurrency}<input type="search" value={currencySearch} onChange={(event) => setCurrencySearch(event.target.value)} /></label>
           <div className="currency-settings-list" role="table" aria-label={c.currencies}>
@@ -745,7 +802,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
           </div>
           {!canManage ? <p className="muted-copy">{p(language, "ownerSettingsOnly")}</p> : null}
         </article>
-        <article className="settings-card settings-card-wide">
+        <article className="settings-card settings-card-wide" hidden={settingsSection !== "security"}>
           <div className="settings-card-title"><AppIcon name="shield" /><div><h2>{p(language, "accessSecurity")}</h2><p>{p(language, "ledgerProtection")}</p></div></div>
           <div className="security-grid">
             <DetailRow label={p(language, "currentRole")} value={roleLabel} status="good" />
@@ -754,7 +811,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
           </div>
         </article>
         {canManage && controls && <>
-          <article className="settings-card settings-card-wide">
+          <article className="settings-card settings-card-wide" hidden={settingsSection !== "business"}>
             <div className="settings-card-title"><AppIcon name="home" /><div><h2>{c.businessProfile}</h2><p>{c.ownerApproval}</p></div></div>
             <form className="inline-management-form" onSubmit={saveProfile}>
               <label>{c.displayName}<input required minLength={2} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label>
@@ -764,7 +821,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
               <button className="primary-action" disabled={controlBusy === "profile"}>{c.saveProfile}</button>
             </form>
           </article>
-          <article className="settings-card settings-card-wide">
+          <article className="settings-card settings-card-wide" hidden={settingsSection !== "business"}>
             <div className="settings-card-title"><AppIcon name="cashbox" /><div><h2>{c.branchesCashboxes}</h2><p>{c.ownerApproval}</p></div></div>
             <div className="control-lists">
               <div className="balance-list">{controls.branches.map((branch) => <div className="balance-row" key={branch.id}><span className="currency-badge usd">B</span><span className="balance-name"><b>{branch.name}</b><small>{branch.timezone}</small></span><strong>{branch.active ? c.active : c.inactive}</strong><button className="text-button" disabled={controlBusy === branch.id} onClick={() => void changeBranchState(branch.id, !branch.active)}>{branch.active ? c.deactivate : c.activate}</button></div>)}</div>
@@ -773,24 +830,24 @@ export function SettingsView({ language, organizationId, organizationName, branc
               <form className="inline-management-form" onSubmit={addCashbox}><label>{c.branchName}<select required value={newCashboxBranch} onChange={(event) => setNewCashboxBranch(event.target.value)}>{controls.branches.filter((branch) => branch.active).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>{c.cashboxName}<input required minLength={2} value={newCashboxName} onChange={(event) => setNewCashboxName(event.target.value)} /></label><button className="primary-action" disabled={controlBusy === "cashbox"}>{c.addCashbox}</button></form>
             </div>
           </article>
-          <article className="settings-card">
+          <article className="settings-card" hidden={settingsSection !== "business"}>
             <div className="settings-card-title"><AppIcon name="expense" /><div><h2>{c.categories}</h2></div></div>
             <div className="feature-list">{controls.categories.filter((item) => item.active).map((item) => <span className="feature-chip" key={item.id}>{item.name}</span>)}</div>
             <form className="settings-editor" onSubmit={addCategory}><label>{c.categoryName}<input required minLength={2} value={newCategory} onChange={(event) => setNewCategory(event.target.value)} /></label><button className="primary-action" disabled={controlBusy === "category"}>{c.addCategory}</button></form>
           </article>
-          <article className="settings-card">
+          <article className="settings-card" hidden={settingsSection !== "business"}>
             <div className="settings-card-title"><AppIcon name="settings" /><div><h2>{c.services}</h2></div></div>
             <div className="notification-preferences">{["hawala", "advanced_compliance", "advanced_analytics", "imports"].map((feature) => <label key={feature}><span>{serviceLabel(language, feature)}</span><input type="checkbox" disabled={controlBusy === feature} checked={controls.features.find((item) => item.code === feature)?.enabled ?? false} onChange={(event) => void changeFeature(feature, event.target.checked)} /></label>)}</div>
           </article>
-          <article className="settings-card">
+          <article className="settings-card" hidden={settingsSection !== "security"}>
             <div className="settings-card-title"><AppIcon name="report" /><div><h2>{c.dataExport}</h2><p>{c.exportHelp}</p></div></div>
             <button className="primary-action" disabled={controlBusy === "export"} onClick={() => void downloadOrganizationData()}>{c.downloadData}</button>
           </article>
-          <article className="settings-card">
+          <article className="settings-card" hidden={settingsSection !== "security"}>
             <div className="settings-card-title"><AppIcon name="shield" /><div><h2>{c.supportRequests}</h2><p>{c.ownerApproval}</p></div></div>
             <div className="compliance-record-list">{controls.support_requests.length ? controls.support_requests.map((request) => <div key={request.id}><span><b>{request.reason}</b><small>{c.scope}: {request.requested_scope.join(", ")} · {request.requested_hours} {c.hours}</small><small>{new Date(request.requested_at).toLocaleString(language)}</small></span><strong>{c[request.status] ?? request.status}</strong>{request.status === "pending" && <><button className="text-button" disabled={controlBusy === request.id} onClick={() => void decideSupport(request.id, "approved")}>{c.approveSupport}</button><button className="text-button danger" disabled={controlBusy === request.id} onClick={() => void decideSupport(request.id, "rejected")}>{c.rejectSupport}</button></>}{request.status === "approved" && !request.expires_at ? null : request.status === "approved" ? <button className="text-button danger" disabled={controlBusy === request.id} onClick={() => void revokeSupport(request.id)}>{c.revokeSupport}</button> : null}</div>) : <p className="muted-copy">{c.noSupport}</p>}</div>
           </article>
-          <article className="settings-card settings-card-wide">
+          <article className="settings-card settings-card-wide" hidden={settingsSection !== "security"}>
             <div className="settings-card-title"><AppIcon name="shield" /><div><h2>{c.securityHistory}</h2></div></div>
             <div className="compliance-record-list">{controls.security_events.length ? controls.security_events.slice(0, 20).map((event) => <div key={event.id}><span><b>{event.event_type.replaceAll("_", " ")}</b><small>{new Date(event.created_at).toLocaleString(language)}</small></span><strong>✓</strong></div>) : <p className="muted-copy">{c.noSecurityEvents}</p>}</div>
           </article>

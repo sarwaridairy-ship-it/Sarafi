@@ -959,6 +959,90 @@
 .currency-setting input { height: 20px; width: 20px; }
 .currency-use-control { align-items: center; display: flex; justify-content: flex-end; min-width: 0; }
 
+/* Focused owner settings: three calm workspaces instead of one endless form. */
+.settings-section-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 7px;
+  border: 1px solid rgba(28, 73, 61, .12);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, .72);
+  box-shadow: 0 12px 34px rgba(20, 55, 46, .07);
+}
+.settings-section-rail > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 92px;
+  padding: 13px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: #24433a;
+  background: transparent;
+  text-align: start;
+}
+.settings-section-rail > button:hover,
+.settings-section-rail > button:focus-visible { border-color: #b9d2c8; background: #f4f9f6; }
+.settings-section-rail > button.active {
+  color: #fff;
+  border-color: #245f51;
+  background: linear-gradient(145deg, #173f36, #276c5b);
+  box-shadow: 0 10px 25px rgba(20, 70, 58, .2);
+}
+.settings-section-icon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 11px; color: #176b58; background: #e5f3ed; }
+.settings-section-rail > button.active .settings-section-icon { color: #fff; background: rgba(255, 255, 255, .14); }
+.settings-section-rail > button > span:nth-child(2) { display: grid; min-width: 0; }
+.settings-section-rail b { font-size: .9rem; }
+.settings-section-rail small { margin-top: 3px; color: #667a72; font-size: .69rem; line-height: 1.45; }
+.settings-section-rail > button.active small { color: rgba(255, 255, 255, .75); }
+.settings-section-rail em { grid-column: 2; justify-self: start; max-width: 100%; overflow: hidden; padding: 3px 7px; border-radius: 999px; color: #477066; background: #eaf3ef; font-size: .62rem; font-style: normal; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.settings-section-rail > button.active em { color: #164d40; background: #fff; }
+.settings-grid > [hidden] { display: none !important; }
+.settings-grid { align-items: start; }
+.settings-grid > .settings-save-message { grid-column: 1 / -1; }
+.settings-command-card { border-top: 3px solid #2b806a; }
+.currency-settings-card { border-top: 3px solid #c09342; }
+.currency-settings-card .currency-settings-search { max-width: none; }
+.currency-settings-card .currency-settings-list { box-shadow: 0 8px 24px rgba(21, 56, 47, .06); }
+.currency-settings-card .currency-setting:not(.currency-setting-head) { min-height: 61px; }
+.currency-settings-card .currency-symbol { color: #164f42; background: #e9f5f0; }
+
+/* Security landing page with visible protection layers and clear destinations. */
+.security-overview-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
+  gap: 20px;
+  padding: clamp(20px, 4vw, 34px);
+  border: 1px solid rgba(28, 75, 63, .13);
+  border-radius: 19px;
+  color: #f7fffb;
+  background: radial-gradient(circle at 88% 12%, rgba(215, 177, 96, .22), transparent 28%), linear-gradient(138deg, #12372f 0%, #1d5c4d 64%, #28725f 100%);
+  box-shadow: 0 18px 48px rgba(14, 52, 42, .18);
+}
+.security-overview-hero::after { position: absolute; inset: auto -45px -95px auto; width: 220px; height: 220px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 50%; content: ""; }
+.security-overview-heading { display: flex; align-items: flex-start; gap: 15px; min-width: 0; }
+.security-overview-heading .kicker { margin: 1px 0 4px; color: #e7c982; }
+.security-overview-heading h1 { margin: 0 0 7px; color: #fff; font-size: clamp(27px, 4vw, 40px); }
+.security-overview-heading p:last-child { max-width: 650px; margin: 0; color: rgba(244, 255, 250, .74); line-height: 1.65; }
+.security-overview-shield { display: grid; width: 54px; height: 54px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255, 255, 255, .17); border-radius: 15px; color: #f0d188; background: rgba(255, 255, 255, .1); }
+.security-overview-assurance { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 11px; padding: 15px; border: 1px solid rgba(255, 255, 255, .15); border-radius: 14px; background: rgba(255, 255, 255, .09); backdrop-filter: blur(8px); }
+.security-overview-assurance > span { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #174c40; background: #e9d399; }
+.security-overview-assurance div { display: grid; gap: 4px; }
+.security-overview-assurance small { color: rgba(247, 255, 251, .72); font-size: .69rem; line-height: 1.6; }
+.security-layer-strip { position: relative; z-index: 1; grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.security-layer-strip > span { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 9px 12px; border: 1px solid rgba(255, 255, 255, .11); border-radius: 10px; color: rgba(255, 255, 255, .88); background: rgba(8, 37, 30, .18); font-size: .72rem; }
+.security-overview-prompt { margin: 1px 2px -4px; color: #5d7169; font-size: .75rem; font-weight: 800; }
+.security-overview .control-center-grid { gap: 14px; }
+.security-overview .control-center-card { min-height: 118px; padding: 19px; border-radius: 16px; box-shadow: 0 8px 26px rgba(20, 58, 48, .07); }
+.security-overview .control-center-card > .app-icon { width: 43px; height: 43px; padding: 10px; border-radius: 12px; color: #1d6b59; background: #eaf5f0; }
+.security-overview .control-center-card strong { color: #153d34; font-size: .94rem; }
+.security-overview .control-center-card small { max-width: 460px; margin-top: 6px; line-height: 1.55; }
+
 .operation-primary-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.25fr) minmax(180px, .75fr); }
 .operation-entry-form,
 .operation-entry-form > *,
@@ -1037,6 +1121,12 @@
 .platform-plan-editor .plan-term-editor .text-button { min-height: 36px; white-space: nowrap; }
 
 @media (max-width: 720px) {
+  .settings-section-rail { grid-template-columns: 1fr; }
+  .settings-section-rail > button { min-height: 74px; }
+  .security-overview-hero { grid-template-columns: 1fr; padding: 19px; }
+  .security-layer-strip { grid-template-columns: 1fr; }
+  .security-overview-heading { gap: 11px; }
+  .security-overview-shield { width: 46px; height: 46px; }
   .mobile-nav button { font-size: clamp(7px, 2.15vw, 9px); line-height: 1.08; padding-inline: 1px; white-space: normal; }
   .mobile-nav button .app-icon { height: 18px; width: 18px; }
   .exchange-entry-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -170,6 +170,7 @@ test.describe("calm premium v4 objective acceptance", () => {
         ["/control/business?role=owner", ".currency-settings-list"],
       ] as const) {
         await page.goto(`${workspace}${path}`);
+        if (path.startsWith("/control/business")) await page.getByRole("tab", { name: /Currencies/ }).click();
         await expect(page.locator(selector)).toBeVisible();
         const layout = await page.evaluate(() => ({
           documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,

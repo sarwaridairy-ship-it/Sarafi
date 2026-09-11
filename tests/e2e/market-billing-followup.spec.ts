@@ -11,15 +11,19 @@ test('rates expose only the two markets and respect the shop currency selection 
   await page.goto(`${workspace}/control/rates?role=owner`)
 
   const market = page.getByRole('combobox', { name: 'Rate board' })
-  await expect(market.locator('option')).toHaveText(['Sarai Shahzada · AFN', 'Khorasan Market · IRR'])
+  await expect(market.locator('option')).toHaveText(['Sarai Shahzada · AFN', 'Khorasan Market · AFN'])
   await expect(page.locator('body')).not.toContainText('sarafi.af')
   await market.selectOption('khorasan-market')
   await expect(page.getByRole('heading', { name: 'Khorasan Market' })).toBeVisible()
   await expect(page.locator('.market-rate-row').filter({ hasText: 'USD' })).toBeVisible()
+  await expect(page.locator('.market-rate-row').filter({ hasText: 'EUR' })).toBeVisible()
+  await expect(page.locator('.market-rate-row').filter({ hasText: 'GBP' })).toBeVisible()
+  await expect(page.locator('.market-rate-row').filter({ hasText: 'PKR' })).toBeVisible()
 
   await page.locator('.rate-currency-picker > summary').click()
   await page.getByRole('combobox', { name: 'Add currency' }).selectOption('IRR')
   await page.getByRole('button', { name: 'Add currency' }).click()
+  await expect(page.locator('.market-rate-row').filter({ hasText: 'IRR' })).toBeVisible()
   const eurChoice = page.locator('.rate-currency-choice-list article').filter({ hasText: 'EUR' })
   await eurChoice.getByRole('button', { name: 'Remove currency EUR' }).click()
   await page.getByRole('button', { name: 'Save currency list' }).click()
@@ -44,6 +48,34 @@ test('transaction customer picker can search and add a customer without leaving 
   await dialog.getByLabel('Customer name').fill('Mobile Test Customer')
   await dialog.getByRole('button', { name: 'Save and select' }).click()
   await expect(picker.getByRole('combobox', { name: 'Customer' }).locator('option:checked')).toContainText('Mobile Test Customer')
+})
+
+test('debt forms stay native-currency simple and never open transaction rate controls', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'The simplified debt journey is covered once.')
+  await page.goto(`${workspace}/transactions/new/debt/receivable?role=owner`)
+  await page.getByRole('combobox', { name: 'Currency' }).selectOption('USD')
+  await expect(page.locator('.financial-task-form')).not.toContainText('Rate for this transaction')
+  await expect(page.locator('.financial-task-form .rate-context-card')).toHaveCount(0)
+})
+
+test('FX no longer exposes the rate-calculation explainer label', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'The focused FX copy check is covered once.')
+  await page.goto(`${workspace}/transactions/new/fx/buy?role=owner&lang=fa-AF`)
+  await expect(page.locator('body')).not.toContainText('این نرخ چگونه حساب شده؟')
+})
+
+test('business, currencies, and security are focused settings workspaces', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'The owner settings navigation is covered once.')
+  await page.goto(`${workspace}/control/business?role=owner`)
+  const tabs = page.getByRole('tab')
+  await expect(tabs).toHaveCount(3)
+  await expect(page.getByRole('tab', { name: /Business/ })).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('tab', { name: /Currencies/ }).click()
+  await expect(page.getByRole('heading', { name: 'Currencies used by this shop' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Operating context' })).toBeHidden()
+  await page.getByRole('tab', { name: /Security/ }).click()
+  await expect(page.getByRole('heading', { name: 'Access & security' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Your notifications' })).toBeVisible()
 })
 
 test('owner and administrator payment workspaces expose receipt and editable duration controls', async ({ page, browserName }) => {

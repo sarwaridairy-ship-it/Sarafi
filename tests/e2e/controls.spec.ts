@@ -292,6 +292,7 @@ test.describe("workspace controls", () => {
     await expect(page.getByRole("heading", { name: "Shop settings" })).toBeVisible();
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect(page.getByText("Settings saved and added to the security history.")).toBeVisible();
+    await page.getByRole("tab", { name: /Security/ }).click();
     await expect(page.getByRole("heading", { name: "Your notifications" })).toBeVisible();
     await page.getByLabel("Actions waiting for approval").uncheck();
     await expect(page.getByText("Notification choice saved.")).toBeVisible();
@@ -686,6 +687,7 @@ test.describe("workspace controls", () => {
     await expect(page.getByRole("combobox", { name: "Currency" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "By currency" })).toHaveCount(0);
     await page.goto("/app/inspection/control/business?role=owner");
+    await page.getByRole("tab", { name: /Currencies/ }).click();
     await expect(page.getByRole("heading", { name: "Currencies used by this shop" })).toBeVisible();
     await page.getByRole("searchbox", { name: "Find a currency" }).fill("CNY");
     await expect(page.locator(".currency-setting:not(.currency-setting-head)")).toHaveCount(1);

@@ -16,7 +16,7 @@ const UPSTREAM_MARKETS = [
   {
     market: 'Khorasan Market' as const,
     marketCode: 'khorasan-market' as const,
-    quoteCurrency: 'IRR' as const,
+    quoteCurrency: 'AFN' as const,
     url: 'https://sarafi.af/en/exchange-rates/khorasan-market',
   },
 ] as const

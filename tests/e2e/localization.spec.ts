@@ -221,6 +221,7 @@ for (const locale of [
     code: "fa-AF",
     money: "پول من",
     cashboxes: "صندوق‌ها",
+    currenciesTab: "اسعار",
     currencies: "اسعار مورد استفاده صرافی",
     search: "جستجوی اسعار",
   },
@@ -228,6 +229,7 @@ for (const locale of [
     code: "ps-AF",
     money: "زما پیسې",
     cashboxes: "صندوقونه",
+    currenciesTab: "اسعار",
     currencies: "د صرافۍ کارېدونکي اسعار",
     search: "اسعار ولټوئ",
   },
@@ -243,6 +245,7 @@ for (const locale of [
     await expect(page.locator(".account-card")).toHaveCount(1);
     await expectNoEnglishLeak(page, `${locale.code} money controls`);
     await page.goto("/app/inspection/control/business?role=owner");
+    await page.getByRole("tab", { name: new RegExp(locale.currenciesTab) }).click();
     await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();
     await expect(page.getByRole("searchbox", { name: locale.search })).toBeVisible();
   });
