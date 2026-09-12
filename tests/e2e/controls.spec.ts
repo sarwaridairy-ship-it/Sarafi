@@ -136,7 +136,7 @@ test.describe("workspace controls", () => {
     await navigation.getByRole("button", { name: /Manage Sarafi/ }).click();
     await expect(page).toHaveURL(/\/control$/);
     await expect(page.getByRole("heading", { name: "Manage SARAFI", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: /^Business & currencies/ }).click();
+    await page.getByRole("button", { name: /^Business Information/ }).click();
     await expect(page).toHaveURL(/\/control\/business$/);
     await expect(page.getByRole("heading", { name: "Shop settings", exact: true })).toBeVisible();
   });
@@ -145,9 +145,9 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/control/rates?role=owner");
     await expect(page.getByRole("heading", { name: "Market rates" })).toBeVisible();
     await expect(page.getByRole("table", { name: "Market rates" })).toContainText("USD");
-    await expect(page.getByRole("table", { name: "Market rates" })).toContainText("دالر امریکایی");
+    await expect(page.getByRole("table", { name: "Market rates" })).toContainText("United States Dollar");
     await expect(page.getByRole("table", { name: "Market rates" })).toContainText("64.25");
-    await expect(page.getByRole("columnheader", { name: "Change" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Update" })).toBeVisible();
     await expect(page.locator('.rates-market-only a[href*="sarafi.af"]')).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText(/sarafi\.af/i);
     await expect(page.getByRole("heading", { name: "Set shop rate" })).toHaveCount(0);
@@ -297,11 +297,13 @@ test.describe("workspace controls", () => {
     await page.goto("/");
     await page.getByRole("button", { name: /Manage Sarafi/ }).click();
     await expect(page.getByRole("heading", { name: "Manage SARAFI" })).toBeVisible();
-    await page.getByRole("button", { name: /^Business & currencies/ }).click();
+    await page.getByRole("button", { name: /^Business Information/ }).click();
     await expect(page.getByRole("heading", { name: "Shop settings" })).toBeVisible();
+    await page.getByText("Edit Business Information", { exact: true }).click();
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect(page.getByText("Settings saved and added to the security history.")).toBeVisible();
-    await page.getByRole("tab", { name: /Security/ }).click();
+    await page.goto("/app/inspection/control/security?role=owner");
+    await page.getByRole("button", { name: /Security controls and history/ }).click();
     await expect(page.getByRole("heading", { name: "Your notifications" })).toBeVisible();
     await page.getByLabel("Actions waiting for approval").uncheck();
     await expect(page.getByText("Notification choice saved.")).toBeVisible();
@@ -427,7 +429,7 @@ test.describe("workspace controls", () => {
       .getByRole("combobox", { name: "Change language" })
       .selectOption("fa-AF");
     await expect(page.locator("html")).toHaveAttribute("lang", "fa-AF");
-    await page.getByRole("button", { name: /^خرید و فروش اسعار/ }).click();
+    await page.getByRole("button", { name: /^تبدیل اسعار/ }).click();
     await page.getByRole("button", { name: "خرید اسعار", exact: true }).click();
     await expect(
       page.getByRole("textbox", { name: /ما می‌دهیم/ }),
@@ -653,9 +655,9 @@ test.describe("workspace controls", () => {
     page,
   }) => {
     await page.goto("/app/inspection/transactions/new");
-    for (const family of ["Exchange Currency", "Receive Money", "Pay Money", "Move Our Money", "Debt", "Hawala"])
+    for (const family of ["Currency Exchange", "Receive Money", "Spend Money", "Move Money", "Debt", "Hawala"])
       await expect(page.getByRole("button", { name: new RegExp(family) })).toBeVisible();
-    await page.getByRole("button", { name: /^Exchange Currency/ }).click();
+    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
     await expect(page.getByRole("button", { name: "Buy currency", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sell currency", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Buy currency", exact: true }).click();
@@ -682,29 +684,20 @@ test.describe("workspace controls", () => {
     await expect(page.locator(".sidebar nav").getByRole("button", { name: /Make a Transaction/ })).toBeVisible();
   });
 
-  test("My Money separates valuation and cashboxes while currency choices live in Business Settings", async ({
+  test("My Money totals available balances while cashbox administration stays in Manage SARAFI", async ({
     page,
   }) => {
     await page.goto("/app/inspection/money");
     await expect(page.getByRole("heading", { name: "My Money" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Currency breakdown" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Available money by currency" })).toBeVisible();
     await expect(page.locator(".money-valuation-hero").getByText("11,000.00 AFN")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Cashbox balances" })).toBeVisible();
-    await expect(page.locator(".account-card")).toHaveCount(1);
-    await page.getByRole("button", { name: "Add cashbox" }).click();
-    await page.getByRole("textbox", { name: "Cashbox name" }).fill("Counter 2");
-    await page.getByRole("button", { name: "Create cashbox" }).click();
-    await expect(page.locator(".account-card")).toHaveCount(2);
-    await expect(page.locator(".account-card").filter({ hasText: "Counter 2" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cashbox balances" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add cashbox" })).toHaveCount(0);
     await expect(page.getByRole("combobox", { name: "Currency" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "By currency" })).toHaveCount(0);
-    await page.goto("/app/inspection/control/business?role=owner");
-    await page.getByRole("tab", { name: /Currencies/ }).click();
-    await expect(page.getByRole("heading", { name: "Currencies used by this shop" })).toBeVisible();
-    await page.getByRole("searchbox", { name: "Find a currency" }).fill("CNY");
-    await expect(page.locator(".currency-setting:not(.currency-setting-head)")).toHaveCount(1);
-    await expect(page.locator(".currency-setting:not(.currency-setting-head)")).toContainText("Chinese Yuan");
-    await expect(page.locator(".currency-setting:not(.currency-setting-head) .currency-symbol")).toHaveText("¥");
+    await page.goto("/app/inspection/control/rates?role=owner");
+    await page.locator(".rate-currency-picker > summary").click();
+    await expect(page.getByRole("combobox", { name: "Add currency" })).toBeVisible();
   });
 
   test("People supports search and statement views", async ({ page }) => {
@@ -730,7 +723,7 @@ test.describe("workspace controls", () => {
     await page.getByRole("button", { name: "Save customer" }).click();
     await expect(page.getByText("Hamid Exchange", { exact: true })).toBeVisible();
     await page.locator(".sidebar nav").getByRole("button", { name: /^Make a Transaction/ }).click();
-    await page.getByRole("button", { name: /^Exchange Currency/ }).click();
+    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
     await page.getByRole("button", { name: "Buy currency", exact: true }).click();
     await expect(page.locator(".financial-task-form")).toBeVisible();
     await page.locator(".trade-optional-fields > summary").click();
@@ -800,17 +793,17 @@ test.describe("workspace controls", () => {
   test("live buy and sell rates are open between the two currencies", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy");
     await expect(page.locator(".exchange-entry-row")).toBeVisible();
-    await expect(page.locator(".rate-box")).toContainText("1 USD =");
-    await expect(page.locator(".rate-box")).toContainText("AFN");
-    await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.25");
+    await expect(page.locator(".rate-box")).toContainText("1 AFN =");
+    await expect(page.locator(".rate-box")).toContainText("USD");
+    await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
     await page.goto("/app/inspection/transactions/new/fx/sell");
-    await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.35");
+    await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01421464108");
   });
 
   test("FX transaction uses the current shop rate inline", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy");
     await expect(page.getByText("Current shop rate", { exact: true })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.25");
+    await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
     await expect(page).toHaveURL(/\/transactions\/new\/fx\/buy$/);
   });
 

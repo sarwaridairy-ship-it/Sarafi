@@ -10,20 +10,20 @@ test.describe("calm premium v4 objective acceptance", () => {
     const families = page.locator(".transaction-family-grid > button");
     await expect(families).toHaveCount(6);
     await expect(families).toHaveText([
-      /Exchange Currency/,
+      /Currency Exchange/,
       /Receive Money/,
-      /Pay Money/,
-      /Move Our Money/,
+      /Spend Money/,
+      /Move Money/,
       /^Debt/,
       /^Hawala/,
     ]);
     expect(await page.locator(".quick-actions button").count()).toBeLessThanOrEqual(4);
 
     const journeys = [
-      ["Exchange Currency", "Buy currency", "/transactions/new/fx/buy"],
+      ["Currency Exchange", "Buy currency", "/transactions/new/fx/buy"],
       ["Receive Money", "From a customer", "/transactions/new/money/receive/customer"],
-      ["Pay Money", "To a customer", "/transactions/new/money/pay/customer"],
-      ["Move Our Money", "Between cashboxes", "/transactions/new/money/move/cashbox"],
+      ["Spend Money", "To a customer", "/transactions/new/money/pay/customer"],
+      ["Move Money", "Between cashboxes", "/transactions/new/money/move/cashbox"],
       ["Debt", "They owe us", "/transactions/new/debt/receivable"],
       ["Debt", "Settle a debt", "/debts"],
       ["Hawala", "Hawala Inbox", "/hawala/incoming"],
@@ -57,7 +57,7 @@ test.describe("calm premium v4 objective acceptance", () => {
     await expect(form).toBeVisible();
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
     await expect(form.locator(".compact-rate-row")).toBeVisible();
-    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.25");
+    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
     await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveAttribute("readonly", "");
     await expect(form).not.toContainText("Rate for this transaction");
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
@@ -72,7 +72,7 @@ test.describe("calm premium v4 objective acceptance", () => {
     await buyForm.getByRole("button", { name: "Edit transaction" }).click();
 
     await page.locator(".sidebar nav").getByRole("button", { name: "Make a Transaction", exact: true }).click();
-    await page.getByRole("button", { name: /^Exchange Currency/ }).click();
+    await page.getByRole("button", { name: /^Currency Exchange/ }).click();
     await page.getByRole("button", { name: "Sell currency", exact: true }).click();
 
     await expect(page).toHaveURL(/\/transactions\/new\/fx\/sell$/);
@@ -109,7 +109,7 @@ test.describe("calm premium v4 objective acceptance", () => {
 
   test("Business Administrator receives operations but never owner-capital actions", async ({ page }) => {
     await page.goto(`${workspace}/transactions/new?role=business_admin`);
-    await expect(page.getByRole("button", { name: /^Exchange Currency/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Currency Exchange/ })).toBeVisible();
     await page.getByRole("button", { name: /^Receive Money/ }).click();
     await expect(page.getByRole("button", { name: /Owner capital/i })).toHaveCount(0);
     await page.goto(`${workspace}/transactions/new/money-in/owner-investment?role=business_admin`);
@@ -168,12 +168,11 @@ test.describe("calm premium v4 objective acceptance", () => {
         ["/transactions/new/fx/buy?role=owner", ".exchange-entry-row"],
         ["/transactions/new/money/receive/customer?role=owner", ".operation-entry-form"],
         ["/transactions/new/money/pay/expense?role=owner", ".operation-entry-form"],
-        ["/money?role=owner", ".cashbox-only-panel"],
+        ["/money?role=owner", ".money-valuation-workspace"],
         ["/control/rates?role=owner", ".market-rate-table"],
-        ["/control/business?role=owner", ".currency-settings-list"],
+        ["/control/business?role=owner", ".settings-command-card"],
       ] as const) {
         await page.goto(`${workspace}${path}`);
-        if (path.startsWith("/control/business")) await page.getByRole("tab", { name: /Currencies/ }).click();
         await expect(page.locator(selector)).toBeVisible();
         const layout = await page.evaluate(() => ({
           documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,

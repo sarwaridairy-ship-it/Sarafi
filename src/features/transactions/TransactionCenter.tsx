@@ -12,7 +12,7 @@ type Family = { id: FamilyId; label: Localized; intro: Localized; icon: AppIconN
 const families: Family[] = [
   {
     id: "fx",
-    label: { en: "Exchange Currency", "fa-AF": "خرید و فروش اسعار", "ps-AF": "د اسعارو پېر او پلور" },
+    label: { en: "Currency Exchange", "fa-AF": "تبدیل اسعار", "ps-AF": "د اسعارو تبادله" },
     intro: { en: "Buy or sell any two currencies.", "fa-AF": "هر دو اسعار را بخرید یا بفروشید.", "ps-AF": "هر دوه اسعار وپېرئ یا وپلورئ." },
     icon: "trade",
     actions: [
@@ -34,7 +34,7 @@ const families: Family[] = [
   },
   {
     id: "money-out",
-    label: { en: "Pay Money", "fa-AF": "پول می‌دهیم", "ps-AF": "پیسې ورکوو" },
+    label: { en: "Spend Money", "fa-AF": "مصرف پول", "ps-AF": "پیسې لګول" },
     intro: { en: "Why is money going out?", "fa-AF": "پول را به کی می‌دهیم؟", "ps-AF": "پیسې ولې وځي؟" },
     icon: "pay",
     actions: [
@@ -46,7 +46,7 @@ const families: Family[] = [
   },
   {
     id: "move",
-    label: { en: "Move Our Money", "fa-AF": "انتقال پول خود ما", "ps-AF": "زموږ پیسې لېږدول" },
+    label: { en: "Move Money", "fa-AF": "انتقال پول", "ps-AF": "پیسې لېږدول" },
     intro: { en: "Move money without changing profit.", "fa-AF": "پول را بدون تغییر مفاد انتقال دهید.", "ps-AF": "پیسې بې له دې چې ګټه بدله شي ولېږدوئ." },
     icon: "transfer",
     actions: [
@@ -105,10 +105,10 @@ export function TransactionCenter({
   );
   const selected = visibleFamilies.find((family) => family.id === selectedFamily) ?? null;
   const copy = language === "en"
-    ? { kicker: "One task at a time", title: "Make a Transaction", intro: "Choose what happened with the money.", back: "All transaction families", unavailable: "This family is not enabled for your assignment." }
+    ? { kicker: "One task at a time", title: "Make a Transaction", intro: "Choose what happened with the money.", back: "Back to Transaction Types", unavailable: "This family is not enabled for your assignment." }
     : language === "fa-AF"
-      ? { kicker: "هر بار یک کار", title: "ثبت معامله", intro: "انتخاب کنید با پول چه اتفاق افتاده است.", back: "همه نوع‌های معامله", unavailable: "این بخش در وظیفه شما فعال نیست." }
-      : { kicker: "په یو وخت کې یو کار", title: "معامله ثبتول", intro: "وټاکئ چې له پیسو سره څه شوي دي.", back: "د معاملو ټول ډولونه", unavailable: "دا برخه ستاسو په دنده کې فعاله نه ده." };
+      ? { kicker: "هر بار یک کار", title: "ثبت معامله", intro: "انتخاب کنید با پول چه اتفاق افتاده است.", back: "بازگشت به نوع معامله", unavailable: "این بخش در وظیفه شما فعال نیست." }
+      : { kicker: "په یو وخت کې یو کار", title: "معامله ثبتول", intro: "وټاکئ چې له پیسو سره څه شوي دي.", back: "د معاملې ډولونو ته ستنېدل", unavailable: "دا برخه ستاسو په دنده کې فعاله نه ده." };
 
   return (
     <section className="calm-page transaction-hub" aria-labelledby="transaction-center-title">

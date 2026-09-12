@@ -98,6 +98,33 @@ export type InlineRateResolverProps = {
   onReadyChange: (ready: boolean) => void;
 };
 
+export function CompactRateRow({ language, loading, needsResolution, quote, modeLabel, loadingLabel, reverseLabel, updatedLabel, effectiveFrom, source, detailsLabel, editing, onReverse, onToggleDetails }: {
+  language: Language;
+  loading: boolean;
+  needsResolution: boolean;
+  quote: string;
+  modeLabel: string;
+  loadingLabel: string;
+  reverseLabel: string;
+  updatedLabel: string;
+  effectiveFrom?: string;
+  source?: string;
+  detailsLabel: string;
+  editing: boolean;
+  onReverse: () => void;
+  onToggleDetails: () => void;
+}) {
+  return (
+    <div className="compact-rate-row" dir="ltr">
+      <span className={`compact-rate-mode ${needsResolution ? "manual" : ""}`}><i aria-hidden="true" />{modeLabel}</span>
+      <strong className="compact-rate-quote">{loading ? loadingLabel : quote}</strong>
+      <button className="compact-rate-swap" type="button" onClick={onReverse} aria-label={reverseLabel}>⇄</button>
+      <span className="compact-rate-time" dir={language === "en" ? "ltr" : "rtl"}>{effectiveFrom ? `${updatedLabel} ${new Date(effectiveFrom).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}` : source ?? ""}</span>
+      <button className="compact-rate-change" type="button" onClick={onToggleDetails} aria-expanded={editing}>{detailsLabel}</button>
+    </div>
+  );
+}
+
 export function InlineRateResolver({
   organizationId,
   branchId,
@@ -114,7 +141,7 @@ export function InlineRateResolver({
   const normalizedCurrency = currency.toUpperCase();
   const key = `${organizationId ?? ""}:${branchId ?? ""}:${normalizedCurrency}:AFN`;
   const [loaded, setLoaded] = useState<LoadedRateContext | null>(null);
-  const [reversed, setReversed] = useState(false);
+  const [reversed, setReversed] = useState(true);
   const [editing, setEditing] = useState(false);
   const [inspectionNow] = useState(() => Date.now());
   const inspectionParams = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
@@ -219,13 +246,7 @@ export function InlineRateResolver({
 
   return (
     <section className={`inline-rate-resolver compact-rate ${needsResolution ? "needs-attention" : ""}`} aria-label={text.title}>
-      <div className="compact-rate-row" dir="ltr">
-        <span className={`compact-rate-mode ${needsResolution ? "manual" : ""}`}><i aria-hidden="true" />{needsResolution ? text.required : text.current}</span>
-        <strong className="compact-rate-quote">{loading ? text.loading : quote}</strong>
-        <button className="compact-rate-swap" type="button" onClick={() => setReversed((current) => !current)} aria-label={text.reverse}>⇄</button>
-        <span className="compact-rate-time" dir={language === "en" ? "ltr" : "rtl"}>{context?.effective_from ? `${text.updated} ${new Date(context.effective_from).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}` : context?.source ?? ""}</span>
-        <button className="compact-rate-change" type="button" onClick={() => setEditing((current) => !current)} aria-expanded={editing}>{text.details}</button>
-      </div>
+      <CompactRateRow language={language} loading={loading} needsResolution={needsResolution} quote={quote} modeLabel={needsResolution ? text.required : text.current} loadingLabel={text.loading} reverseLabel={text.reverse} updatedLabel={text.updated} effectiveFrom={context?.effective_from} source={context?.source} detailsLabel={text.details} editing={editing} onReverse={() => setReversed((current) => !current)} onToggleDetails={() => setEditing((current) => !current)} />
       {loading ? <p role="status">{text.loading}</p> : null}
       {!loading && error ? <p role="alert">{text.unavailable}</p> : null}
       {!loading && needsResolution ? <p role="alert">{context?.stale ? text.stale : context?.missing ? text.missing : text.unavailable}</p> : null}

@@ -41,7 +41,7 @@ export type DashboardSnapshot = { role_code?: string; profit_hidden?: boolean; t
 export type DebtRecord = { id: string; branch_id?: string; counterparty_id: string; counterparty_name?: string; direction: 'receivable' | 'payable'; currency_code: string; original_amount: string; outstanding_amount: string; due_at: string | null; notes: string | null; created_at?: string }
 export type CounterpartyRecord = { id: string; customer_number?: number; customer_reference?: string; branch_id?: string | null; display_name: string; counterparty_type: string; risk_status: string; phone?: string | null; notes?: string | null }
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string; direction?: 'incoming' | 'outgoing'; workflow_type?: string; hawala_partner_id?: string | null; integrity_state?: 'valid' | 'review_required'; journal_entry_id?: string | null; payout_journal_entry_id?: string | null; payout_receipt_id?: string | null; sender_organization_id?: string | null; sender_branch_id?: string | null; recipient_type?: 'internal_branch' | 'external_partner' | null; recipient_organization_id?: string | null; recipient_partner_id?: string | null; recipient_branch_id?: string | null; expires_at?: string | null }
-export type HawalaPartnerRecord = { id: string; counterparty_id: string | null; name: string; active: boolean; endpoint_type?: 'internal_branch' | 'external_partner' | null; recipient_organization_id?: string | null; recipient_branch_id?: string | null; reciprocal_partner_id?: string | null; endpoint_verified_at?: string | null; endpoint_active?: boolean }
+export type HawalaPartnerRecord = { id: string; counterparty_id: string | null; name: string; active: boolean; endpoint_type?: 'internal_branch' | 'external_partner' | null; recipient_organization_id?: string | null; recipient_branch_id?: string | null; reciprocal_partner_id?: string | null; endpoint_verified_at?: string | null; endpoint_active?: boolean; recipient_organization_name?: string | null; recipient_branch_name?: string | null; recipient_location?: string | null }
 export type HawalaPayoutMatch = { transfer_id: string; reference_code: string; beneficiary_name: string; destination_location: string; currency_code: string; amount: string; branch_id: string; hawala_partner_id: string }
 export type HawalaPartnerStatement = { partner_id: string; totals: Array<{ currency_code: string; payable: string; receivable: string; net_receivable: string }>; lines: Array<{ id: string; transfer_id: string; branch_id?: string; reference_code: string; beneficiary_name: string; direction: 'payable' | 'receivable'; currency_code: string; original_amount: string; settled_amount: string; remaining_amount: string; status: string; created_at: string }> }
 export type JournalRecord = { id: string; transaction_number?: number; transaction_reference?: string; customer_number?: number; customer_reference?: string; receipt_number?: string | null; customer_rate?: string | null; fee_amount?: string | null; fee_currency?: string | null; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null; counterparty_name?: string | null; employee_name?: string | null; given_amount?: string | null; given_currency?: string | null; received_amount?: string | null; received_currency?: string | null }
@@ -62,9 +62,13 @@ export type MoneyValuationSnapshot = {
   valuation_rate_set_id: string | null
   valuation_effective_at: string | null
   quality: 'current' | 'partial'
+  total_complete: boolean
   excluded_currency_count: number
+  missing_currencies: string[]
+  stale_currencies: string[]
   totals: {
-    available_base: string
+    available_base: string | null
+    available_valued_base: string
     receivables_base: string
     payables_base: string
     hawala_net_base: string
@@ -83,6 +87,7 @@ export type MoneyValuationSnapshot = {
     native_net: string
     rate: string | null
     rate_status: 'current' | 'stale' | 'missing'
+    available_base: string | null
     current_base: string | null
     book_base: string
   }>

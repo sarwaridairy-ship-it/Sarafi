@@ -11,6 +11,7 @@ import {
   getOrganizationDataExport,
   listCurrencyCatalog,
   listCounterparties,
+  listHawalaPartners,
   listNotificationPreferences,
   getWorkspaceSettings,
   revokeSupportAccess,
@@ -27,6 +28,7 @@ import {
   type ComplianceWorkspaceRecord,
   type CounterpartyRecord,
   type CurrencyCatalogRecord,
+  type HawalaPartnerRecord,
   type KycProfileRecord,
   type NotificationPreferenceRecord,
   type OrganizationControlPlane,
@@ -410,7 +412,7 @@ function DetailRow({ label, value, status }: { label: string; value: ReactNode; 
 const controlCopy: Record<Language, Record<string, string>> = {
   en: {
     businessProfile: "Business profile", displayName: "Shop name", legalName: "Legal name", licenseNumber: "License number", licenseExpiry: "License expiry", saveProfile: "Save business profile",
-    branchesCashboxes: "Branches and cashboxes", addBranch: "Add branch", branchName: "Branch name", addCashbox: "Add cashbox", cashboxName: "Cashbox name", active: "Active", inactive: "Inactive", deactivate: "Deactivate", activate: "Activate", reasonPrompt: "Write the reason for this change",
+    branchesCashboxes: "Branches and connected partners", addBranch: "Add branch", branchName: "Branch name", addCashbox: "Add cashbox", cashboxName: "Cashbox name", active: "Active", inactive: "Inactive", deactivate: "Deactivate", activate: "Activate", reasonPrompt: "Write the reason for this change",
     workingRules: "Daily working rules", dateStyle: "Date shown", gregorian: "Gregorian", solarHijri: "Afghan Solar Hijri", bothDates: "Show both", digitStyle: "Number style", westernDigits: "Western digits", localDigits: "Local digits", approvalLimit: "Approval threshold in AFN", offlineLimit: "Offline limit (deferred; kept at zero)", hideCashierProfit: "Hide owner profit from cashiers", rateMaxAge: "Maximum rate age (minutes)", rateTolerance: "Allowed rate difference (basis points)",
     categories: "Expense categories", addCategory: "Add category", categoryName: "Category name", services: "Optional services", dataExport: "Business data export", exportHelp: "Download the organization’s authorized ledger and operating records as JSON.", downloadData: "Download business data", securityHistory: "Security history", supportRequests: "Support access requests", approveSupport: "Approve temporarily", rejectSupport: "Reject", revokeSupport: "Revoke now", noSupport: "No support request is waiting.", ownerApproval: "Owner approval and verification code are required.",
     currencies: "Currencies used by this shop", currenciesIntro: "Choose the currencies shown when staff make a transaction. AFN always stays on.", searchCurrency: "Find a currency", baseCurrency: "Main currency", usedCurrency: "Used in shop", currencySymbol: "Symbol", currencyName: "Currency", currencyStatus: "Use",
@@ -418,7 +420,7 @@ const controlCopy: Record<Language, Record<string, string>> = {
   },
   "fa-AF": {
     businessProfile: "معلومات صرافی", displayName: "نام صرافی", legalName: "نام رسمی", licenseNumber: "شماره جواز", licenseExpiry: "تاریخ ختم جواز", saveProfile: "ذخیره معلومات صرافی",
-    branchesCashboxes: "شعبه‌ها و صندوق‌ها", addBranch: "افزودن شعبه", branchName: "نام شعبه", addCashbox: "افزودن صندوق", cashboxName: "نام صندوق", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعال کردن", activate: "فعال کردن", reasonPrompt: "دلیل این تغییر را بنویسید",
+    branchesCashboxes: "شعبه‌ها و همکاران وصل‌شده", addBranch: "افزودن شعبه", branchName: "نام شعبه", addCashbox: "افزودن صندوق", cashboxName: "نام صندوق", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعال کردن", activate: "فعال کردن", reasonPrompt: "دلیل این تغییر را بنویسید",
     workingRules: "قواعد کار روزانه", dateStyle: "نمایش تاریخ", gregorian: "میلادی", solarHijri: "هجری شمسی افغانستان", bothDates: "هر دو تاریخ", digitStyle: "شکل اعداد", westernDigits: "اعداد انگلیسی", localDigits: "اعداد محلی", approvalLimit: "حد تأیید به افغانی", offlineLimit: "حد کار آفلاین (فعلاً صفر)", hideCashierProfit: "مفاد مالک از صندوق‌دار پنهان باشد", rateMaxAge: "بیشترین عمر نرخ (دقیقه)", rateTolerance: "تفاوت مجاز نرخ (نقطه پایه)",
     categories: "بخش‌های مصرف", addCategory: "افزودن بخش", categoryName: "نام بخش مصرف", services: "خدمات اختیاری", dataExport: "دانلود معلومات صرافی", exportHelp: "دفتر معاملات و معلومات کاری صرافی را با اجازه مالک به شکل JSON دانلود کنید.", downloadData: "دانلود معلومات", securityHistory: "تاریخچه امنیت", supportRequests: "درخواست دسترسی پشتیبانی", approveSupport: "تأیید موقت", rejectSupport: "رد کردن", revokeSupport: "قطع دسترسی", noSupport: "هیچ درخواست پشتیبانی منتظر نیست.", ownerApproval: "تأیید مالک و کود امنیتی لازم است.",
     currencies: "اسعار مورد استفاده صرافی", currenciesIntro: "اسعاری را انتخاب کنید که هنگام معامله به کارمندان نشان داده شود. افغانی همیشه فعال است.", searchCurrency: "جستجوی اسعار", baseCurrency: "اسعار اصلی", usedCurrency: "در صرافی استفاده می‌شود", currencySymbol: "نشان", currencyName: "نام اسعار", currencyStatus: "استفاده",
@@ -426,7 +428,7 @@ const controlCopy: Record<Language, Record<string, string>> = {
   },
   "ps-AF": {
     businessProfile: "د صرافۍ معلومات", displayName: "د صرافۍ نوم", legalName: "رسمي نوم", licenseNumber: "د جواز شمېره", licenseExpiry: "د جواز پای", saveProfile: "د صرافۍ معلومات ساتل",
-    branchesCashboxes: "څانګې او صندوقونه", addBranch: "څانګه زیاتول", branchName: "د څانګې نوم", addCashbox: "صندوق زیاتول", cashboxName: "د صندوق نوم", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعالول", activate: "فعالول", reasonPrompt: "د دې بدلون لامل ولیکئ",
+    branchesCashboxes: "څانګې او نښلول شوي همکاران", addBranch: "څانګه زیاتول", branchName: "د څانګې نوم", addCashbox: "صندوق زیاتول", cashboxName: "د صندوق نوم", active: "فعال", inactive: "غیرفعال", deactivate: "غیرفعالول", activate: "فعالول", reasonPrompt: "د دې بدلون لامل ولیکئ",
     workingRules: "د ورځني کار اصول", dateStyle: "د نېټې ښودل", gregorian: "میلادي", solarHijri: "افغان لمریز هجري", bothDates: "دواړه نېټې", digitStyle: "د شمېرو بڼه", westernDigits: "انګلیسي شمېرې", localDigits: "سیمه‌ییزې شمېرې", approvalLimit: "د تایید حد په افغانۍ", offlineLimit: "د افلاین کار حد (اوس صفر)", hideCashierProfit: "د مالک ګټه له صندوق‌دار پټه وي", rateMaxAge: "د نرخ تر ټولو زیات عمر (دقیقې)", rateTolerance: "د نرخ اجازه شوی توپیر (بنسټیز ټکي)",
     categories: "د لګښت برخې", addCategory: "برخه زیاتول", categoryName: "د لګښت د برخې نوم", services: "اختیاري خدمتونه", dataExport: "د صرافۍ معلومات ښکته کول", exportHelp: "د مالک په اجازه د صرافۍ دفتر او کاري معلومات د JSON په بڼه ښکته کړئ.", downloadData: "معلومات ښکته کول", securityHistory: "امنیتي تاریخ", supportRequests: "د مرستې د لاسرسي غوښتنې", approveSupport: "لنډمهاله تایید", rejectSupport: "ردول", revokeSupport: "لاس‌رسی بندول", noSupport: "د مرستې منتظره غوښتنه نشته.", ownerApproval: "د مالک تایید او امنیتي کوډ اړین دي.",
     currencies: "د صرافۍ کارېدونکي اسعار", currenciesIntro: "هغه اسعار وټاکئ چې کارکوونکو ته د معاملې پر مهال ښکاري. افغانۍ تل فعاله ده.", searchCurrency: "اسعار ولټوئ", baseCurrency: "اصلي اسعار", usedCurrency: "په صرافۍ کې کارېږي", currencySymbol: "نښه", currencyName: "د اسعارو نوم", currencyStatus: "کارول",
@@ -436,9 +438,9 @@ const controlCopy: Record<Language, Record<string, string>> = {
 
 export function SettingsView({ language, organizationId, organizationName, branchName, roleLabel, canManage, onDashboard }: { language: Language; organizationId: string | null; organizationName: string; branchName: string; roleLabel: string; canManage: boolean; onDashboard: () => void }) {
   const c = controlCopy[language];
-  const [settingsSection, setSettingsSection] = useState<"business" | "currencies" | "security">(() => {
+  const [settingsSection, setSettingsSection] = useState<"business" | "branches" | "currencies" | "security">(() => {
     const requested = window.sessionStorage.getItem("sarafi-settings-section");
-    return requested === "currencies" || requested === "security" ? requested : "business";
+    return requested === "branches" || requested === "currencies" || requested === "security" ? requested : "business";
   });
   const [settings, setSettings] = useState<WorkspaceSettingsRecord | null>(null);
   const [controls, setControls] = useState<OrganizationControlPlane | null>(null);
@@ -494,6 +496,9 @@ export function SettingsView({ language, organizationId, organizationName, branc
     ["JPY", "Japanese Yen", "ین جاپان", "جاپاني ین", "¥"],
   ].map(([code, name_en, name_dari, name_pashto, symbol]) => ({ code, name_en, name_dari, name_pashto, symbol, minor_unit: 2, enabled: true })) : []);
   const [currencySearch, setCurrencySearch] = useState("");
+  const [connectedPartners, setConnectedPartners] = useState<HawalaPartnerRecord[]>(() => organizationId === "inspection" ? [
+    { id: "inspection-partner", counterparty_id: null, name: "Rahimi Exchange", active: true, endpoint_type: "external_partner", recipient_organization_id: "inspection-recipient", recipient_branch_id: "inspection-herat", reciprocal_partner_id: "inspection-reciprocal", endpoint_verified_at: "2026-09-11T08:00:00+04:30", endpoint_active: true, recipient_organization_name: "Rahimi Exchange", recipient_branch_name: "Herat Main", recipient_location: "Herat" },
+  ] : []);
   useEffect(() => {
     window.sessionStorage.removeItem("sarafi-settings-section");
   }, []);
@@ -507,12 +512,13 @@ export function SettingsView({ language, organizationId, organizationName, branc
     if (!organizationId || organizationId === "inspection") return;
     let active = true;
     const controlRequest = canManage ? getOrganizationControlPlane(organizationId) : Promise.resolve({ data: null, error: null });
-    void Promise.all([getWorkspaceSettings(organizationId), listNotificationPreferences(organizationId), controlRequest, listCurrencyCatalog(organizationId)]).then(([result, preferenceResult, controlResult, currencyResult]) => {
+    void Promise.all([getWorkspaceSettings(organizationId), listNotificationPreferences(organizationId), controlRequest, listCurrencyCatalog(organizationId), listHawalaPartners(organizationId)]).then(([result, preferenceResult, controlResult, currencyResult, partnerResult]) => {
       if (!active) return;
       setSettings(result.data);
       setPreferences(preferenceResult.data ?? []);
       setControls(controlResult.data);
       setCurrencies(currencyResult.data ?? []);
+      setConnectedPartners(partnerResult.data ?? []);
       if (result.data) {
         setDraftLanguage(result.data.default_language as Language);
         setTimezone(result.data.timezone);
@@ -533,7 +539,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
         setLicenseExpiry(controlResult.data.organization.license_expires_on ?? "");
         setNewCashboxBranch(controlResult.data.branches.find((item) => item.active)?.id ?? "");
       }
-      setState(result.error || currencyResult.error || (canManage && controlResult.error) || !result.data ? "error" : "ready");
+      setState(result.error || currencyResult.error || partnerResult.error || (canManage && controlResult.error) || !result.data ? "error" : "ready");
     });
     return () => { active = false; };
   }, [canManage, organizationId]);
@@ -675,6 +681,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
     const query = currencySearch.trim().toLocaleLowerCase();
     return !query || currency.code.toLocaleLowerCase().includes(query) || currencyLabel(currency).toLocaleLowerCase().includes(query);
   });
+  const verifiedPartners = connectedPartners.filter((partner) => partner.endpoint_active && partner.endpoint_verified_at);
   const timezoneOptions = [
     { value: "Asia/Kabul", label: language === "en" ? "Kabul" : "کابل" },
     { value: "Asia/Tehran", label: language === "en" ? "Tehran" : language === "fa-AF" ? "تهران" : "تهران" },
@@ -684,38 +691,61 @@ export function SettingsView({ language, organizationId, organizationName, branc
     { value: "UTC", label: language === "en" ? "Universal time" : language === "fa-AF" ? "زمان جهانی" : "نړیوال وخت" },
   ];
   const cashRule = settings ? (settings.negative_cash_allowed ? p(language, "negativeCashAllowed") : p(language, "noNegativeCash")) : "—";
-  const enabledCurrencyCount = currencies.filter((currency) => currency.enabled).length;
   const settingsNavigation = language === "en"
     ? {
         label: "Settings areas",
         business: "Business",
-        businessIntro: "Identity, branches, cashboxes, and operating rules",
+        businessIntro: "Name, license, currency, timezone, and language",
+        branches: "Branches and Connected Partners",
+        branchesIntro: "Branches, cashboxes, and verified Hawala endpoints",
         currencies: "Currencies",
         currenciesIntro: "Choose the money your team can use",
         security: "Security",
         securityIntro: "Access, alerts, support, and audit history",
         enabled: "enabled",
+        editBusiness: "Edit Business Information",
+        license: "License information",
+        primaryBranch: "Primary branch",
+        verifiedPartner: "Verified Hawala endpoint",
+        noPartners: "No verified partner connection is available yet.",
+        advanced: "Advanced operating controls",
       }
     : language === "fa-AF"
       ? {
           label: "بخش‌های تنظیمات",
           business: "صرافی",
-          businessIntro: "مشخصات، شعبه‌ها، صندوق‌ها و اصول کاری",
+          businessIntro: "نام، جواز، اسعار، وقت رسمی و زبان",
+          branches: "شعبه‌ها و همکاران وصل‌شده",
+          branchesIntro: "شعبه‌ها، صندوق‌ها و مقصدهای تأییدشده حواله",
           currencies: "اسعار",
           currenciesIntro: "پول‌هایی را انتخاب کنید که تیم استفاده می‌کند",
           security: "امنیت",
           securityIntro: "دسترسی، خبرها، پشتیبانی و تاریخچه",
           enabled: "فعال",
+          editBusiness: "ویرایش معلومات صرافی",
+          license: "معلومات جواز",
+          primaryBranch: "شعبه اصلی",
+          verifiedPartner: "مقصد تأییدشده حواله",
+          noPartners: "هنوز همکار تأییدشده‌ای وصل نیست.",
+          advanced: "کنترول‌های پیشرفته کاری",
         }
       : {
           label: "د تنظیماتو برخې",
           business: "صرافي",
-          businessIntro: "معلومات، څانګې، صندوقونه او کاري اصول",
+          businessIntro: "نوم، جواز، اسعار، کاري وخت او ژبه",
+          branches: "څانګې او نښلول شوي همکاران",
+          branchesIntro: "څانګې، صندوقونه او د حوالې تایید شوي مقصدونه",
           currencies: "اسعار",
           currenciesIntro: "هغه پیسې وټاکئ چې ډله یې کاروي",
           security: "امنیت",
           securityIntro: "لاس‌رسی، خبرتیاوې، ملاتړ او تاریخ",
           enabled: "فعال",
+          editBusiness: "د صرافۍ معلومات سمول",
+          license: "د جواز معلومات",
+          primaryBranch: "اصلي څانګه",
+          verifiedPartner: "د حوالې تایید شوی مقصد",
+          noPartners: "تر اوسه تایید شوی همکار نه دی نښلول شوی.",
+          advanced: "پرمختللي کاري کنټرولونه",
         };
   return (
     <section className="professional-workspace">
@@ -729,32 +759,48 @@ export function SettingsView({ language, organizationId, organizationName, branc
           <span><b>{settingsNavigation.business}</b><small>{settingsNavigation.businessIntro}</small></span>
           <em>{branchName || "—"}</em>
         </button>
-        <button type="button" role="tab" aria-selected={settingsSection === "currencies"} className={settingsSection === "currencies" ? "active" : ""} onClick={() => setSettingsSection("currencies")}>
-          <span className="settings-section-icon"><AppIcon name="rates" /></span>
-          <span><b>{settingsNavigation.currencies}</b><small>{settingsNavigation.currenciesIntro}</small></span>
-          <em>{enabledCurrencyCount} {settingsNavigation.enabled}</em>
-        </button>
-        <button type="button" role="tab" aria-selected={settingsSection === "security"} className={settingsSection === "security" ? "active" : ""} onClick={() => setSettingsSection("security")}>
-          <span className="settings-section-icon"><AppIcon name="shield" /></span>
-          <span><b>{settingsNavigation.security}</b><small>{settingsNavigation.securityIntro}</small></span>
-          <em>{roleLabel}</em>
+        <button type="button" role="tab" aria-selected={settingsSection === "branches"} className={settingsSection === "branches" ? "active" : ""} onClick={() => setSettingsSection("branches")}>
+          <span className="settings-section-icon"><AppIcon name="cashbox" /></span>
+          <span><b>{settingsNavigation.branches}</b><small>{settingsNavigation.branchesIntro}</small></span>
+          <em>{controls?.branches.length ?? (organizationId === "inspection" ? 1 : 0)}</em>
         </button>
       </div>
       <div className="settings-grid">
         <article className="settings-card settings-command-card" hidden={settingsSection !== "business"}>
           <div className="settings-card-title"><AppIcon name="home" /><div><h2>{p(language, "operatingContext")}</h2><p>{organizationName}</p></div></div>
           <div className="detail-list">
-            <DetailRow label={p(language, "organization")} value={organizationName || "—"} />
-            <DetailRow label={p(language, "branch")} value={branchName || "—"} />
+            <DetailRow label={c.displayName} value={displayName || organizationName || "—"} />
+            <DetailRow label={settingsNavigation.license} value={licenseNumber ? `${licenseNumber}${licenseExpiry ? ` · ${licenseExpiry}` : ""}` : "—"} />
             <DetailRow label={p(language, "baseCurrency")} value={settings?.base_currency_code ?? "—"} />
             <DetailRow label={p(language, "timezone")} value={settings ? (timezoneOptions.find((option) => option.value === settings.timezone)?.label ?? settings.timezone) : "—"} />
             <DetailRow label={p(language, "language")} value={languageLabel} />
-            <DetailRow label={p(language, "receiptPrefix")} value={settings?.receipt_prefix ?? "—"} />
+            <DetailRow label={settingsNavigation.primaryBranch} value={branchName || "—"} />
           </div>
-          {canManage ? <form className="settings-editor" onSubmit={saveSettings}>
+          {canManage ? <details className="settings-editor-disclosure"><summary>{settingsNavigation.editBusiness}</summary>
+          {controls ? <form className="settings-editor" onSubmit={saveProfile}>
+            <h3>{c.businessProfile}</h3>
+            <label>{c.displayName}<input required minLength={2} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label>
+            <label>{c.legalName}<input required minLength={2} value={legalName} onChange={(event) => setLegalName(event.target.value)} /></label>
+            <label>{c.licenseNumber}<input value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} /></label>
+            <label>{c.licenseExpiry}<input type="date" value={licenseExpiry} onChange={(event) => setLicenseExpiry(event.target.value)} /></label>
+            <button className="primary-action" disabled={controlBusy === "profile"}>{c.saveProfile}</button>
+          </form> : null}
+          <form className="settings-editor" onSubmit={saveSettings}>
             <h3>{p(language, "editSettings")}</h3>
             <label>{p(language, "language")}<select value={draftLanguage} onChange={(event) => setDraftLanguage(event.target.value as Language)}><option value="fa-AF">دری</option><option value="ps-AF">پښتو</option><option value="en">English</option></select></label>
             <label>{p(language, "timezone")}<select value={timezone} onChange={(event) => setTimezone(event.target.value)}>{timezoneOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+            <button className="primary-action" disabled={saving}>{saving ? p(language, "savingSettings") : p(language, "saveSettings")}</button>
+          </form></details> : <p className="muted-copy">{p(language, "ownerSettingsOnly")}</p>}
+        </article>
+        <details className="settings-card settings-secondary-disclosure" hidden={settingsSection !== "business"}>
+          <summary>{settingsNavigation.advanced}</summary>
+          <div className="settings-card-title"><AppIcon name="wallet" /><div><h2>{p(language, "cashRule")}</h2><p>{cashRule}</p></div></div>
+          <div className={`security-callout ${settings ? "good" : ""}`}><AppIcon name="shield" /><span>{cashRule}</span></div>
+          <h3>{p(language, "enabledServices")}</h3>
+          <div className="feature-list">
+            {settings?.features.filter((feature) => feature.enabled).length ? settings.features.filter((feature) => feature.enabled).map((feature) => <span className="feature-chip" key={feature.feature_code}><AppIcon name="check" size={15} />{serviceLabel(language, feature.feature_code)} · {p(language, "enabled")}</span>) : <p className="muted-copy">{settings ? p(language, "noExtraServices") : "—"}</p>}
+          </div>
+          {canManage ? <form className="settings-editor" onSubmit={saveSettings}>
             <label>{p(language, "receiptPrefix")}<input required minLength={2} maxLength={10} pattern="[A-Za-z0-9-]{2,10}" dir="ltr" value={receiptPrefix} onChange={(event) => setReceiptPrefix(event.target.value)} /></label>
             <label>{c.dateStyle}<select value={dateDisplay} onChange={(event) => setDateDisplay(event.target.value)}><option value="gregorian">{c.gregorian}</option><option value="solar_hijri">{c.solarHijri}</option><option value="both">{c.bothDates}</option></select></label>
             <label>{c.digitStyle}<select value={digitDisplay} onChange={(event) => setDigitDisplay(event.target.value)}><option value="western">{c.westernDigits}</option><option value="localized">{c.localDigits}</option></select></label>
@@ -765,18 +811,10 @@ export function SettingsView({ language, organizationId, organizationName, branc
             <label className="settings-checkbox"><input type="checkbox" checked={negativeCashAllowed} onChange={(event) => setNegativeCashAllowed(event.target.checked)} />{p(language, "allowNegativeCash")}</label>
             <label className="settings-checkbox"><input type="checkbox" checked={cashierProfitHidden} onChange={(event) => setCashierProfitHidden(event.target.checked)} />{c.hideCashierProfit}</label>
             <small>{p(language, "mfaSettingsNote")}</small>
-            {saveMessage && <div className={`settings-save-message ${saveMessage}`} role="status">{p(language, saveMessage === "saved" ? "settingsSaved" : "settingsFailed")}</div>}
             <button className="primary-action" disabled={saving}>{saving ? p(language, "savingSettings") : p(language, "saveSettings")}</button>
-          </form> : <p className="muted-copy">{p(language, "ownerSettingsOnly")}</p>}
-        </article>
-        <article className="settings-card" hidden={settingsSection !== "business"}>
-          <div className="settings-card-title"><AppIcon name="wallet" /><div><h2>{p(language, "cashRule")}</h2><p>{cashRule}</p></div></div>
-          <div className={`security-callout ${settings ? "good" : ""}`}><AppIcon name="shield" /><span>{cashRule}</span></div>
-          <h3>{p(language, "enabledServices")}</h3>
-          <div className="feature-list">
-            {settings?.features.filter((feature) => feature.enabled).length ? settings.features.filter((feature) => feature.enabled).map((feature) => <span className="feature-chip" key={feature.feature_code}><AppIcon name="check" size={15} />{serviceLabel(language, feature.feature_code)} · {p(language, "enabled")}</span>) : <p className="muted-copy">{settings ? p(language, "noExtraServices") : "—"}</p>}
-          </div>
-        </article>
+          </form> : null}
+        </details>
+        {saveMessage ? <div className={`settings-save-message ${saveMessage}`} role="status">{p(language, saveMessage === "saved" ? "settingsSaved" : "settingsFailed")}</div> : null}
         <article className="settings-card settings-card-wide" hidden={settingsSection !== "security"}>
           <div className="settings-card-title"><AppIcon name="check" /><div><h2>{p(language, "notificationChoices")}</h2><p>{p(language, "notificationIntro")}</p></div></div>
           <div className="notification-preferences">
@@ -810,35 +848,36 @@ export function SettingsView({ language, organizationId, organizationName, branc
             <div className="security-callout"><AppIcon name="shield" /><span>{p(language, "ledgerProtection")}</span></div>
           </div>
         </article>
+        {!controls && settingsSection === "branches" ? <article className="settings-card settings-card-wide">
+          <div className="settings-card-title"><AppIcon name="cashbox" /><div><h2>{c.branchesCashboxes}</h2><p>{settingsNavigation.branchesIntro}</p></div></div>
+          <section className="connected-partner-list" aria-label={settingsNavigation.branches}>
+            {verifiedPartners.length ? verifiedPartners.map((partner) => <div className="balance-row" key={partner.id}><span className="currency-badge usd">P</span><span className="balance-name"><b>{partner.recipient_organization_name ?? partner.name}</b><small>{partner.recipient_branch_name ?? "—"} · {partner.recipient_location ?? "—"}</small></span><strong>{settingsNavigation.verifiedPartner}</strong></div>) : <p className="muted-copy">{settingsNavigation.noPartners}</p>}
+          </section>
+        </article> : null}
         {canManage && controls && <>
-          <article className="settings-card settings-card-wide" hidden={settingsSection !== "business"}>
-            <div className="settings-card-title"><AppIcon name="home" /><div><h2>{c.businessProfile}</h2><p>{c.ownerApproval}</p></div></div>
-            <form className="inline-management-form" onSubmit={saveProfile}>
-              <label>{c.displayName}<input required minLength={2} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label>
-              <label>{c.legalName}<input required minLength={2} value={legalName} onChange={(event) => setLegalName(event.target.value)} /></label>
-              <label>{c.licenseNumber}<input value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} /></label>
-              <label>{c.licenseExpiry}<input type="date" value={licenseExpiry} onChange={(event) => setLicenseExpiry(event.target.value)} /></label>
-              <button className="primary-action" disabled={controlBusy === "profile"}>{c.saveProfile}</button>
-            </form>
-          </article>
-          <article className="settings-card settings-card-wide" hidden={settingsSection !== "business"}>
+          <article className="settings-card settings-card-wide" hidden={settingsSection !== "branches"}>
             <div className="settings-card-title"><AppIcon name="cashbox" /><div><h2>{c.branchesCashboxes}</h2><p>{c.ownerApproval}</p></div></div>
             <div className="control-lists">
               <div className="balance-list">{controls.branches.map((branch) => <div className="balance-row" key={branch.id}><span className="currency-badge usd">B</span><span className="balance-name"><b>{branch.name}</b><small>{branch.timezone}</small></span><strong>{branch.active ? c.active : c.inactive}</strong><button className="text-button" disabled={controlBusy === branch.id} onClick={() => void changeBranchState(branch.id, !branch.active)}>{branch.active ? c.deactivate : c.activate}</button></div>)}</div>
               <form className="inline-management-form" onSubmit={addBranch}><label>{c.branchName}<input required minLength={2} value={newBranchName} onChange={(event) => setNewBranchName(event.target.value)} /></label><button className="primary-action" disabled={controlBusy === "branch"}>{c.addBranch}</button></form>
               <div className="balance-list">{controls.cashboxes.map((cashbox) => <div className="balance-row" key={cashbox.id}><span className="currency-badge usd">C</span><span className="balance-name"><b>{cashbox.name}</b><small>{controls.branches.find((branch) => branch.id === cashbox.branch_id)?.name ?? "—"}</small></span><strong>{cashbox.active ? c.active : c.inactive}</strong><button className="text-button" disabled={controlBusy === cashbox.id} onClick={() => void changeCashboxState(cashbox.id, !cashbox.active)}>{cashbox.active ? c.deactivate : c.activate}</button></div>)}</div>
               <form className="inline-management-form" onSubmit={addCashbox}><label>{c.branchName}<select required value={newCashboxBranch} onChange={(event) => setNewCashboxBranch(event.target.value)}>{controls.branches.filter((branch) => branch.active).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>{c.cashboxName}<input required minLength={2} value={newCashboxName} onChange={(event) => setNewCashboxName(event.target.value)} /></label><button className="primary-action" disabled={controlBusy === "cashbox"}>{c.addCashbox}</button></form>
+              <section className="connected-partner-list" aria-label={settingsNavigation.branches}>
+                {verifiedPartners.length ? verifiedPartners.map((partner) => <div className="balance-row" key={partner.id}><span className="currency-badge usd">P</span><span className="balance-name"><b>{partner.recipient_organization_name ?? partner.name}</b><small>{partner.recipient_branch_name ?? "—"} · {partner.recipient_location ?? "—"}</small></span><strong>{settingsNavigation.verifiedPartner}</strong></div>) : <p className="muted-copy">{settingsNavigation.noPartners}</p>}
+              </section>
             </div>
           </article>
-          <article className="settings-card" hidden={settingsSection !== "business"}>
+          <details className="settings-card settings-secondary-disclosure" hidden={settingsSection !== "business"}>
+            <summary>{c.categories}</summary>
             <div className="settings-card-title"><AppIcon name="expense" /><div><h2>{c.categories}</h2></div></div>
             <div className="feature-list">{controls.categories.filter((item) => item.active).map((item) => <span className="feature-chip" key={item.id}>{item.name}</span>)}</div>
             <form className="settings-editor" onSubmit={addCategory}><label>{c.categoryName}<input required minLength={2} value={newCategory} onChange={(event) => setNewCategory(event.target.value)} /></label><button className="primary-action" disabled={controlBusy === "category"}>{c.addCategory}</button></form>
-          </article>
-          <article className="settings-card" hidden={settingsSection !== "business"}>
+          </details>
+          <details className="settings-card settings-secondary-disclosure" hidden={settingsSection !== "business"}>
+            <summary>{c.services}</summary>
             <div className="settings-card-title"><AppIcon name="settings" /><div><h2>{c.services}</h2></div></div>
             <div className="notification-preferences">{["hawala", "advanced_compliance", "advanced_analytics", "imports"].map((feature) => <label key={feature}><span>{serviceLabel(language, feature)}</span><input type="checkbox" disabled={controlBusy === feature} checked={controls.features.find((item) => item.code === feature)?.enabled ?? false} onChange={(event) => void changeFeature(feature, event.target.checked)} /></label>)}</div>
-          </article>
+          </details>
           <article className="settings-card" hidden={settingsSection !== "security"}>
             <div className="settings-card-title"><AppIcon name="report" /><div><h2>{c.dataExport}</h2><p>{c.exportHelp}</p></div></div>
             <button className="primary-action" disabled={controlBusy === "export"} onClick={() => void downloadOrganizationData()}>{c.downloadData}</button>

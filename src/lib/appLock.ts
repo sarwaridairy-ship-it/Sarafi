@@ -1,7 +1,7 @@
 import { getSupabaseClient, isPasskeyFeatureEnabled } from './supabase'
 
-export type AppLockStatus = { configured: boolean; lockedUntil: string | null; passkeyEnabled: boolean }
-type UnlockResponse = { grant?: string; expiresAt?: string; configured?: boolean; lockedUntil?: string | null; passkeyEnabled?: boolean; error?: string }
+export type AppLockStatus = { configured: boolean; lockedUntil: string | null; passkeyEnabled: boolean; autoLockSeconds: 30 | 60 | 300 | 900; lockOnBackground: boolean }
+type UnlockResponse = { grant?: string; expiresAt?: string; configured?: boolean; lockedUntil?: string | null; passkeyEnabled?: boolean; autoLockSeconds?: number; lockOnBackground?: boolean; error?: string }
 
 let activeGrant: { value: string; expiresAt: number; organizationId: string; deviceId: string } | null = null
 
@@ -24,11 +24,22 @@ async function invoke(body: Record<string, unknown>): Promise<{ data: UnlockResp
 
 export async function getAppLockStatus(organizationId: string, deviceId: string): Promise<{ data: AppLockStatus | null; error: string | null }> {
   const result = await invoke({ action: 'status', organization_id: organizationId, device_id: deviceId })
-  return { data: result.data ? { configured: Boolean(result.data.configured), lockedUntil: result.data.lockedUntil ?? null, passkeyEnabled: isPasskeyFeatureEnabled() } : null, error: result.error }
+  return { data: result.data ? { configured: Boolean(result.data.configured), lockedUntil: result.data.lockedUntil ?? null, passkeyEnabled: isPasskeyFeatureEnabled(), autoLockSeconds: [30, 60, 300, 900].includes(result.data.autoLockSeconds ?? 900) ? result.data.autoLockSeconds as AppLockStatus['autoLockSeconds'] : 900, lockOnBackground: result.data.lockOnBackground ?? true } : null, error: result.error }
 }
 
-export async function configureAppLockPin(organizationId: string, deviceId: string, pin: string): Promise<string | null> {
-  const result = await invoke({ action: 'configure', organization_id: organizationId, device_id: deviceId, pin })
+export async function configureAppLockPin(organizationId: string, deviceId: string, pin: string, settings?: Pick<AppLockStatus, 'autoLockSeconds' | 'lockOnBackground'>): Promise<string | null> {
+  const result = await invoke({ action: 'configure', organization_id: organizationId, device_id: deviceId, pin, auto_lock_seconds: settings?.autoLockSeconds, lock_on_background: settings?.lockOnBackground })
+  return result.error
+}
+
+export async function updateAppLockSettings(organizationId: string, deviceId: string, settings: Pick<AppLockStatus, 'autoLockSeconds' | 'lockOnBackground'>): Promise<string | null> {
+  const result = await invoke({ action: 'settings', organization_id: organizationId, device_id: deviceId, auto_lock_seconds: settings.autoLockSeconds, lock_on_background: settings.lockOnBackground })
+  return result.error
+}
+
+export async function disableAppLock(organizationId: string, deviceId: string): Promise<string | null> {
+  const result = await invoke({ action: 'disable', organization_id: organizationId, device_id: deviceId })
+  if (!result.error) clearActiveAppUnlockGrant()
   return result.error
 }
 

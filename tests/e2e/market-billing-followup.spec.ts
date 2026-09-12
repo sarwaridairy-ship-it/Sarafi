@@ -29,7 +29,7 @@ test('rates expose only the two markets and respect the shop currency selection 
   await page.getByRole('button', { name: 'Save currency list' }).click()
   await market.selectOption('sarai-shahzada')
   await expect(page.locator('.market-rate-row').filter({ hasText: 'EUR' })).toHaveCount(0)
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'IRR' })).toContainText('ریال ایرانی')
+  await expect(page.locator('.market-rate-row').filter({ hasText: 'IRR' })).toContainText('Iranian Toman')
 
   await page.getByRole('button', { name: 'Move down USD' }).click()
   await page.getByRole('button', { name: 'Save currency list' }).click()
@@ -64,18 +64,20 @@ test('FX no longer exposes the rate-calculation explainer label', async ({ page,
   await expect(page.locator('body')).not.toContainText('این نرخ چگونه حساب شده؟')
 })
 
-test('business, currencies, and security are focused settings workspaces', async ({ page, browserName }) => {
+test('Manage SARAFI exposes five focused internal workspaces', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'The owner settings navigation is covered once.')
-  await page.goto(`${workspace}/control/business?role=owner`)
-  const tabs = page.getByRole('tab')
-  await expect(tabs).toHaveCount(3)
-  await expect(page.getByRole('tab', { name: /Business/ })).toHaveAttribute('aria-selected', 'true')
-  await page.getByRole('tab', { name: /Currencies/ }).click()
-  await expect(page.getByRole('heading', { name: 'Currencies used by this shop' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Operating context' })).toBeHidden()
-  await page.getByRole('tab', { name: /Security/ }).click()
-  await expect(page.getByRole('heading', { name: 'Access & security' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Your notifications' })).toBeVisible()
+  await page.goto(`${workspace}/control?role=owner`)
+  await expect(page.locator('.control-center-card')).toHaveCount(5)
+  for (const label of ['Business Information', 'Branches and Connected Partners', 'Currencies and Rates', 'Security and App Lock', 'Team and Access'])
+    await expect(page.getByRole('button', { name: new RegExp(label) })).toBeVisible()
+
+  await page.getByRole('button', { name: /Currencies and Rates/ }).click()
+  await expect(page.getByRole('columnheader')).toHaveText(['Currency', 'Buy rate', 'Sell rate', 'Daily valuation', 'Rate mode', 'Time', 'Update'])
+
+  await page.goto(`${workspace}/control?role=owner`)
+  await page.getByRole('button', { name: /Security and App Lock/ }).click()
+  await expect(page.getByRole('heading', { name: 'App lock' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Lock Now' })).toBeVisible()
 })
 
 test('owner and administrator payment workspaces expose receipt and editable duration controls', async ({ page, browserName }) => {

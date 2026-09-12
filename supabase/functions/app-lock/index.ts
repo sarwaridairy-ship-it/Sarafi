@@ -32,7 +32,7 @@ Deno.serve(async (request) => {
   const { data: userData, error: userError } = await userClient.auth.getUser(token);
   if (userError || !userData.user) return reply(401, { error: "Authentication required" });
 
-  let body: { action?: string; organization_id?: string; device_id?: string; pin?: string };
+  let body: { action?: string; organization_id?: string; device_id?: string; pin?: string; auto_lock_seconds?: number; lock_on_background?: boolean };
   try { body = await request.json(); } catch { return reply(400, { error: "Invalid request body" }); }
   if (!body.organization_id) return reply(400, { error: "Organization is required" });
   if (!body.device_id) return reply(400, { error: "Registered device is required" });
@@ -46,22 +46,45 @@ Deno.serve(async (request) => {
     await admin.from("security_audit_events").insert({ organization_id: body.organization_id, actor_user_id: userId, target_device_id: body.device_id, event_type: eventType, metadata });
   };
   if (body.action === "status") {
-    const { data } = await admin.from("app_lock_credentials").select("locked_until").eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id).maybeSingle();
-    return reply(200, { configured: Boolean(data), lockedUntil: data?.locked_until ?? null, passkeyEnabled: true });
+    const { data } = await admin.from("app_lock_credentials").select("locked_until,auto_lock_seconds,lock_on_background").eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id).maybeSingle();
+    return reply(200, { configured: Boolean(data), lockedUntil: data?.locked_until ?? null, passkeyEnabled: true, autoLockSeconds: data?.auto_lock_seconds ?? 900, lockOnBackground: data?.lock_on_background ?? true });
+  }
+
+  if (["configure", "settings", "disable"].includes(body.action ?? "")) {
+    const { data: canManageSecurity } = await userClient.rpc("has_capability", { target_org: body.organization_id, capability: "security.manage", optional_scope: {} });
+    if (!canManageSecurity) return reply(403, { error: "Security management access is required" });
+    if (decodeJwt(token).aal !== "aal2") return reply(403, { error: "Two-step verification is required before changing app-lock controls" });
   }
 
   if (body.action === "configure") {
     if (!pinPattern.test(body.pin ?? "")) return reply(400, { error: "PIN must contain exactly six digits" });
-    if (decodeJwt(token).aal !== "aal2") return reply(403, { error: "Two-step verification is required before changing the app PIN" });
+    const autoLockSeconds = [30, 60, 300, 900].includes(body.auto_lock_seconds ?? 900) ? body.auto_lock_seconds : 900;
     const salt = randomBytes(16);
     const hash = scryptSync(body.pin!, salt, 32, scryptOptions);
     const { error } = await admin.from("app_lock_credentials").upsert({
       organization_id: body.organization_id, user_id: userId, device_id: body.device_id, pin_salt: salt.toString("hex"), pin_hash: hash.toString("hex"),
-      kdf: "scrypt", kdf_parameters: { N: scryptOptions.N, r: scryptOptions.r, p: scryptOptions.p, keyLength: 32 }, failed_attempts: 0, locked_until: null, updated_at: new Date().toISOString(),
+      kdf: "scrypt", kdf_parameters: { N: scryptOptions.N, r: scryptOptions.r, p: scryptOptions.p, keyLength: 32 }, failed_attempts: 0, locked_until: null,
+      auto_lock_seconds: autoLockSeconds, lock_on_background: body.lock_on_background ?? true, updated_at: new Date().toISOString(),
     });
     if (error) return reply(503, { error: "PIN could not be saved" });
     await audit("app_lock_pin_configured", { kdf: "scrypt", parameters: { N: scryptOptions.N, r: scryptOptions.r, p: scryptOptions.p } });
     return reply(200, { configured: true });
+  }
+
+  if (body.action === "settings") {
+    if (![30, 60, 300, 900].includes(body.auto_lock_seconds ?? 0) || typeof body.lock_on_background !== "boolean") return reply(400, { error: "Choose valid app-lock settings" });
+    const { data, error } = await admin.from("app_lock_credentials").update({ auto_lock_seconds: body.auto_lock_seconds, lock_on_background: body.lock_on_background, updated_at: new Date().toISOString() }).eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id).select("auto_lock_seconds,lock_on_background").maybeSingle();
+    if (error || !data) return reply(404, { error: "Configure an app PIN before saving lock settings" });
+    await audit("app_lock_settings_updated", { auto_lock_seconds: data.auto_lock_seconds, lock_on_background: data.lock_on_background });
+    return reply(200, { configured: true, autoLockSeconds: data.auto_lock_seconds, lockOnBackground: data.lock_on_background });
+  }
+
+  if (body.action === "disable") {
+    await admin.from("app_unlock_grants").update({ revoked_at: new Date().toISOString() }).eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id).is("revoked_at", null);
+    const { error } = await admin.from("app_lock_credentials").delete().eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id);
+    if (error) return reply(503, { error: "App lock could not be reset" });
+    await audit("app_lock_disabled");
+    return reply(200, { configured: false });
   }
 
   const issueGrant = async (method: "scrypt_pin" | "passkey") => {

@@ -203,7 +203,7 @@ test("Afghan Dari transaction forms use short shop wording", async ({ page }) =>
   await page.goto("/app/inspection/transactions/new/fx/buy");
   const exchangeRow = page.locator(".exchange-entry-row");
   await expect(exchangeRow.getByRole("textbox", { name: "ما می‌گیریم USD" })).toBeVisible();
-  await expect(exchangeRow.getByRole("textbox", { name: "نرخ معامله" })).toHaveValue("70.25");
+  await expect(exchangeRow.getByRole("textbox", { name: "نرخ معامله" })).toHaveValue("0.01423487544");
   await expect(exchangeRow.getByRole("textbox", { name: "ما می‌دهیم AFN" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "کمیشن (AFN)" })).toBeVisible();
 
@@ -230,18 +230,16 @@ for (const locale of [
   {
     code: "fa-AF",
     money: "پول من",
-    cashboxes: "موجودی صندوق‌ها",
-    currenciesTab: "اسعار",
-    currencies: "اسعار مورد استفاده صرافی",
-    search: "جستجوی اسعار",
+    breakdown: "پول موجود به تفکیک اسعار",
+    rates: "نرخ‌های بازار",
+    currencyName: "دالر امریکایی",
   },
   {
     code: "ps-AF",
     money: "زما پیسې",
-    cashboxes: "د صندوقونو پیسې",
-    currenciesTab: "اسعار",
-    currencies: "د صرافۍ کارېدونکي اسعار",
-    search: "اسعار ولټوئ",
+    breakdown: "شته پیسې د اسعارو له مخې",
+    rates: "د بازار نرخونه",
+    currencyName: "امریکايي ډالر",
   },
 ] as const) {
   test(`${locale.code} money controls use local wording`, async ({ page }) => {
@@ -252,12 +250,11 @@ for (const locale of [
       .selectOption(locale.code);
     await page.goto("/app/inspection/money");
     await expect(page.getByRole("heading", { name: locale.money, exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: locale.cashboxes, exact: true })).toBeVisible();
-    await expect(page.locator(".account-card")).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: locale.breakdown, exact: true })).toBeVisible();
+    await expect(page.locator(".money-currency-row:not(.heading)")).toHaveCount(3);
     await expectNoEnglishLeak(page, `${locale.code} money controls`);
-    await page.goto("/app/inspection/control/business?role=owner");
-    await page.getByRole("tab", { name: new RegExp(locale.currenciesTab) }).click();
-    await expect(page.getByRole("heading", { name: locale.currencies })).toBeVisible();
-    await expect(page.getByRole("searchbox", { name: locale.search })).toBeVisible();
+    await page.goto("/app/inspection/control/rates?role=owner");
+    await expect(page.getByRole("heading", { name: locale.rates })).toBeVisible();
+    await expect(page.locator(".market-rate-row").filter({ hasText: "USD" }).first()).toContainText(locale.currencyName);
   });
 }

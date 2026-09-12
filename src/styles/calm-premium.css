@@ -1043,6 +1043,7 @@
 }
 
 @media (max-width: 720px) {
+  .hawala-inbox-tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .global-search-popover,
   .notification-popover,
   .profile-popover {
@@ -1069,6 +1070,10 @@
   .transaction-receipt-foot details { max-width: none; }
 }
 
+.app-lock-preferences label.inline-check { display:flex!important; flex-direction:row; align-items:center; gap:9px; }
+.app-lock-preferences label.inline-check input[type="checkbox"] { flex:0 0 18px; width:18px!important; height:18px!important; min-height:18px!important; margin:0; padding:0; }
+.app-lock-preferences .primary-action { color:#fff!important; background:#176b5b!important; }
+
 /* Compact mobile navigation, market board, cashboxes, and local workflows. */
 .app-shell,
 .main-content,
@@ -1085,6 +1090,10 @@
 .transaction-page-form .transaction-back { flex: 0 1 230px; min-width: 0; overflow-wrap: anywhere; }
 .mobile-nav { overflow-x: hidden; }
 .mobile-nav button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 900px) {
+  .transaction-inline-form { inset-inline-start:0; }
+}
 
 .rates-market-only .online-rate-board {
   background: #fff;
@@ -1400,4 +1409,96 @@
   .platform-mfa-form { grid-template-columns: 1fr; }
   .platform-mfa-enrollment { grid-template-columns: 1fr; }
   .platform-mfa-enrollment img { height: auto; justify-self: center; max-width: 180px; width: 100%; }
+}
+
+/* v8 exact-workflow refinements */
+.exchange-inline-rate-resolvers { display:grid; grid-column:1/-1; gap:8px; min-width:0; }
+.compact-account-flow { padding:9px 12px; border:1px solid #dce5e1; border-radius:10px; background:#fafcfb; }
+.compact-account-flow > summary { color:#3e5d56; cursor:pointer; font-size:.76rem; font-weight:800; }
+.compact-account-flow[open] > summary { margin-bottom:10px; }
+.money-location-toggle { margin-top:14px; }
+.money-location-details { display:grid; gap:8px; margin-top:10px; }
+.money-location-details article { display:flex; align-items:center; justify-content:space-between; gap:14px; min-width:0; padding:12px 14px; border:1px solid #d9e3df; border-radius:10px; background:#fff; }
+.money-location-details article > span,.money-location-details article > div { display:grid; gap:3px; min-width:0; }
+.money-location-details article small { color:#687a74; }
+.money-location-details article > div { justify-items:end; }
+.hawala-recipient-picker { display:grid; gap:12px; margin:0; padding:14px; border:1px solid #cddfd7; border-radius:12px; background:#f7fbf9; }
+.hawala-recipient-picker legend { padding-inline:6px; color:#164f45; font-weight:850; }
+.hawala-recipient-tools { display:grid; grid-template-columns:minmax(160px,.7fr) minmax(220px,1.3fr); gap:10px; }
+.hawala-recipient-tools label,.hawala-recipient-picker > label { margin:0; }
+.hawala-selected-recipient { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:10px; min-width:0; padding:11px; border:1px solid #abd0c0; border-radius:10px; background:#fff; }
+.hawala-selected-recipient > span:nth-child(2) { display:grid; min-width:0; }
+.hawala-selected-recipient small { color:#697b75; overflow-wrap:anywhere; }
+.hawala-selected-recipient > b { color:#146052; font-size:.72rem; }
+.hawala-inbox-controls { grid-template-columns:auto minmax(380px,1fr) minmax(360px,1fr); }
+.hawala-send-action { white-space:nowrap; }
+.app-lock-control-stack { display:grid!important; align-items:stretch!important; gap:14px!important; min-width:0; }
+.app-lock-preferences { display:grid; gap:10px; min-width:0; padding-top:12px; border-top:1px solid #e0e7e4; }
+.app-lock-preferences > label:not(.inline-check) { display:grid; gap:5px; }
+.app-lock-preferences select { box-sizing:border-box; width:100%; min-height:42px; border:1px solid #cbd8d3; border-radius:9px; padding:8px; background:#fff; }
+.app-lock-recovery { display:block; margin-top:10px; color:#667872; line-height:1.45; }
+.security-app-lock-card .inline-actions { flex-wrap:wrap; margin:0; }
+.market-rate-row { grid-template-columns:minmax(170px,1.5fr) repeat(3,minmax(72px,.72fr)) minmax(90px,.8fr) minmax(72px,.65fr) minmax(72px,.6fr); }
+.rate-mode-pill { color:#176b5b; font-size:.72rem; font-weight:800; }
+.rate-row-update { justify-self:start; min-height:32px; padding:5px 8px; }
+.rate-history-disclosure { padding:0 18px 16px; border-top:1px solid #dce5e1; }
+.rate-history-disclosure > summary { padding:13px 0; color:#164f45; cursor:pointer; font-weight:800; }
+.rate-history-disclosure > p { margin:0; color:#687a74; }
+
+@media (max-width: 1050px) {
+  .hawala-inbox-controls { grid-template-columns:1fr; }
+  .hawala-send-action { justify-self:start; }
+  .financial-task-form .compact-trade-rate { grid-template-columns:auto minmax(0,1fr) 42px; }
+  .financial-task-form .compact-trade-rate .compact-rate-time { grid-column:2; }
+  .financial-task-form .compact-trade-rate .compact-rate-change { grid-column:3; }
+}
+
+@media (max-width: 720px) {
+  .market-rate-heading { display:none; }
+  .market-rate-row { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 12px; margin:8px; padding:12px; border:1px solid #dce5e1; border-radius:11px; background:#fff!important; }
+  .market-currency-cell { grid-column:1/-1; padding-bottom:7px; border-bottom:1px solid #e5ebe8; }
+  .market-rate-row > [data-label] { display:grid; gap:3px; justify-items:start; text-align:start; }
+  .market-rate-row > [data-label]::before { content:attr(data-label); color:#72817c; font-size:.6rem; font-weight:750; }
+  .rate-row-update { align-self:end; width:100%; justify-content:center; }
+  .hawala-recipient-tools { grid-template-columns:1fr; }
+  .hawala-selected-recipient { grid-template-columns:auto minmax(0,1fr); }
+  .hawala-selected-recipient > b { grid-column:2; }
+  .money-location-details article { align-items:stretch; display:grid; }
+  .money-location-details article > div { justify-items:start; }
+}
+
+@media (max-width: 420px) {
+  .financial-task-form .compact-trade-rate { grid-template-columns:minmax(0,1fr) 40px; }
+  .financial-task-form .compact-trade-rate .compact-rate-mode { grid-column:1/-1; justify-self:start; }
+  .financial-task-form .compact-trade-rate .rate-input-shell { grid-column:1; }
+  .financial-task-form .compact-trade-rate .rate-input-shell { grid-template-columns:auto minmax(0,1fr) auto; }
+  .financial-task-form .compact-trade-rate .rate-input-shell small { display:block; font-size:7px; }
+  .financial-task-form .compact-trade-rate .compact-rate-swap { grid-column:2; }
+  .financial-task-form .compact-trade-rate .compact-rate-time { grid-column:1; }
+  .financial-task-form .compact-trade-rate .compact-rate-change { grid-column:2; }
+}
+
+@media (max-width: 720px) {
+  .hawala-inbox-tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+
+.settings-editor-disclosure,
+.settings-secondary-disclosure { min-width:0; }
+.settings-editor-disclosure > summary,
+.settings-secondary-disclosure > summary { cursor:pointer; list-style:none; color:#0e6253; font-weight:800; }
+.settings-editor-disclosure > summary::-webkit-details-marker,
+.settings-secondary-disclosure > summary::-webkit-details-marker { display:none; }
+.settings-editor-disclosure > summary::after,
+.settings-secondary-disclosure > summary::after { content:"+"; float:inline-end; font-size:1.15rem; }
+.settings-editor-disclosure[open] > summary::after,
+.settings-secondary-disclosure[open] > summary::after { content:"−"; }
+.settings-editor-disclosure > .settings-editor,
+.settings-editor-disclosure > .settings-card-title,
+.settings-secondary-disclosure > .settings-card-title { margin-top:1rem; }
+.connected-partner-list { display:grid; gap:.65rem; padding-top:1rem; border-top:1px solid #d9e4df; }
+.connected-partner-list .balance-row { grid-template-columns:auto minmax(0,1fr) auto; }
+
+@media (max-width: 640px) {
+  .connected-partner-list .balance-row { grid-template-columns:auto minmax(0,1fr); }
+  .connected-partner-list .balance-row > strong { grid-column:2; }
 }
