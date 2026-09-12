@@ -793,7 +793,7 @@ test.describe("workspace controls", () => {
   test("live buy and sell rates are open between the two currencies", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy");
     await expect(page.locator(".exchange-entry-row")).toBeVisible();
-    await expect(page.locator(".rate-box")).toContainText("1 AFN =");
+    await expect(page.locator(".rate-box")).toContainText("1 AFN");
     await expect(page.locator(".rate-box")).toContainText("USD");
     await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
     await page.goto("/app/inspection/transactions/new/fx/sell");
@@ -802,36 +802,42 @@ test.describe("workspace controls", () => {
 
   test("FX transaction uses the current shop rate inline", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy");
-    await expect(page.getByText("Current shop rate", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Online", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Manual", exact: true })).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
+    await expect(page.getByText("Reason for manual rate", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Save as shop rate", { exact: true })).toHaveCount(0);
     await expect(page).toHaveURL(/\/transactions\/new\/fx\/buy$/);
   });
 
-  test("missing FX rate can be entered once and published by an owner", async ({ page }) => {
+  test("missing FX rate uses only the manual mode and reversible quote", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy?rate=missing");
     const resolver = page.getByRole("region", { name: "Applied rate" });
-    await expect(resolver).toContainText("No approved rate exists");
-    await resolver.getByRole("textbox", { name: "Shop buy rate" }).fill("70.50");
-    await resolver.getByRole("textbox", { name: "Reason for manual rate" }).fill("Owner approved counter quote");
+    await expect(resolver.getByRole("button", { name: "Online", exact: true })).toBeDisabled();
+    await expect(resolver.getByRole("button", { name: "Manual", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await resolver.getByRole("button", { name: "Reverse quote" }).click();
+    await resolver.getByRole("textbox", { name: "Manual rate" }).fill("70.50");
     await expect(page.getByRole("textbox", { name: "Reason for the rate decision" })).toHaveCount(0);
-    await expect(resolver.getByRole("button", { name: "Save as shop rate" })).toBeVisible();
+    await expect(resolver.getByText("Reason for manual rate", { exact: true })).toHaveCount(0);
+    await expect(resolver.getByText("Save as shop rate", { exact: true })).toHaveCount(0);
+    await expect(resolver.getByText("Updated", { exact: false })).toHaveCount(0);
   });
 
-  test("stale FX rate offers a reasoned continuation or a replacement", async ({ page }) => {
+  test("stale FX rate is replaced through the same compact manual quote", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy?rate=stale");
     const resolver = page.getByRole("region", { name: "Applied rate" });
-    await expect(resolver).toContainText("This rate has expired");
-    await resolver.getByRole("textbox", { name: "Shop buy rate" }).fill("70.50");
-    await resolver.getByRole("textbox", { name: "Reason for manual rate" }).fill("Fresh counter quote");
+    await expect(resolver.getByRole("button", { name: "Online", exact: true })).toBeDisabled();
+    await resolver.getByRole("button", { name: "Reverse quote" }).click();
+    await resolver.getByRole("textbox", { name: "Manual rate" }).fill("70.50");
     await expect(page.getByRole("textbox", { name: "Reason for the rate decision" })).toHaveCount(0);
-    await expect(resolver.getByRole("textbox", { name: "Shop buy rate" })).toHaveValue("70.50");
+    await expect(resolver.getByRole("textbox", { name: "Manual rate" })).toHaveValue("70.50");
   });
 
   test("cashier rate override requests approval and preserves the draft", async ({ page }) => {
     await page.goto("/app/inspection/transactions/new/fx/buy?role=cashier&rate=missing");
     const resolver = page.getByRole("region", { name: "Applied rate" });
-    await resolver.getByRole("textbox", { name: "Shop buy rate" }).fill("70.50");
-    await resolver.getByRole("textbox", { name: "Reason for manual rate" }).fill("Customer agreed quote");
+    await resolver.getByRole("button", { name: "Reverse quote" }).click();
+    await resolver.getByRole("textbox", { name: "Manual rate" }).fill("70.50");
     await page.locator(".financial-task-form").getByRole("textbox", { name: /We receive/ }).fill("1000");
     await page.getByRole("button", { name: "Review transaction" }).click();
     await page.getByRole("button", { name: "Confirm and save" }).click();
@@ -955,9 +961,8 @@ test.describe("workspace controls", () => {
     await expect(dialog.locator(".inline-rate-resolver")).toHaveCount(0);
     await dialog.getByRole("textbox", { name: "We receive USD" }).fill("100");
     await expect(dialog.getByRole("textbox", { name: "We give EUR" })).toHaveValue("93.42");
-    await dialog.getByRole("button", { name: "Change", exact: true }).click();
+    await dialog.getByRole("button", { name: "Manual", exact: true }).click();
     await dialog.getByRole("textbox", { name: "Transaction rate" }).fill("0.92");
-    await dialog.getByRole("textbox", { name: "Reason for manual rate" }).fill("Customer agreed quote");
     await expect(dialog.getByRole("textbox", { name: "Reason for the rate decision" })).toHaveCount(0);
     await expect(dialog.getByRole("textbox", { name: "We give EUR" })).toHaveValue("92.00");
     await dialog.getByRole("button", { name: "Review transaction" }).click();
@@ -977,10 +982,10 @@ test.describe("workspace controls", () => {
     await expect(review).toBeDisabled();
     const resolvers = dialog.locator(".inline-rate-resolver");
     await expect(resolvers).toHaveCount(2);
-    await resolvers.nth(0).getByRole("textbox", { name: "Shop buy rate" }).fill("70.25");
-    await resolvers.nth(1).getByRole("textbox", { name: "Shop sell rate" }).fill("75.20");
-    await resolvers.nth(0).getByRole("textbox", { name: "Reason for manual rate" }).fill("USD counter quote");
-    await resolvers.nth(1).getByRole("textbox", { name: "Reason for manual rate" }).fill("EUR counter quote");
+    await resolvers.nth(0).getByRole("button", { name: "Reverse quote" }).click();
+    await resolvers.nth(1).getByRole("button", { name: "Reverse quote" }).click();
+    await resolvers.nth(0).getByRole("textbox", { name: "Manual rate" }).fill("70.25");
+    await resolvers.nth(1).getByRole("textbox", { name: "Manual rate" }).fill("75.20");
     await expect(dialog.getByRole("textbox", { name: "We give EUR" })).toHaveValue("93.42");
     await expect(review).toBeEnabled();
   });

@@ -174,6 +174,7 @@ const BillingView = lazy(() => import("./PlatformWorkspace").then((module) => ({
 const PlatformAdminConsole = lazy(() => import("./PlatformWorkspace").then((module) => ({ default: module.PlatformAdminConsole })));
 
 const openingSessionKey = "sarafi-opening-seen";
+const manualTransactionRateReason = "Manual transaction rate";
 
 function InlineRateResolver(props: InlineRateResolverProps) {
   const loading = props.language === "en"
@@ -659,9 +660,7 @@ function App() {
   }));
   const [rateOverrideEnabled, setRateOverrideEnabled] = useState(false);
   const [rateOverride, setRateOverride] = useState("");
-  const [rateOverrideReason, setRateOverrideReason] = useState("");
   const [tradeQuoteReversed, setTradeQuoteReversed] = useState(true);
-  const [publishRate, setPublishRate] = useState(false);
   const [allowStaleRate, setAllowStaleRate] = useState(false);
   const [dashboardDate, setDashboardDate] = useState(() =>
     businessDateInTimeZone(new Date(), "Asia/Kabul"),
@@ -1217,7 +1216,6 @@ function App() {
       setExchangeTargetRateReady(!target.missing && !target.stale);
       setRateOverrideEnabled(false);
       setRateOverride("");
-      setPublishRate(false);
       setAllowStaleRate(false);
       return;
     }
@@ -1253,7 +1251,6 @@ function App() {
         setExchangeTargetRateReady(tradeReceiveCurrency === "AFN" || Boolean(target?.buy_rate && target?.sell_rate && !target.stale));
         setRateOverrideEnabled(false);
         setRateOverride("");
-        setPublishRate(false);
         setAllowStaleRate(false);
         if (source?.stale || target?.stale) setToast(language === "en" ? "An approved rate is older than one day; review it before posting." : language === "fa-AF" ? "یک نرخ تأییدشده بیشتر از یک روز قدیمی است؛ پیش از ثبت آن را بررسی کنید." : "یو تایید شوی نرخ له یوې ورځې زوړ دی؛ له ثبت مخکې یې وګورئ.");
         setExchangeSourceRatePublication(undefined);
@@ -1392,10 +1389,6 @@ function App() {
       setToast(language === "en" ? "Choose how to handle the old shop rate before continuing." : language === "fa-AF" ? "پیش از ادامه، روش استفاده از نرخ قدیمی را انتخاب کنید." : "له دوام مخکې د زاړه نرخ د کارولو لاره وټاکئ.");
       return;
     }
-    if (rateOverrideEnabled && rateOverrideReason.trim().length < 3) {
-      setToast(language === "en" ? "Write a short reason for the manual rate." : language === "fa-AF" ? "دلیل کوتاه برای نرخ دستی بنویسید." : "د لاسي نرخ لنډ لامل ولیکئ.");
-      return;
-    }
     if (!tradeReviewing) {
       setTradeReviewing(true);
       return;
@@ -1424,7 +1417,7 @@ function App() {
         .map((item) => item.reason?.trim())
         .find((reason): reason is string => Boolean(reason));
       const rateDecisionReason = rateOverrideEnabled
-        ? rateOverrideReason.trim()
+        ? manualTransactionRateReason
         : inlineTransactionReason
           ? inlineTransactionReason
           : allowStaleRate || tradeRateStale
@@ -1453,17 +1446,6 @@ function App() {
         fee_currency: "AFN",
         counterparty_id: tradeCounterparty || undefined,
         memo: tradeNote || undefined,
-        publish_rate: publishRate && rateOverrideEnabled && tradeCurrency !== "AFN" && tradeReceiveCurrency === "AFN"
-          ? {
-              branch_id: branchId,
-              source_currency: tradeCurrency,
-              target_currency: "AFN",
-              buy_rate: tradeSide === "BUY_FX" ? effectiveTradeRate : rate || effectiveTradeRate,
-              sell_rate: tradeSide === "SELL_FX" ? effectiveTradeRate : sellRate || effectiveTradeRate,
-              reason: rateOverrideReason.trim(),
-              publication_scope: "rate_board" as const,
-            }
-          : undefined,
         publish_rates: exchangeRatePublications.length
           ? exchangeRatePublications
           : undefined,
@@ -1541,7 +1523,6 @@ function App() {
     setTradeCommandId(crypto.randomUUID());
     setRateOverrideEnabled(false);
     setRateOverride("");
-    setPublishRate(false);
     setAllowStaleRate(false);
     setExchangeSourceRatePublication(undefined);
     setExchangeTargetRatePublication(undefined);
@@ -1625,7 +1606,6 @@ function App() {
     setTradeCommandId(crypto.randomUUID());
     setRateOverrideEnabled(false);
     setRateOverride("");
-    setPublishRate(false);
     setAllowStaleRate(false);
     setTradeReviewing(false);
     setTradeBusy(false);
@@ -2170,25 +2150,15 @@ function App() {
     || (tradeReceiveCurrency !== "AFN" && tradeReceiveRateContext.stale);
   const sourceRateNeedsResolution = tradeCurrency !== "AFN" && (rateContext.missing || rateContext.stale);
   const targetRateNeedsResolution = tradeReceiveCurrency !== "AFN" && (tradeReceiveRateContext.missing || tradeReceiveRateContext.stale);
-  const tradeRateStatus = rateOverrideEnabled
-    ? rateWorkflowCopy.custom
-    : tradeRateMissing
-      ? rateWorkflowCopy.noRate
-      : tradeRateStale
-        ? rateWorkflowCopy.stale
-        : rateWorkflowCopy.current;
   const changeDisplayedTradeRate = (next: string) => {
     setRateOverrideEnabled(true);
     setRateOverride(next);
     setAllowStaleRate(false);
-    setPublishRate(false);
     setTradeReviewing(false);
   };
   const restoreApprovedTradeRate = () => {
     setRateOverrideEnabled(false);
     setRateOverride("");
-    setPublishRate(false);
-    setRateOverrideReason("");
     setTradeReviewing(false);
   };
   let tradePreview: ReturnType<typeof deriveTradeAmounts> | null = null;
@@ -2803,10 +2773,14 @@ function App() {
                   </select>
                 </label>
 
-                {!sourceRateNeedsResolution && !targetRateNeedsResolution ? <div className="rate-box exchange-rate-card compact-trade-rate compact-rate-row">
-                  <span className={`compact-rate-mode ${rateOverrideEnabled ? "manual" : ""}`} dir={isRtl(language) ? "rtl" : "ltr"}><i aria-hidden="true" />{rateOverrideEnabled ? rateWorkflowCopy.custom : language === "en" ? "Auto" : language === "fa-AF" ? "خودکار" : "اتومات"}</span>
-                  <label className="rate-input-shell">
-                    <small>1 {tradeQuoteReversed ? tradeRateTargetCurrency : tradeCurrency} =</small>
+                {!sourceRateNeedsResolution && !targetRateNeedsResolution ? <div className="rate-box exchange-rate-card compact-trade-rate transaction-rate-only">
+                  <div className="transaction-rate-mode" role="group" aria-label={t("exchangeRate")} dir={isRtl(language) ? "rtl" : "ltr"}>
+                    <button type="button" className={!rateOverrideEnabled ? "active" : ""} aria-pressed={!rateOverrideEnabled} onClick={restoreApprovedTradeRate}>{language === "en" ? "Online" : "آنلاین"}</button>
+                    <button type="button" className={rateOverrideEnabled ? "active" : ""} aria-pressed={rateOverrideEnabled} onClick={() => changeDisplayedTradeRate(displayedTradeRate || "")}>{language === "en" ? "Manual" : language === "fa-AF" ? "دستی" : "لاسي"}</button>
+                  </div>
+                  <div className="transaction-rate-quote" dir="ltr">
+                    <span>1 {tradeQuoteReversed ? tradeRateTargetCurrency : tradeCurrency}</span>
+                    <span aria-hidden="true">=</span>
                     <input
                       required
                       readOnly={!rateOverrideEnabled}
@@ -2823,16 +2797,9 @@ function App() {
                       placeholder="0.00"
                       aria-label={rateWorkflowCopy.newRate}
                     />
-                    <small>{tradeQuoteReversed ? tradeCurrency : tradeRateTargetCurrency}</small>
-                  </label>
-                  <button className="compact-rate-swap" type="button" onClick={() => setTradeQuoteReversed((value) => !value)} aria-label={language === "en" ? "Reverse quote" : language === "fa-AF" ? "برعکس‌ساختن نرخ" : "نرخ سرچپه کول"}>⇄</button>
-                  <small className={`compact-rate-time ${!rateOverrideEnabled && (tradeRateMissing || tradeRateStale) ? "rate-warning" : "positive"}`} dir={isRtl(language) ? "rtl" : "ltr"}>
-                    {tradeRateStatus}
-                  </small>
-                  <button type="button" className="compact-rate-change" onClick={() => rateOverrideEnabled ? restoreApprovedTradeRate() : changeDisplayedTradeRate(displayedTradeRate || "")}>{rateOverrideEnabled ? rateWorkflowCopy.useShop : language === "en" ? "Change" : language === "fa-AF" ? "تغییر" : "بدلول"}</button>
-                  {rateOverrideEnabled ? <label className="compact-trade-rate-reason" dir={isRtl(language) ? "rtl" : "ltr"}>{language === "en" ? "Reason for manual rate" : language === "fa-AF" ? "دلیل نرخ دستی" : "د لاسي نرخ لامل"}<input required minLength={3} maxLength={240} value={rateOverrideReason} onChange={(event) => setRateOverrideReason(event.target.value)} placeholder={language === "en" ? "Short operational reason" : language === "fa-AF" ? "دلیل کوتاه کاری" : "لنډ کاري لامل"} /></label> : null}
-                  {rateOverrideEnabled ? <div className="compact-rate-scope compact-trade-rate-scope" role="group" aria-label={language === "en" ? "Manual rate scope" : language === "fa-AF" ? "ساحه نرخ دستی" : "د لاسي نرخ ساحه"}><button type="button" className={!publishRate ? "active" : ""} onClick={() => setPublishRate(false)}>{language === "en" ? "This transaction only" : language === "fa-AF" ? "فقط همین معامله" : "یوازې دا معامله"}</button>{canPublishTransactionRate ? <button type="button" className={publishRate ? "active" : ""} onClick={() => setPublishRate(true)}>{rateWorkflowCopy.publish}</button> : null}</div> : null}
-                  {rateOverrideEnabled && capability("approval.request") && !capability("approval.decide") ? <small className="compact-rate-approval" dir={isRtl(language) ? "rtl" : "ltr"}>{rateWorkflowCopy.approval}</small> : null}
+                    <span>{tradeQuoteReversed ? tradeCurrency : tradeRateTargetCurrency}</span>
+                    <button className="compact-rate-swap" type="button" onClick={() => setTradeQuoteReversed((value) => !value)} aria-label={language === "en" ? "Reverse quote" : language === "fa-AF" ? "برعکس‌ساختن نرخ" : "نرخ سرچپه کول"}>⇄</button>
+                  </div>
                 </div> : null}
 
                 <label className="exchange-money-card">
@@ -2891,6 +2858,7 @@ function App() {
                     language={language}
                     canPublish={canPublishTransactionRate}
                     canRequestApproval={capability("approval.request")}
+                    simplifiedTransaction
                     rateSide={tradeSide === "BUY_FX" ? "buy" : tradeSide === "SELL_FX" ? "sell" : "valuation"}
                     value={exchangeSourceRatePublication}
                     onChange={(value) => { setExchangeSourceRatePublication(value); setTradeReviewing(false); }}
@@ -2903,6 +2871,7 @@ function App() {
                     language={language}
                     canPublish={canPublishTransactionRate}
                     canRequestApproval={capability("approval.request")}
+                    simplifiedTransaction
                     rateSide={tradeSide === "BUY_FX" ? "sell" : tradeSide === "SELL_FX" ? "buy" : "valuation"}
                     value={exchangeTargetRatePublication}
                     onChange={(value) => { setExchangeTargetRatePublication(value); setTradeReviewing(false); }}

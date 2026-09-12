@@ -34,6 +34,9 @@ const copy = {
     updated: "Updated",
     transactionOnly: "This transaction only",
     publish: "Save as shop rate",
+    online: "Online",
+    manual: "Manual",
+    manualRate: "Manual rate",
   },
   "fa-AF": {
     title: "نرخ تطبیق‌شده",
@@ -58,6 +61,9 @@ const copy = {
     updated: "تازه‌شده",
     transactionOnly: "فقط همین معامله",
     publish: "ثبت به‌حیث نرخ صرافی",
+    online: "آنلاین",
+    manual: "دستی",
+    manualRate: "نرخ دستی",
   },
   "ps-AF": {
     title: "کارېدلی نرخ",
@@ -82,8 +88,13 @@ const copy = {
     updated: "تازه شوی",
     transactionOnly: "یوازې دا معامله",
     publish: "د صرافۍ نرخ په توګه ثبتول",
+    online: "آنلاین",
+    manual: "لاسي",
+    manualRate: "لاسي نرخ",
   },
 } as const;
+
+const transactionManualRateReason = "Manual transaction rate";
 
 export type InlineRateResolverProps = {
   organizationId: string | null;
@@ -92,6 +103,7 @@ export type InlineRateResolverProps = {
   language: Language;
   canPublish: boolean;
   canRequestApproval?: boolean;
+  simplifiedTransaction?: boolean;
   rateSide?: "buy" | "sell" | "valuation";
   value?: InlineRatePublication;
   onChange: (value: InlineRatePublication | undefined) => void;
@@ -132,6 +144,7 @@ export function InlineRateResolver({
   language,
   canPublish,
   canRequestApproval = false,
+  simplifiedTransaction = false,
   rateSide = "valuation",
   value,
   onChange,
@@ -225,8 +238,8 @@ export function InlineRateResolver({
       target_currency: "AFN",
       buy_rate: relevantField === "buy_rate" ? next : value?.buy_rate ?? context?.buy_rate ?? fallback,
       sell_rate: relevantField === "sell_rate" ? next : value?.sell_rate ?? context?.sell_rate ?? fallback,
-      reason: value?.reason,
-      publication_scope: value?.publication_scope ?? "transaction",
+      reason: value?.reason ?? (simplifiedTransaction ? transactionManualRateReason : undefined),
+      publication_scope: simplifiedTransaction ? "transaction" : value?.publication_scope ?? "transaction",
     });
   };
 
@@ -243,6 +256,67 @@ export function InlineRateResolver({
       ...changes,
     });
   };
+
+  if (simplifiedTransaction) {
+    const reciprocal = (rate: string | undefined) => {
+      if (!rate) return "";
+      try {
+        const parsed = new Decimal(rate);
+        return parsed.isPositive() ? new Decimal(1).div(parsed).toSignificantDigits(10).toString() : "";
+      } catch {
+        return "";
+      }
+    };
+    const visibleManualRate = reversed ? reciprocal(manualRate) : manualRate ?? "";
+    const visibleOnlineRate = reversed ? reciprocal(contextRate) : contextRate ?? "";
+    const manualAvailable = !loading && canResolve;
+    const chooseManual = () => {
+      if (!manualAvailable || value) return;
+      updateRate(contextRate ?? "");
+    };
+    const changeManualRate = (next: string) => {
+      if (!reversed) {
+        updateRate(next);
+        return;
+      }
+      if (!next) {
+        updateRate("");
+        return;
+      }
+      try {
+        const parsed = new Decimal(next);
+        updateRate(parsed.isPositive() ? new Decimal(1).div(parsed).toString() : "");
+      } catch {
+        updateRate("");
+      }
+    };
+
+    return (
+      <section className="inline-rate-resolver compact-rate transaction-rate-only" aria-label={text.title}>
+        <div className="transaction-rate-mode" role="group" aria-label={text.title} dir={language === "en" ? "ltr" : "rtl"}>
+          <button type="button" aria-pressed={false} disabled={needsResolution || loading}>{text.online}</button>
+          <button type="button" className="active" aria-pressed="true" disabled={!manualAvailable} onClick={chooseManual}>{text.manual}</button>
+        </div>
+        <div className="transaction-rate-quote" dir="ltr">
+          <span>1 {reversed ? "AFN" : normalizedCurrency}</span>
+          <span aria-hidden="true">=</span>
+          <input
+            required
+            min="0.000001"
+            step="any"
+            inputMode="decimal"
+            value={visibleManualRate}
+            onChange={(event) => changeManualRate(event.target.value)}
+            placeholder={visibleOnlineRate || "0.00"}
+            aria-label={text.manualRate}
+            disabled={!manualAvailable}
+          />
+          <span>{reversed ? normalizedCurrency : "AFN"}</span>
+          <button className="compact-rate-swap" type="button" onClick={() => setReversed((current) => !current)} aria-label={text.reverse}>⇄</button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className={`inline-rate-resolver compact-rate ${needsResolution ? "needs-attention" : ""}`} aria-label={text.title}>

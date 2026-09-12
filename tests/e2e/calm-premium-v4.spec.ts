@@ -56,7 +56,7 @@ test.describe("calm premium v4 objective acceptance", () => {
     const form = page.locator(".financial-task-form");
     await expect(form).toBeVisible();
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
-    await expect(form.locator(".compact-rate-row")).toBeVisible();
+    await expect(form.locator(".transaction-rate-only")).toBeVisible();
     await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
     await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveAttribute("readonly", "");
     await expect(form).not.toContainText("Rate for this transaction");

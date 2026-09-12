@@ -34,6 +34,16 @@ describe("SARAFI exact user requirements v8", () => {
     expect(app).not.toContain("exchange-rate-governance");
   });
 
+  it("keeps transaction rates to online, manual, and a reversible quote only", () => {
+    expect(app).toContain("transaction-rate-only");
+    expect(app).toContain("simplifiedTransaction");
+    expect(app).toContain('manualTransactionRateReason = "Manual transaction rate"');
+    expect(app).not.toContain("Reason for manual rate");
+    expect(app).not.toContain("compact-trade-rate-scope");
+    expect(inlineRateResolver).toContain('className="transaction-rate-mode"');
+    expect(inlineRateResolver).toContain('simplifiedTransaction ? "transaction"');
+  });
+
   it("values available money only and marks missing available rates incomplete", () => {
     const exactAvailable = new Decimal(2000).plus(new Decimal(2000).mul("1.3")).plus(new Decimal(100).mul(64));
     expect(exactAvailable.toString()).toBe("11000");

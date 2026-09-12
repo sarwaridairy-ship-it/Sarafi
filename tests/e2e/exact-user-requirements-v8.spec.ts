@@ -28,10 +28,10 @@ test.describe("exact user requirements v8", () => {
     await expect(form.getByRole("combobox", { name: "Currency 2" })).toHaveValue("AFN");
     await expect(form.locator(".compact-trade-rate")).toHaveCount(1);
     await expect(form.locator(".rate-governance, .exchange-rate-governance")).toHaveCount(0);
-    await expect(form.locator(".compact-trade-rate")).toContainText("1 AFN =");
+    await expect(form.locator(".compact-trade-rate")).toContainText("1 AFN");
     await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
     await form.getByRole("button", { name: "Reverse quote" }).click();
-    await expect(form.locator(".compact-trade-rate")).toContainText("1 USD =");
+    await expect(form.locator(".compact-trade-rate")).toContainText("1 USD");
     await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.25");
   });
 
