@@ -24,6 +24,8 @@ test.describe("exact user requirements v8", () => {
   test("FX opens with one compact AFN-first quote and swaps display only", async ({ page }) => {
     await page.goto(`${workspace}/transactions/new/fx/buy?role=owner`);
     const form = page.locator(".transaction-page-form");
+    await expect(form.getByRole("combobox", { name: "Currency", exact: true })).toHaveValue("USD");
+    await expect(form.getByRole("combobox", { name: "Currency 2" })).toHaveValue("AFN");
     await expect(form.locator(".compact-trade-rate")).toHaveCount(1);
     await expect(form.locator(".rate-governance, .exchange-rate-governance")).toHaveCount(0);
     await expect(form.locator(".compact-trade-rate")).toContainText("1 AFN =");

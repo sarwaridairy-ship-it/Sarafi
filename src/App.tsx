@@ -1048,6 +1048,7 @@ function App() {
 
   useEffect(() => {
     if (inspectionMode) return;
+    if (!organizationId) return;
     void listCurrencyCatalog(organizationId).then((result) => {
       if (result.data) {
         setCurrencyCatalog(result.data);
@@ -1608,6 +1609,14 @@ function App() {
     side?: typeof tradeSide,
   ) => {
     const nextSide = side === "EXCHANGE_FX" ? "BUY_FX" : side ?? (tradeSide === "EXCHANGE_FX" ? "BUY_FX" : tradeSide);
+    if (tradeCurrency === "AFN" && tradeCurrencies.includes("AFN")) {
+      const preferredForeign = tradeCurrencies.find((currency) => currency !== "AFN");
+      if (preferredForeign) {
+        setTradeCurrency(preferredForeign);
+        setTradeReceiveCurrency("AFN");
+        setTradeQuoteReversed(defaultTradeQuoteReversed(preferredForeign, "AFN"));
+      }
+    }
     setTradeSide(nextSide);
     setAmount("");
     setTradeFee("");
