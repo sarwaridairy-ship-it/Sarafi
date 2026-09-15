@@ -1506,8 +1506,17 @@
 .trade-optional-fields .trade-note-field { grid-column:1/-1; }
 
 @media (max-width: 420px) {
-  .transaction-rate-band { grid-template-columns:auto auto minmax(0,1fr); min-height:68px; max-height:76px; padding:7px 8px; column-gap:6px; }
-  .transaction-rate-line { grid-template-columns:auto auto minmax(58px,1fr) auto 38px; gap:4px; font-size:.73rem; }
+  .transaction-rate-band {
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:auto auto auto;
+    grid-template-areas:"label switch" "quote quote" "meta meta";
+    min-height:0;
+    max-height:none;
+    padding:7px 8px;
+    column-gap:6px;
+    row-gap:6px;
+  }
+  .transaction-rate-line { grid-template-columns:auto auto minmax(0,1fr) auto 36px; gap:4px; width:100%; font-size:.73rem; }
   .transaction-rate-line input,.transaction-rate-line output { font-size:.82rem; }
   .automatic-rate-switch { gap:4px; padding-inline-start:8px; }
   .transaction-rate-exception { align-items:stretch; flex-direction:column; }

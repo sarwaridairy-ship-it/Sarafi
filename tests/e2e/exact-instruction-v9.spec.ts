@@ -13,6 +13,15 @@ test.describe("exact instruction v9 browser contract", () => {
     for (const width of [360, 390, 768, 820, 1024, 1440]) {
       await page.setViewportSize({ width, height: width < 600 ? 844 : 1000 });
       await expectNoHorizontalOverflow(page);
+      if (width <= 420) {
+        const rateBandBox = await page.locator(".transaction-rate-band").boundingBox();
+        const reverseButtonBox = await page.getByRole("button", { name: "Reverse quote" }).boundingBox();
+        expect(rateBandBox).not.toBeNull();
+        expect(reverseButtonBox).not.toBeNull();
+        expect((reverseButtonBox?.x ?? 0) + (reverseButtonBox?.width ?? 0)).toBeLessThanOrEqual(
+          (rateBandBox?.x ?? 0) + (rateBandBox?.width ?? 0) + 1,
+        );
+      }
       const sidebar = page.locator(".sidebar");
       if (width >= 600 && width <= 899) {
         const box = await sidebar.boundingBox();

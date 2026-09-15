@@ -35,7 +35,8 @@ describe("SARAFI exact instruction v10", () => {
   it("keeps the rate row compact and asks for a reason only outside tolerance", () => {
     expect(rateControl).toContain("transaction-rate-band");
     expect(css).toContain("max-height:64px");
-    expect(css).toContain("max-height:76px");
+    expect(css).toContain('grid-template-areas:"label switch" "quote quote" "meta meta"');
+    expect(css).toContain("max-height:none");
     expect(rateResolver).toContain("outsideTolerance");
     expect(rateResolver).toContain("exceptionReason");
     expect(app).not.toContain('const manualTransactionRateReason = "Manual transaction rate"');
