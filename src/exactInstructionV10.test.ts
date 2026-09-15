@@ -12,6 +12,7 @@ const css = read("./styles/calm-premium.css");
 const appLock = read("../supabase/functions/app-lock/index.ts");
 const privateDocuments = read("../supabase/functions/private-document-url/index.ts");
 const evidenceCleanup = read("../supabase/functions/hawala-evidence-cleanup/index.ts");
+const reconciliation = read("../scripts/security/run-step17-reconciliation.mjs");
 const migration = read("../supabase/migrations/20260915175821_exact_instruction_v10.sql");
 const ci = read("../.github/workflows/ci.yml");
 const release = read("../.github/workflows/release.yml");
@@ -62,6 +63,14 @@ describe("SARAFI exact instruction v10", () => {
   });
 
   it("limits Hawala identity evidence by purpose and cleans expired storage objects", () => {
+    expect(migration).toContain("insert into public.capability_definitions");
+    expect(migration).not.toContain("insert into public.capabilities");
+    expect(migration).toContain(
+      "private_document_upload_target_is_valid(target_org uuid, target_counterparty uuid)",
+    );
+    expect(migration).not.toContain(
+      "private_document_upload_target_is_valid(target_org uuid, target_entity uuid)",
+    );
     for (const capability of [
       "documents.hawala_payout.create",
       "documents.hawala_payout.view_own_draft",
@@ -81,6 +90,7 @@ describe("SARAFI exact instruction v10", () => {
   });
 
   it("makes release evidence non-optional and prevents blank role screenshots", () => {
+    expect(reconciliation).toContain("const expectedSnapshot = expected?.actual ?? expected");
     expect(ci).toContain("Require authenticated browser fixtures");
     expect(ci).not.toContain("authenticated_fixtures.outputs.ready");
     for (const evidence of [

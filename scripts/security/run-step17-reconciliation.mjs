@@ -148,6 +148,7 @@ const expectedPath = env.SARAFI_STEP17_EXPECTED;
 const expected = expectedPath
   ? JSON.parse(readFileSync(expectedPath, "utf8"))
   : null;
+const expectedSnapshot = expected?.actual ?? expected;
 const comparable = (value) =>
   JSON.stringify({
     counts: value.counts,
@@ -168,9 +169,11 @@ const report = {
   balanced,
   balance_basis: "base_currency",
   native_totals: "informational_only_cross_currency",
-  expected_match: expected ? comparable(actual) === comparable(expected) : null,
+  expected_match: expectedSnapshot
+    ? comparable(actual) === comparable(expectedSnapshot)
+    : null,
   actual,
-  expected: expected ?? undefined,
+  expected: expectedSnapshot ?? undefined,
 };
 mkdirSync("test-results/step17", { recursive: true });
 writeFileSync(

@@ -2,7 +2,7 @@
 -- operator the exact immutable rate used by non-FX accounting, narrows Hawala
 -- identity evidence authority, and exposes an audited cleanup queue.
 
-insert into public.capabilities (capability_code, description, owner_only)
+insert into public.capability_definitions (capability_code, description, owner_only)
 values
   ('documents.hawala_payout.create', 'Capture private identity evidence for an assigned Hawala payout draft', false),
   ('documents.hawala_payout.view_own_draft', 'View private identity evidence attached to the current user assigned Hawala payout draft', false),
@@ -321,7 +321,7 @@ $$;
 revoke all on function public.request_operation_rate_approval_v10(jsonb) from public, anon;
 grant execute on function public.request_operation_rate_approval_v10(jsonb) to authenticated;
 
-create or replace function public.private_document_upload_target_is_valid(target_org uuid, target_entity uuid)
+create or replace function public.private_document_upload_target_is_valid(target_org uuid, target_counterparty uuid)
 returns boolean
 language sql
 security definer
@@ -330,13 +330,13 @@ set search_path = ''
 as $$
   select (
     public.has_capability(target_org, 'documents.upload', '{}'::jsonb)
-    and exists (select 1 from public.counterparties cp where cp.organization_id = target_org and cp.id = target_entity)
+    and exists (select 1 from public.counterparties cp where cp.organization_id = target_org and cp.id = target_counterparty)
   ) or (
     public.has_capability(target_org, 'documents.hawala_payout.create', '{}'::jsonb)
     and exists (
       select 1 from public.hawala_payout_drafts d
       join public.hawala_transfers h on h.id = d.transfer_id
-      where d.id = target_entity and d.organization_id = target_org
+      where d.id = target_counterparty and d.organization_id = target_org
         and d.created_by = (select auth.uid()) and d.status in ('open', 'awaiting_approval')
         and d.expires_at > now() and h.recipient_organization_id = target_org
         and h.recipient_branch_id = d.recipient_branch_id and h.status = 'ready'
