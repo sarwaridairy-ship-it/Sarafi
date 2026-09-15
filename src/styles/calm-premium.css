@@ -1189,6 +1189,10 @@
 .security-overview .control-center-card > .app-icon { width: 43px; height: 43px; padding: 10px; border-radius: 12px; color: #1d6b59; background: #eaf5f0; }
 .security-overview .control-center-card strong { color: #153d34; font-size: .94rem; }
 .security-overview .control-center-card small { max-width: 460px; margin-top: 6px; line-height: 1.55; }
+.security-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; padding:6px; border:1px solid #d4dfdb; border-radius:13px; background:#fff; }
+.security-tabs button { min-height:42px; border:0; border-radius:9px; color:#5d706a; background:transparent; font:800 .75rem var(--font-sans); cursor:pointer; }
+.security-tabs button[aria-selected="true"] { color:#0f6255; background:#e7f1ed; }
+.security-tab-panel { min-width:0; }
 
 .operation-primary-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.25fr) minmax(180px, .75fr); }
 .operation-entry-form,
@@ -1274,6 +1278,7 @@
   .security-layer-strip { grid-template-columns: 1fr; }
   .security-overview-heading { gap: 11px; }
   .security-overview-shield { width: 46px; height: 46px; }
+  .security-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .mobile-nav button { font-size: clamp(7px, 2.15vw, 9px); line-height: 1.08; padding-inline: 1px; white-space: normal; }
   .mobile-nav button .app-icon { height: 18px; width: 18px; }
   .exchange-entry-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1386,6 +1391,13 @@
   .app-lock-policy-roles > div,.app-lock-policy-grid { grid-template-columns:1fr; }
 }
 .market-rate-row { grid-template-columns:minmax(170px,1.5fr) repeat(3,minmax(72px,.72fr)) minmax(90px,.8fr) minmax(72px,.65fr) minmax(72px,.6fr); }
+.approved-rate-board { overflow:hidden; border:1px solid #d8e1dd; border-radius:14px; background:#fff; box-shadow:0 12px 34px rgba(24,57,48,.06); }
+.approved-rate-board .online-rate-board-head { padding:18px; }
+.approved-rate-table .market-rate-row { grid-template-columns:minmax(170px,1.5fr) repeat(3,minmax(72px,.72fr)) minmax(90px,.8fr) minmax(72px,.65fr); }
+.market-reference-table .market-rate-row { grid-template-columns:minmax(170px,1.5fr) repeat(2,minmax(72px,.72fr)) minmax(90px,.8fr) minmax(72px,.65fr); }
+.approved-rate-editor { display:grid; grid-template-columns:auto repeat(2,minmax(120px,1fr)) auto auto; align-items:end; gap:9px; padding:14px 18px; border-top:1px solid #dce5e1; background:#f8fbfa; }
+.approved-rate-editor label { display:grid; gap:4px; color:#60736d; font-size:.7rem; font-weight:800; }
+.approved-rate-editor input { box-sizing:border-box; width:100%; min-height:38px; border:1px solid #cbd9d4; border-radius:8px; padding:7px 9px; }
 .rate-mode-pill { color:#176b5b; font-size:.72rem; font-weight:800; }
 .rate-row-update { justify-self:start; min-height:32px; padding:5px 8px; }
 .rate-history-disclosure { padding:0 18px 16px; border-top:1px solid #dce5e1; }
@@ -1404,6 +1416,9 @@
   .market-rate-row > [data-label] { display:grid; gap:3px; justify-items:start; text-align:start; }
   .market-rate-row > [data-label]::before { content:attr(data-label); color:#72817c; font-size:.6rem; font-weight:750; }
   .rate-row-update { align-self:end; width:100%; justify-content:center; }
+  .approved-rate-table .market-rate-row,.market-reference-table .market-rate-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .approved-rate-editor { grid-template-columns:1fr 1fr; }
+  .approved-rate-editor > strong { grid-column:1/-1; }
   .hawala-recipient-tools { grid-template-columns:1fr; }
   .hawala-selected-recipient { grid-template-columns:auto minmax(0,1fr); }
   .hawala-selected-recipient > b { grid-column:2; }
@@ -1440,16 +1455,18 @@
 .transaction-rate-control {
   box-sizing:border-box;
   display:grid;
-  gap:8px;
+  gap:6px;
   min-width:0;
-  margin:0 0 14px;
-  padding:11px 13px;
-  border:1px solid #bfd4cb;
-  border-radius:12px;
-  background:#f7fbf9;
+  margin:0 0 10px;
+  padding:0;
+  border:0;
+  background:transparent;
 }
-.transaction-rate-control > header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.transaction-rate-control > header > strong { color:#173c38; font-size:.82rem; }
+.transaction-rate-band { box-sizing:border-box; display:grid; grid-template-columns:auto auto minmax(0,1fr); grid-template-rows:auto auto; grid-template-areas:"label switch quote" "meta meta quote"; align-items:center; column-gap:10px; min-height:60px; max-height:64px; padding:7px 10px; border-block:1px solid #c8d9d2; color:#173c38; background:rgba(247,251,249,.72); }
+.transaction-rate-band > strong { grid-area:label; font-size:.78rem; }
+.transaction-rate-band > .automatic-rate-switch { grid-area:switch; }
+.transaction-rate-band > .transaction-rate-line { grid-area:quote; }
+.transaction-rate-band > .transaction-rate-meta { grid-area:meta; }
 .automatic-rate-switch {
   display:inline-flex;
   align-items:center;
@@ -1474,13 +1491,24 @@
 .transaction-rate-line input { box-sizing:border-box; width:100%; min-width:0; min-height:40px; padding:7px 9px; border:1px solid #b9cec5; border-radius:9px; color:#173c38; background:#fff; font:inherit; font-weight:850; text-align:center; }
 .transaction-rate-meta { color:#62756f; font-size:.68rem; }
 .transaction-rate-warning,.transaction-rate-approval { margin:0; color:#8b5518; font-size:.74rem; font-weight:750; }
-.transaction-rate-control.unavailable { border-color:#d9b774; background:#fffaf0; }
+.transaction-rate-control.unavailable .transaction-rate-band { border-color:#d9b774; background:#fffaf0; }
+.transaction-rate-exception { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid #dfc58c; border-radius:9px; color:#7c511a; background:#fffaf0; }
+.transaction-rate-exception p { margin:0; font-size:.72rem; font-weight:750; }
+.transaction-rate-exception .secondary-action { min-height:34px; padding:6px 11px; white-space:nowrap; }
 .transaction-rate-loading { margin-bottom:14px; padding:12px; border:1px solid #d9e3df; border-radius:11px; color:#60736d; background:#fafcfb; }
+.rate-exception-reason { display:grid; gap:6px; margin:6px 0 10px; color:#7c511a; font-size:.76rem; font-weight:800; }
+.rate-exception-reason input { box-sizing:border-box; width:100%; min-height:40px; border-color:#d9b774; background:#fffdf7; }
 .inline-transaction-review { position:static; display:grid; gap:12px; margin:14px 0; box-shadow:none; }
+.trade-optional-fields { margin:2px 0 10px; border:1px solid #d6e1dd; border-radius:10px; background:#fbfcfb; }
+.trade-optional-fields > summary { min-height:40px; padding:10px 12px; color:#315a52; font-size:.76rem; font-weight:850; cursor:pointer; }
+.trade-optional-fields[open] > summary { border-bottom:1px solid #dfe7e4; }
+.trade-optional-fields .trade-quick-fields { grid-template-columns:minmax(0,1.25fr) minmax(150px,.55fr); padding:10px 12px; }
+.trade-optional-fields .trade-note-field { grid-column:1/-1; }
 
 @media (max-width: 420px) {
-  .transaction-rate-control { padding:10px; }
+  .transaction-rate-band { grid-template-columns:auto auto minmax(0,1fr); min-height:68px; max-height:76px; padding:7px 8px; column-gap:6px; }
   .transaction-rate-line { grid-template-columns:auto auto minmax(58px,1fr) auto 38px; gap:4px; font-size:.73rem; }
   .transaction-rate-line input,.transaction-rate-line output { font-size:.82rem; }
   .automatic-rate-switch { gap:4px; padding-inline-start:8px; }
+  .transaction-rate-exception { align-items:stretch; flex-direction:column; }
 }

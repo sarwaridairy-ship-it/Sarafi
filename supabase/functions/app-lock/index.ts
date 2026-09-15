@@ -2,14 +2,12 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const headers = {
+const baseHeaders = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store",
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const reply = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), { status, headers });
 const pinPattern = /^\d{6}$/;
 const scryptOptions = { N: 32768, r: 8, p: 1, maxmem: 128 * 1024 * 1024 };
 const decodeJwt = (token: string): Record<string, unknown> => {
@@ -18,6 +16,18 @@ const decodeJwt = (token: string): Record<string, unknown> => {
 };
 
 Deno.serve(async (request) => {
+  const allowedOrigins = new Set((Deno.env.get("ALLOWED_ORIGINS")
+    ?? "https://sarafi-swart.vercel.app,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174,http://127.0.0.1:5175,http://localhost:5175")
+    .split(",").map((value) => value.trim()).filter(Boolean));
+  const requestOrigin = request.headers.get("Origin") ?? "";
+  const headers = {
+    ...baseHeaders,
+    "Access-Control-Allow-Origin": allowedOrigins.has(requestOrigin)
+      ? requestOrigin
+      : "https://sarafi-swart.vercel.app",
+    "Vary": "Origin",
+  };
+  const reply = (status: number, body: Record<string, unknown>) => new Response(JSON.stringify(body), { status, headers });
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return reply(405, { error: "Method not allowed" });
   const authorization = request.headers.get("Authorization");
@@ -68,7 +78,7 @@ Deno.serve(async (request) => {
     return reply(200, { configured: Boolean(data), required: policyRequired, lockedUntil: data?.locked_until ?? null, passkeyEnabled: true, autoLockSeconds: Math.min(data?.auto_lock_seconds ?? maximumTimeoutSeconds, maximumTimeoutSeconds), lockOnBackground: data?.lock_on_background ?? true, maximumTimeoutSeconds, sensitiveReunlockSeconds });
   }
 
-  if (["configure", "settings", "disable"].includes(body.action ?? "")) {
+  if (["configure", "settings", "disable", "reset"].includes(body.action ?? "")) {
     const { data: canManageOwnLock } = await userClient.rpc("has_capability", { target_org: body.organization_id, capability: "app_lock.self.manage", optional_scope: {} });
     if (!canManageOwnLock) return reply(403, { error: "App Lock self-management access is required" });
     if (decodeJwt(token).aal !== "aal2") return reply(403, { error: "Two-step verification is required before changing app-lock controls" });
@@ -99,12 +109,15 @@ Deno.serve(async (request) => {
     return reply(200, { configured: true, autoLockSeconds: data.auto_lock_seconds, lockOnBackground: data.lock_on_background });
   }
 
-  if (body.action === "disable") {
+  if (body.action === "disable" || body.action === "reset") {
+    if (body.action === "disable" && policyRequired) {
+      return reply(409, { error: "App Lock is required by your organization and cannot be disabled", required: true, configured: true });
+    }
     await admin.from("app_unlock_grants").update({ revoked_at: new Date().toISOString() }).eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id).is("revoked_at", null);
     const { error } = await admin.from("app_lock_credentials").delete().eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id);
     if (error) return reply(503, { error: "App lock could not be reset" });
-    await audit("app_lock_disabled");
-    return reply(200, { configured: false });
+    await audit(body.action === "reset" ? "app_lock_pin_reset" : "app_lock_disabled", { required: policyRequired, setup_required: policyRequired });
+    return reply(200, { configured: false, required: policyRequired, setupRequired: policyRequired });
   }
 
   const issueGrant = async (method: "scrypt_pin" | "passkey") => {

@@ -11,6 +11,8 @@ const labels = {
     enter: "Enter rate here",
     updated: "Updated",
     daily: "Daily rate",
+    manual: "Manual rate for this transaction",
+    requestApproval: "Request rate approval",
     reverse: "Reverse quote",
   },
   "fa-AF": {
@@ -22,6 +24,8 @@ const labels = {
     enter: "نرخ را اینجا بنویسید",
     updated: "تازه‌شده",
     daily: "نرخ روزانه",
+    manual: "نرخ دستی برای همین معامله",
+    requestApproval: "درخواست تأیید نرخ",
     reverse: "برعکس‌ساختن نرخ",
   },
   "ps-AF": {
@@ -33,6 +37,8 @@ const labels = {
     enter: "نرخ دلته ولیکئ",
     updated: "تازه شوی",
     daily: "ورځنی نرخ",
+    manual: "د همدې معاملې لاسي نرخ",
+    requestApproval: "د نرخ تایید غوښتنه",
     reverse: "نرخ سرچپه کول",
   },
 } as const;
@@ -64,6 +70,7 @@ export function TransactionRateControl({
   onAutomaticChange,
   onCanonicalRateChange,
   onReverse,
+  onRequestApproval,
 }: {
   language: Language;
   automatic: boolean;
@@ -79,6 +86,7 @@ export function TransactionRateControl({
   onAutomaticChange: (automatic: boolean) => void;
   onCanonicalRateChange: (rate: string) => void;
   onReverse: () => void;
+  onRequestApproval?: () => void;
 }) {
   const text = labels[language];
   const visibleRate = reversed ? reciprocal(canonicalRate) : canonicalRate ?? "";
@@ -98,22 +106,20 @@ export function TransactionRateControl({
 
   return (
     <section className={`transaction-rate-control${unavailable ? " unavailable" : ""}`} aria-label={text.rate}>
-      <header>
+      <div className="transaction-rate-band">
         <strong>{text.rate}</strong>
         <button
           type="button"
           className="automatic-rate-switch"
           role="switch"
           aria-checked={automatic}
-          disabled={disabled}
+          disabled={disabled || !canEdit || unavailable}
           onClick={() => onAutomaticChange(!automatic)}
         >
           <span>{text.automatic}</span>
           <b>{automatic ? text.on : text.off}</b>
         </button>
-      </header>
-      {unavailable && automatic ? <p className="transaction-rate-warning" role="alert">{text.unavailable}</p> : null}
-      <div className="transaction-rate-line" dir="ltr">
+        <div className="transaction-rate-line" dir="ltr">
         <span>1 {leftCurrency}</span>
         <span aria-hidden="true">=</span>
         {editable ? (
@@ -131,9 +137,15 @@ export function TransactionRateControl({
         ) : <output>{visibleRate || "—"}</output>}
         <span>{rightCurrency}</span>
         <button type="button" className="compact-rate-swap" onClick={onReverse} aria-label={text.reverse} disabled={disabled}>⇄</button>
+        </div>
+        <small className="transaction-rate-meta">{unavailable ? text.manual : updatedLabel}</small>
       </div>
-      <small className="transaction-rate-meta">{unavailable ? text.unavailable : updatedLabel}</small>
-      {approvalMessage ? <p className="transaction-rate-approval" role="status">{approvalMessage}</p> : null}
+      {approvalMessage ? (
+        <div className="transaction-rate-exception" role="status">
+          <p>{approvalMessage}</p>
+          {!canEdit && onRequestApproval ? <button type="button" className="secondary-action" onClick={onRequestApproval}>{text.requestApproval}</button> : null}
+        </div>
+      ) : null}
     </section>
   );
 }

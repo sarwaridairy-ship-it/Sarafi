@@ -38,8 +38,9 @@ describe("SARAFI exact user requirements v8", () => {
   it("keeps transaction rates to automatic, manual entry, and a reversible quote only", () => {
     expect(transactionRateControl).toContain('automatic: "Automatic"');
     expect(transactionRateControl).toContain("transaction-rate-line");
-    expect(app).toContain('manualTransactionRateReason = "Manual transaction rate"');
-    expect(app).not.toContain("Reason for manual rate");
+    expect(app).not.toContain('manualTransactionRateReason = "Manual transaction rate"');
+    expect(app).toContain("tradeRateOutsideTolerance");
+    expect(inlineRateResolver).toContain("exceptionReason");
     expect(app).not.toContain("compact-trade-rate-scope");
     expect(inlineRateResolver).toContain('publication_scope: "transaction"');
     expect(transactionRateControl).not.toContain('online: "Online"');

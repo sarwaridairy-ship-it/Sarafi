@@ -75,7 +75,7 @@ const locales = [
     reports: "گزارش‌ها",
     reportsHeading: "نسخه دقیق گزارش",
     rates: "نرخ‌ها",
-    ratesHeading: "نرخ‌های بازار",
+    ratesHeading: "اسعار و نرخ‌ها",
     cashbox: "بررسی صندوق",
     cashboxHeading: "بررسی صندوق",
     team: "کارمندان و دستگاه‌ها",
@@ -103,7 +103,7 @@ const locales = [
     reports: "راپورونه",
     reportsHeading: "د راپور کره نسخه",
     rates: "نرخونه",
-    ratesHeading: "د بازار نرخونه",
+    ratesHeading: "اسعار او نرخونه",
     cashbox: "د صندوق کتنه",
     cashboxHeading: "صندوق کتل",
     team: "کارکوونکي او وسایل",
@@ -203,8 +203,9 @@ test("Afghan Dari transaction forms use short shop wording", async ({ page }) =>
   await page.goto("/app/inspection/transactions/new/fx/buy");
   const exchangeRow = page.locator(".exchange-entry-row");
   await expect(exchangeRow.getByRole("textbox", { name: "ما می‌گیریم USD" })).toBeVisible();
-  await expect(exchangeRow.getByRole("textbox", { name: "نرخ معامله" })).toHaveValue("0.01423487544");
+  await expect(exchangeRow.locator(".transaction-rate-line output")).toHaveText("0.0142348754448");
   await expect(exchangeRow.getByRole("textbox", { name: "ما می‌دهیم AFN" })).toBeVisible();
+  await page.locator(".trade-optional-fields > summary").click();
   await expect(page.getByRole("textbox", { name: "کمیشن (AFN)" })).toBeVisible();
 
   await page.goto("/app/inspection/transactions/new/money-in/receive");
@@ -231,14 +232,14 @@ for (const locale of [
     code: "fa-AF",
     money: "پول من",
     breakdown: "پول موجود به تفکیک اسعار",
-    rates: "نرخ‌های بازار",
+    rates: "اسعار و نرخ‌ها",
     currencyName: "دالر امریکایی",
   },
   {
     code: "ps-AF",
     money: "زما پیسې",
     breakdown: "شته پیسې د اسعارو له مخې",
-    rates: "د بازار نرخونه",
+    rates: "اسعار او نرخونه",
     currencyName: "امریکايي ډالر",
   },
 ] as const) {

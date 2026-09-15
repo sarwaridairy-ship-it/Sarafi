@@ -4,6 +4,13 @@ import { test } from "@playwright/test";
 
 const outputDirectory = path.resolve("test-results/web-ux-production");
 
+async function requireRenderedWorkspace(page: import("@playwright/test").Page) {
+  await page.locator("main").waitFor();
+  await page.locator(".app-shell").waitFor();
+  const content = (await page.locator("main").innerText()).trim();
+  if (content.length < 100) throw new Error("Screenshot route rendered a blank or incomplete workspace");
+}
+
 const roles = [
   "owner",
   "business_admin",
@@ -77,7 +84,8 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
     });
 
     for (const role of roles) {
-      await page.goto(`/?role=${role}`);
+      await page.goto(`/app/inspection/home?role=${role}`);
+      await requireRenderedWorkspace(page);
       await page.screenshot({
         path: path.join(
           outputDirectory,
@@ -142,7 +150,8 @@ test("capture controlled three-language desktop and mobile UX matrix", async ({
 
     await page.setViewportSize({ width: 390, height: 844 });
     for (const role of roles) {
-      await page.goto(`/?role=${role}`);
+      await page.goto(`/app/inspection/home?role=${role}`);
+      await requireRenderedWorkspace(page);
       await page.screenshot({
         path: path.join(
           outputDirectory,

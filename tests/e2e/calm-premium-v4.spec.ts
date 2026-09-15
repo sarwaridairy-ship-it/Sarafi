@@ -56,9 +56,8 @@ test.describe("calm premium v4 objective acceptance", () => {
     const form = page.locator(".financial-task-form");
     await expect(form).toBeVisible();
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
-    await expect(form.locator(".transaction-rate-only")).toBeVisible();
-    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
-    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveAttribute("readonly", "");
+    await expect(form.getByRole("region", { name: "Rate" })).toBeVisible();
+    await expect(form.locator(".transaction-rate-line output")).toHaveText("0.0142348754448");
     await expect(form).not.toContainText("Rate for this transaction");
     await expect(form.getByRole("textbox", { name: /reason/i })).toHaveCount(0);
   });
@@ -169,7 +168,7 @@ test.describe("calm premium v4 objective acceptance", () => {
         ["/transactions/new/money/receive/customer?role=owner", ".operation-entry-form"],
         ["/transactions/new/money/pay/expense?role=owner", ".operation-entry-form"],
         ["/money?role=owner", ".money-valuation-workspace"],
-        ["/control/rates?role=owner", ".market-rate-table"],
+        ["/control/rates?role=owner", ".rates-market-only"],
         ["/control/business?role=owner", ".settings-command-card"],
       ] as const) {
         await page.goto(`${workspace}${path}`);

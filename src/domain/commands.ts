@@ -11,6 +11,15 @@ export const inlineRatePublicationSchema = z.object({
   sell_rate: decimalString.refine((value) => value !== '0', 'Rate must be greater than zero'),
   reason: z.string().trim().min(3).max(240).optional(),
   publication_scope: z.enum(['transaction', 'rate_board']).optional(),
+  rate: decimalString.refine((value) => value !== '0', 'Rate must be greater than zero').optional(),
+  quote_direction: z.enum(['AFN_FIRST', 'FOREIGN_FIRST']).optional(),
+  source: z.enum(['APPROVED_DAILY', 'TRANSACTION_MANUAL']).optional(),
+  effective_at: z.string().datetime().optional(),
+  expires_at: z.string().datetime().nullable().optional(),
+  approval_required: z.boolean().optional(),
+  context_id: z.string().trim().min(16).max(128).optional(),
+  rate_mode: z.enum(['automatic', 'manual']).optional(),
+  rate_side: z.enum(['buy', 'sell', 'valuation']).optional(),
 })
 
 export type InlineRatePublication = z.infer<typeof inlineRatePublicationSchema>

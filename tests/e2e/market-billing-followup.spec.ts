@@ -14,32 +14,34 @@ test('rates expose only the two markets and respect the shop currency selection 
   await expect(market.locator('option')).toHaveText(['Sarai Shahzada · AFN', 'Khorasan Market · AFN'])
   await expect(page.locator('body')).not.toContainText('sarafi.af')
   await market.selectOption('khorasan-market')
-  await expect(page.getByRole('heading', { name: 'Khorasan Market' })).toBeVisible()
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'USD' })).toBeVisible()
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'EUR' })).toBeVisible()
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'GBP' })).toBeVisible()
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'PKR' })).toBeVisible()
+  const referenceBoard = page.getByRole('table', { name: 'Market reference' })
+  await expect(page.locator('.online-rate-board > .online-rate-board-head')).toContainText('Khorasan Market')
+  await expect(referenceBoard.getByRole('row').filter({ hasText: 'USD' })).toBeVisible()
+  await expect(referenceBoard.getByRole('row').filter({ hasText: 'EUR' })).toBeVisible()
+  await expect(referenceBoard.getByRole('row').filter({ hasText: 'GBP' })).toBeVisible()
+  await expect(referenceBoard.getByRole('row').filter({ hasText: 'PKR' })).toBeVisible()
 
   await page.locator('.rate-currency-picker > summary').click()
   await page.getByRole('combobox', { name: 'Add currency' }).selectOption('IRR')
   await page.getByRole('button', { name: 'Add currency' }).click()
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'IRR' })).toBeVisible()
+  await expect(referenceBoard.getByRole('row').filter({ hasText: 'IRR' })).toBeVisible()
   const eurChoice = page.locator('.rate-currency-choice-list article').filter({ hasText: 'EUR' })
   await eurChoice.getByRole('button', { name: 'Remove currency EUR' }).click()
   await page.getByRole('button', { name: 'Save currency list' }).click()
   await market.selectOption('sarai-shahzada')
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'EUR' })).toHaveCount(0)
-  await expect(page.locator('.market-rate-row').filter({ hasText: 'IRR' })).toContainText('Iranian Toman')
+  await expect(referenceBoard.getByRole('row').filter({ hasText: 'EUR' })).toHaveCount(0)
+  await expect(referenceBoard.getByRole('row').filter({ hasText: 'IRR' })).toContainText('Iranian Toman')
 
   await page.getByRole('button', { name: 'Move down USD' }).click()
   await page.getByRole('button', { name: 'Save currency list' }).click()
-  const codes = await page.locator('.market-rate-row:not(.market-rate-heading) .market-currency-cell strong').allTextContents()
+  const codes = await referenceBoard.locator('.market-rate-row:not(.market-rate-heading) .market-currency-cell strong').allTextContents()
   expect(codes[0]).not.toContain('USD')
 })
 
 test('transaction customer picker can search and add a customer without leaving the form', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'The inline customer journey is covered once.')
   await page.goto(`${workspace}/transactions/new/fx/buy?role=owner`)
+  await page.locator('.trade-optional-fields > summary').click()
   const picker = page.locator('.customer-selector')
   await picker.getByRole('searchbox', { name: 'Search customer' }).fill('C-00000042')
   await picker.getByRole('button', { name: 'Search customer' }).click()
@@ -50,12 +52,22 @@ test('transaction customer picker can search and add a customer without leaving 
   await expect(picker.getByRole('combobox', { name: 'Customer' }).locator('option:checked')).toContainText('Mobile Test Customer')
 })
 
-test('debt forms stay native-currency simple and never open transaction rate controls', async ({ page, browserName }) => {
-  test.skip(browserName !== 'chromium', 'The simplified debt journey is covered once.')
+test('foreign-currency debt keeps one exact compact rate in the same form', async ({ page }) => {
   await page.goto(`${workspace}/transactions/new/debt/receivable?role=owner`)
   await page.getByRole('combobox', { name: 'Currency' }).selectOption('USD')
-  await expect(page.locator('.financial-task-form')).not.toContainText('Rate for this transaction')
-  await expect(page.locator('.financial-task-form .rate-context-card')).toHaveCount(0)
+  const rate = page.getByRole('region', { name: 'Rate' })
+  await expect(rate).toHaveCount(1)
+  await expect(rate.getByRole('switch', { name: 'Automatic ON' })).toBeChecked()
+  await expect(rate.locator('output')).toHaveText(/0\.0142247510669|70\.3/)
+})
+
+test('non-FX money operations display the exact authoritative valuation rate', async ({ page }) => {
+  await page.goto(`${workspace}/transactions/new/money/pay/expense?role=owner&rateScenario=current`)
+  await page.getByRole('combobox', { name: 'Currency' }).selectOption('USD')
+  const rate = page.getByRole('region', { name: 'Rate' })
+  await expect(rate).toHaveCount(1)
+  await expect(rate.getByRole('switch', { name: 'Automatic ON' })).toBeChecked()
+  await expect(rate.locator('output')).toHaveText('0.0142247510669')
 })
 
 test('FX no longer exposes the rate-calculation explainer label', async ({ page, browserName }) => {
@@ -72,7 +84,8 @@ test('Manage SARAFI exposes five focused internal workspaces', async ({ page, br
     await expect(page.getByRole('button', { name: new RegExp(label) })).toBeVisible()
 
   await page.getByRole('button', { name: /Currencies and Rates/ }).click()
-  await expect(page.getByRole('columnheader')).toHaveText(['Currency', 'Buy rate', 'Sell rate', 'Daily valuation', 'Rate mode', 'Time', 'Update'])
+  await expect(page.getByRole('table', { name: 'Our approved rates' }).getByRole('columnheader')).toHaveText(['Currency', 'Buy rate', 'Sell rate', 'Daily valuation', 'Time', 'Update'])
+  await expect(page.getByRole('table', { name: 'Market reference' }).getByRole('columnheader')).toHaveText(['Currency', 'Buy rate', 'Sell rate', 'Time', 'Change'])
 
   await page.goto(`${workspace}/control?role=owner`)
   await page.getByRole('button', { name: /Security and App Lock/ }).click()

@@ -53,7 +53,10 @@ export type Capability =
   | "documents.upload"
   | "documents.view"
   | "documents.download"
-  | "documents.archive";
+  | "documents.archive"
+  | "documents.hawala_payout.create"
+  | "documents.hawala_payout.view_own_draft"
+  | "documents.hawala_payout.complete";
 
 export type WorkspaceRole =
   | "owner"
@@ -79,6 +82,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "debt.settle.receivable", "debt.settle.payable", "hawala.view", "hawala.send", "hawala.incoming",
     "hawala.payout", "hawala.transition", "hawala.settle", "documents.list", "documents.upload",
     "documents.view", "documents.download", "documents.archive",
+    "documents.hawala_payout.create", "documents.hawala_payout.view_own_draft", "documents.hawala_payout.complete",
   ],
   business_admin: [
     "workspace.view", "financial.overview", "financial.post.fx", "financial.post.money", "financial.post.debt",
@@ -93,6 +97,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "debt.settle.receivable", "debt.settle.payable", "hawala.view", "hawala.send", "hawala.incoming",
     "hawala.payout", "hawala.transition", "hawala.settle", "documents.list", "documents.upload",
     "documents.view", "documents.download", "documents.archive",
+    "documents.hawala_payout.create", "documents.hawala_payout.view_own_draft", "documents.hawala_payout.complete",
   ],
   manager: [
     "workspace.view", "financial.overview", "financial.post.fx", "financial.post.money",
@@ -104,6 +109,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "dashboard.manager", "transactions.view", "debt.view", "debt.create.receivable", "debt.create.payable",
     "debt.settle.receivable", "debt.settle.payable", "hawala.view", "hawala.send", "hawala.incoming",
     "hawala.payout", "hawala.transition", "hawala.settle",
+    "documents.hawala_payout.create", "documents.hawala_payout.view_own_draft", "documents.hawala_payout.complete",
   ],
   accountant: [
     "workspace.view", "financial.overview", "financial.report", "reconciliation.submit", "team.view",
@@ -116,6 +122,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "dashboard.cashier", "transactions.view", "debt.view", "debt.create.receivable",
     "debt.settle.receivable", "hawala.view", "hawala.send", "hawala.incoming", "hawala.payout",
     "hawala.transition",
+    "documents.hawala_payout.create", "documents.hawala_payout.view_own_draft", "documents.hawala_payout.complete",
     "app_lock.self.manage", "app_lock.unlock", "app_lock.sensitive_action",
   ],
   compliance_officer: [

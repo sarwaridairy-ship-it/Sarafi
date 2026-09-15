@@ -37,12 +37,14 @@ test.describe("exact instruction v9 browser contract", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
     await page.goto(`${app}/transactions/new/fx/buy?inspection=1&rateScenario=stale`);
-    await expect(page.getByRole("switch", { name: "Automatic ON" })).toBeChecked();
+    await expect(page.getByRole("switch", { name: /Automatic/ })).not.toBeChecked();
+    await expect(page.getByRole("switch", { name: /Automatic/ })).toBeDisabled();
     await expect(page.getByRole("textbox", { name: "Enter rate here" })).toHaveValue(/.+/);
-    await expect(page.getByText("Automatic rate unavailable").first()).toBeVisible();
+    await expect(page.getByText("Manual rate for this transaction", { exact: true })).toBeVisible();
 
     await page.goto(`${app}/transactions/new/fx/buy?inspection=1&rateScenario=missing`);
-    await expect(page.getByRole("switch", { name: "Automatic ON" })).toBeChecked();
+    await expect(page.getByRole("switch", { name: /Automatic/ })).not.toBeChecked();
+    await expect(page.getByRole("switch", { name: /Automatic/ })).toBeDisabled();
     await expect(page.getByRole("textbox", { name: "Enter rate here" })).toHaveValue("");
     await expectNoHorizontalOverflow(page);
   });
@@ -51,7 +53,7 @@ test.describe("exact instruction v9 browser contract", () => {
     await page.goto(`${app}/money?inspection=1`);
     await expect(page.getByText("11,000.00 AFN", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("171.875 USD", { exact: true })).toBeVisible();
-    await expect(page.getByText("Kabul approved daily board", { exact: false })).toBeVisible();
+    await expect(page.locator(".money-snapshot-source")).toContainText("Approved daily rate");
     await expectNoHorizontalOverflow(page);
 
     await page.goto(`${app}/money?inspection=1&rateScenario=missing`);
@@ -81,7 +83,7 @@ test.describe("exact instruction v9 browser contract", () => {
     for (const title of ["Business Information", "Branches and Connected Partners", "Currencies and Rates", "Security and App Lock", "Team and Access"]) await expect(page.getByRole("button", { name: new RegExp(title) })).toBeVisible();
     await page.getByRole("button", { name: /Currencies and Rates/ }).click();
     await expect(page).toHaveURL(new RegExp("/control/rates$"));
-    await expect(page.getByText("دالر امریکایی", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("United States Dollar", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("option", { name: "Khorasan Market · AFN" })).toHaveCount(1);
 
     await page.goto(`${app}/control/branches?inspection=1`);
@@ -91,6 +93,7 @@ test.describe("exact instruction v9 browser contract", () => {
 
     await page.goto(`${app}/control/security?inspection=1`);
     await expect(page.getByRole("button", { name: "Use Fingerprint / Face ID" })).toBeVisible();
+    await page.getByRole("tab", { name: "Organization Policy" }).click();
     await expect(page.getByRole("region", { name: "Organization App Lock policy" })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Tazkira photos required for Hawala payout" })).toHaveValue("1");
     await expectNoHorizontalOverflow(page);

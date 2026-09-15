@@ -43,6 +43,12 @@ export async function disableAppLock(organizationId: string, deviceId: string): 
   return result.error
 }
 
+export async function resetAppLockPin(organizationId: string, deviceId: string): Promise<string | null> {
+  const result = await invoke({ action: 'reset', organization_id: organizationId, device_id: deviceId })
+  if (!result.error) clearActiveAppUnlockGrant()
+  return result.error
+}
+
 export async function unlockAppWithPin(organizationId: string, deviceId: string, pin: string): Promise<string | null> {
   const result = await invoke({ action: 'verify', organization_id: organizationId, device_id: deviceId, pin })
   if (result.data?.grant && result.data.expiresAt) activeGrant = { value: result.data.grant, expiresAt: new Date(result.data.expiresAt).getTime(), organizationId, deviceId }

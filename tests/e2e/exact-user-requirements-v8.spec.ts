@@ -26,13 +26,13 @@ test.describe("exact user requirements v8", () => {
     const form = page.locator(".transaction-page-form");
     await expect(form.getByRole("combobox", { name: "Currency", exact: true })).toHaveValue("USD");
     await expect(form.getByRole("combobox", { name: "Currency 2" })).toHaveValue("AFN");
-    await expect(form.locator(".compact-trade-rate")).toHaveCount(1);
+    await expect(form.locator(".transaction-rate-control")).toHaveCount(1);
     await expect(form.locator(".rate-governance, .exchange-rate-governance")).toHaveCount(0);
-    await expect(form.locator(".compact-trade-rate")).toContainText("1 AFN");
-    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("0.01423487544");
+    await expect(form.locator(".transaction-rate-control")).toContainText("1 AFN");
+    await expect(form.locator(".transaction-rate-line output")).toHaveText("0.0142348754448");
     await form.getByRole("button", { name: "Reverse quote" }).click();
-    await expect(form.locator(".compact-trade-rate")).toContainText("1 USD");
-    await expect(form.getByRole("textbox", { name: "Transaction rate" })).toHaveValue("70.25");
+    await expect(form.locator(".transaction-rate-control")).toContainText("1 USD");
+    await expect(form.locator(".transaction-rate-line output")).toHaveText("70.25");
   });
 
   test("My Money uses the exact available-money fixture and keeps positions separate", async ({ page }) => {
@@ -61,8 +61,8 @@ test.describe("exact user requirements v8", () => {
     await expect(page.getByRole("textbox", { name: "Destination" })).toHaveAttribute("readonly", "");
 
     await page.goto(`${workspace}/hawala/payout/inspection-incoming?role=owner`);
-    await expect(page.getByText("Front side", { exact: true })).toBeVisible();
-    await expect(page.getByText("Back side", { exact: true })).toBeVisible();
+    await expect(page.getByText("Tazkira photo", { exact: true })).toBeVisible();
+    await expect(page.getByText("Another side or page (optional)", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Give Money and Complete Hawala" })).toBeDisabled();
   });
 
@@ -83,8 +83,8 @@ test.describe("exact user requirements v8", () => {
 
   test("currencies and rates table keeps the required columns behind a responsive layout", async ({ page }) => {
     await page.goto(`${workspace}/control/rates?role=owner`);
-    await expect(page.getByRole("columnheader")).toHaveText(["Currency", "Buy rate", "Sell rate", "Daily valuation", "Rate mode", "Time", "Update"]);
-    await expect(page.locator(".market-rate-row").filter({ hasText: "USD" }).first()).toContainText("Automatic");
+    await expect(page.getByRole("table", { name: "Our approved rates" }).getByRole("columnheader")).toHaveText(["Currency", "Buy rate", "Sell rate", "Daily valuation", "Time", "Update"]);
+    await expect(page.getByRole("table", { name: "Market reference" }).getByRole("columnheader")).toHaveText(["Currency", "Buy rate", "Sell rate", "Time", "Change"]);
     await expect(page.locator(".rate-currency-picker > summary")).toContainText("Add Currency");
     await expect(page.getByRole("combobox", { name: "Rate board" }).locator("option")).toHaveText(["Sarai Shahzada · AFN", "Khorasan Market · AFN"]);
     await expect(page.locator(".rate-currency-picker")).not.toHaveAttribute("open", "");
@@ -99,7 +99,7 @@ test.describe("exact user requirements v8", () => {
     await expect(businessCard.locator("details")).not.toHaveAttribute("open", "");
     await expect(page.getByText("Advanced operating controls", { exact: true })).toBeVisible();
 
-    await page.getByRole("tab", { name: /Branches and Connected Partners/ }).click();
+    await page.goto(`${workspace}/control/branches?role=owner`);
     await expect(page.getByText("Rahimi Exchange", { exact: true })).toBeVisible();
     await expect(page.getByText("Herat Main · Herat", { exact: true })).toBeVisible();
   });
@@ -125,9 +125,9 @@ test.describe("exact user requirements v8", () => {
         expect(overflow, `${width}px ${route}`).toBeLessThanOrEqual(1);
         if (width === 768 || width === 820) await expect(page.locator(".sidebar")).toBeHidden();
         if ((width === 768 || width === 820) && route === "/transactions/new/fx/buy") {
-          const overlayBox = await page.locator(".transaction-inline-form").boundingBox();
-          expect(overlayBox?.x, `${width}px transaction overlay left edge`).toBeLessThanOrEqual(1);
-          expect(overlayBox?.width, `${width}px transaction overlay width`).toBeGreaterThanOrEqual(width - 1);
+          const formBox = await page.locator(".transaction-page-form").boundingBox();
+          expect(formBox?.x ?? -1, `${width}px transaction form left edge`).toBeGreaterThanOrEqual(0);
+          expect((formBox?.x ?? width) + (formBox?.width ?? width), `${width}px transaction form right edge`).toBeLessThanOrEqual(width + 1);
         }
       }
     }
@@ -143,7 +143,7 @@ test.describe("exact user requirements v8", () => {
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), route).toBeLessThanOrEqual(1);
       }
       await page.goto(`${workspace}/transactions/new/fx/buy?role=owner`);
-      expect(await page.getByRole("textbox", { name: /نرخ/ }).evaluate((element) => getComputedStyle(element).direction)).toBe("ltr");
+      expect(await page.locator(".transaction-rate-line output").evaluate((element) => getComputedStyle(element).direction)).toBe("ltr");
     });
   }
 });

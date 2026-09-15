@@ -57,7 +57,29 @@ export type LocationEvidenceRecord = { id: string; journal_entry_id: string; cur
 export type CashboxBalanceRecord = { currency_code: string; expected_amount: string }
 export type CounterpartyStatementRecord = { id: string; occurred_at: string; event_type: string; reference: string; status: string; memo: string | null; direction: 'receivable' | 'payable' | null; currency_code: string | null; amount: string | null }
 export type RateHistoryRecord = { id: string; from_currency: string; to_currency: string; buy_rate: string; sell_rate: string; effective_from: string; group_name: string; branch_id: string | null }
-export type OperationRateContext = { rate_id?: string; rate_group_id?: string; context_id?: string; from_currency: string; to_currency: string; buy_rate?: string; sell_rate?: string; spread_tolerance?: string; tolerance_bps?: string; effective_from?: string; expires_at?: string; age_seconds?: number; max_age_minutes?: number; branch_id?: string | null; source?: string; stale: boolean; missing: boolean; approval_required?: boolean }
+export type OperationRateContext = {
+  rate_id?: string
+  rate_group_id?: string
+  context_id?: string
+  from_currency: string
+  to_currency: string
+  buy_rate?: string
+  sell_rate?: string
+  applied_rate?: string
+  quote_direction?: 'AFN_FIRST' | 'FOREIGN_FIRST'
+  operation_rate_source?: 'APPROVED_DAILY' | 'TRANSACTION_MANUAL'
+  spread_tolerance?: string
+  tolerance_bps?: string
+  effective_from?: string
+  expires_at?: string | null
+  age_seconds?: number
+  max_age_minutes?: number
+  branch_id?: string | null
+  source?: string
+  stale: boolean
+  missing: boolean
+  approval_required?: boolean
+}
 export type CurrencyCatalogRecord = { code: string; name_en: string; name_dari: string; name_pashto: string; symbol: string; minor_unit: number; enabled: boolean; display_order?: number }
 export type MoneyAccountRecord = { id: string; name: string; account_type: 'cashbox' | 'safe' | 'bank' | 'mobile_money' | 'partner' | 'other'; branch_id: string | null; cashbox_id: string | null; reference_label: string | null; active: boolean; balances: Array<{ currency: string; amount: string }> }
 export type MoneyValuationSnapshot = {
@@ -1067,6 +1089,22 @@ export async function getTransactionRateContext(organizationId: string, branchId
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.rpc('get_transaction_rate_context', { target_org: organizationId, target_branch: branchId, source_currency: fromCurrency, target_currency: toCurrency })
   return { data: result.data as OperationRateContext | null, error: result.error?.message ?? null }
+}
+
+export async function requestOperationRateApproval(command: {
+  organization_id: string
+  branch_id: string
+  source_currency: string
+  target_currency: string
+  context_id?: string
+  reason: string
+}): Promise<RpcResult<{ id: string; status: string }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('request_operation_rate_approval_v10', { command })
+  return { data: result.data as { id: string; status: string } | null, error: result.error?.message ?? null }
 }
 
 export async function createTeamInvitation(input: { organizationId: string; email: string; displayName: string; role: string; branchIds: string[]; cashboxIds: string[]; capabilityOverrides?: Array<{ capability: string; allowed: boolean }>; limits?: Record<string, unknown>; requiresMfa?: boolean }): Promise<RpcResult<CreatedTeamInvitation>> {

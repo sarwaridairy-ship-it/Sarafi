@@ -129,6 +129,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           test -n "$BACKUP_EVIDENCE"
           test -n "$LOCAL_LANGUAGE_UAT_EVIDENCE"
@@ -140,6 +141,7 @@ jobs:
           test -n "$SUPABASE_ACCESS_TOKEN"
           test -n "$SUPABASE_DB_PASSWORD"
           test -n "$SUPABASE_PROJECT_REF"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
       - name: Link the reviewed production database
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -156,6 +158,22 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: npx supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Deploy reviewed Supabase functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          npx supabase functions deploy app-lock --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          npx supabase functions deploy private-document-url --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          npx supabase functions deploy hawala-evidence-cleanup --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+      - name: Configure and verify Hawala evidence cleanup
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          npx supabase db query --linked "select public.configure_hawala_evidence_cleanup_v10('https://${SUPABASE_PROJECT_REF}.supabase.co', '${SUPABASE_SERVICE_ROLE_KEY}')"
+          npx supabase db query --linked "do \$\$ begin if not exists (select 1 from cron.job where jobname = 'sarafi-hawala-evidence-cleanup-v10') then raise exception 'Required cleanup schedule is missing'; end if; end \$\$"
       - name: Lint the promoted database
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
