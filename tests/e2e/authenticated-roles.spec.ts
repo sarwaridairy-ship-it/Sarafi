@@ -43,6 +43,11 @@ test.describe("authenticated seven-role contract", () => {
       );
       expect(membership?.role_code).toBe(role);
       expect(membership?.capabilities).toContain("workspace.view");
+      expect(membership?.capabilities).toContain("app_lock.self.manage");
+      expect(membership?.capabilities).toContain("app_lock.unlock");
+      expect(membership?.capabilities).toContain("app_lock.sensitive_action");
+      if (role === "owner" || role === "business_admin") expect(membership?.capabilities).toContain("app_lock.policy.manage");
+      else expect(membership?.capabilities).not.toContain("app_lock.policy.manage");
 
       if (role === "viewer" || role === "accountant" || role === "compliance_officer") {
         expect(membership?.capabilities).not.toContain("financial.post.fx");

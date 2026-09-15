@@ -43,6 +43,14 @@ export type CounterpartyRecord = { id: string; customer_number?: number; custome
 export type HawalaTransferRecord = { id: string; beneficiary_name: string; origin_location: string; destination_location: string; currency_code: string; amount: string; fee: string; reference_code: string; status: string; created_at: string; direction?: 'incoming' | 'outgoing'; workflow_type?: string; hawala_partner_id?: string | null; integrity_state?: 'valid' | 'review_required'; journal_entry_id?: string | null; payout_journal_entry_id?: string | null; payout_receipt_id?: string | null; sender_organization_id?: string | null; sender_branch_id?: string | null; recipient_type?: 'internal_branch' | 'external_partner' | null; recipient_organization_id?: string | null; recipient_partner_id?: string | null; recipient_branch_id?: string | null; expires_at?: string | null }
 export type HawalaPartnerRecord = { id: string; counterparty_id: string | null; name: string; active: boolean; endpoint_type?: 'internal_branch' | 'external_partner' | null; recipient_organization_id?: string | null; recipient_branch_id?: string | null; reciprocal_partner_id?: string | null; endpoint_verified_at?: string | null; endpoint_active?: boolean; recipient_organization_name?: string | null; recipient_branch_name?: string | null; recipient_location?: string | null }
 export type HawalaPayoutMatch = { transfer_id: string; reference_code: string; beneficiary_name: string; destination_location: string; currency_code: string; amount: string; branch_id: string; hawala_partner_id: string }
+export type HawalaPayoutDraft = {
+  id: string
+  transfer_id: string
+  client_command_id: string
+  status: 'open' | 'awaiting_approval' | 'completed' | 'expired'
+  expires_at: string
+  documents: Array<{ id: string; side: 'tazkira_front' | 'tazkira_back'; sha256: string; content_type: string; size_bytes: number }>
+}
 export type HawalaPartnerStatement = { partner_id: string; totals: Array<{ currency_code: string; payable: string; receivable: string; net_receivable: string }>; lines: Array<{ id: string; transfer_id: string; branch_id?: string; reference_code: string; beneficiary_name: string; direction: 'payable' | 'receivable'; currency_code: string; original_amount: string; settled_amount: string; remaining_amount: string; status: string; created_at: string }> }
 export type JournalRecord = { id: string; transaction_number?: number; transaction_reference?: string; customer_number?: number; customer_reference?: string; receipt_number?: string | null; customer_rate?: string | null; fee_amount?: string | null; fee_currency?: string | null; status: string; memo: string | null; occurred_at: string; branch_id: string | null; source_type?: string; event_type?: string; immutable_reference?: string; source_account_name?: string | null; destination_account_name?: string | null; source_account_kind?: string | null; destination_account_kind?: string | null; legacy_location_name?: string | null; legacy_from_name?: string | null; legacy_to_name?: string | null; cashbox_name?: string | null; currency_code?: string | null; amount?: string | null; counterparty_name?: string | null; employee_name?: string | null; given_amount?: string | null; given_currency?: string | null; received_amount?: string | null; received_currency?: string | null }
 export type LocationEvidenceRecord = { id: string; journal_entry_id: string; currency_code: string; native_debit: string; native_credit: string; occurred_at: string; memo: string | null; location_id: string; location_type: 'cashbox' | 'bank' | 'location' | 'account'; location_name: string }
@@ -61,6 +69,10 @@ export type MoneyValuationSnapshot = {
   comparison_currency: string
   valuation_rate_set_id: string | null
   valuation_effective_at: string | null
+  business_timezone?: string
+  valuation_rate_source?: string
+  active_rate_board?: string | null
+  valuation_editor?: string | null
   quality: 'current' | 'partial'
   total_complete: boolean
   excluded_currency_count: number
@@ -147,7 +159,7 @@ export type MembershipCapabilityMatrixRecord = { membership_id: string; role_cod
 export type PrivateDocumentRecord = { id: string; organization_id: string; entity_id: string; entity_type: string; storage_path: string; content_type: string; size_bytes: number; sha256: string; uploaded_by: string; created_at: string }
 export type ReceiptRecord = { id: string; journal_entry_id: string; receipt_number: string; language_code: string; created_at: string }
 export type DocumentTemplateRecord = { template_code: string; document_kind: 'transaction_receipt' | 'report'; title_en: string; title_dari: string; title_pashto: string; body_en: string; body_dari: string; body_pashto: string }
-export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; date_display?: 'gregorian' | 'solar_hijri' | 'both'; digit_display?: 'western' | 'localized'; default_cost_basis?: 'weighted_average'; approval_threshold_base?: string; offline_limit_base?: string; cashier_profit_hidden?: boolean; receipt_number_pattern?: string; rate_max_age_minutes?: number; rate_tolerance_bps?: string; features: Array<{ feature_code: string; enabled: boolean }> }
+export type WorkspaceSettingsRecord = { default_language: string; base_currency_code: string; negative_cash_allowed: boolean; receipt_prefix: string; timezone: string; date_display?: 'gregorian' | 'solar_hijri' | 'both'; digit_display?: 'western' | 'localized'; default_cost_basis?: 'weighted_average'; approval_threshold_base?: string; offline_limit_base?: string; cashier_profit_hidden?: boolean; receipt_number_pattern?: string; rate_max_age_minutes?: number; rate_tolerance_bps?: string; app_lock_required_roles?: string[]; app_lock_max_timeout_seconds?: 30 | 60 | 300 | 900; app_lock_sensitive_reunlock_seconds?: number; hawala_tazkira_images_required?: 1 | 2; features: Array<{ feature_code: string; enabled: boolean }> }
 export type NotificationRecord = { id: string; notification_type: string; subject_id: string; message: string; status: 'unread' | 'read' | 'dismissed'; created_at: string }
 export type NotificationPreferenceRecord = { id: string; notification_type: string; in_app: boolean; push: boolean; threshold_base: string | null }
 export type ReportExportRecord = { id: string; report_name: string; format: 'csv' | 'pdf' | 'xlsx' | 'print'; filters: Record<string, unknown>; generated_at: string; expires_at: string | null; report_snapshot_id?: string; snapshot_sha256?: string }
@@ -230,7 +242,7 @@ export async function getWorkspaceSettings(organizationId: string): Promise<RpcR
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const [settings, features] = await Promise.all([
-    client.from('organization_settings').select('default_language,base_currency_code,negative_cash_allowed,receipt_prefix,timezone,date_display,digit_display,default_cost_basis,approval_threshold_base,offline_limit_base,cashier_profit_hidden,receipt_number_pattern,rate_max_age_minutes,rate_tolerance_bps').eq('organization_id', organizationId).maybeSingle(),
+    client.from('organization_settings').select('default_language,base_currency_code,negative_cash_allowed,receipt_prefix,timezone,date_display,digit_display,default_cost_basis,approval_threshold_base,offline_limit_base,cashier_profit_hidden,receipt_number_pattern,rate_max_age_minutes,rate_tolerance_bps,app_lock_required_roles,app_lock_max_timeout_seconds,app_lock_sensitive_reunlock_seconds,hawala_tazkira_images_required').eq('organization_id', organizationId).maybeSingle(),
     client.from('organization_features').select('feature_code,enabled').eq('organization_id', organizationId).order('feature_code'),
   ])
   const error = settings.error?.message ?? features.error?.message ?? null
@@ -258,6 +270,21 @@ export async function updateWorkspaceSettings(input: { organizationId: string; l
     },
   })
   return { data: result.data ? { ...result.data, features: [] } as WorkspaceSettingsRecord : null, error: result.error?.message ?? null }
+}
+
+export async function updateAppLockPolicy(input: { organizationId: string; requiredRoles: string[]; maxTimeoutSeconds: 30 | 60 | 300 | 900; sensitiveReunlockSeconds: number; hawalaTazkiraImagesRequired: 1 | 2 }): Promise<RpcResult<Record<string, unknown>>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('update_app_lock_policy', {
+    target_org: input.organizationId,
+    command: {
+      required_roles: input.requiredRoles,
+      max_timeout_seconds: input.maxTimeoutSeconds,
+      sensitive_reunlock_seconds: input.sensitiveReunlockSeconds,
+      hawala_tazkira_images_required: input.hawalaTazkiraImagesRequired,
+    },
+  })
+  return { data: result.data as Record<string, unknown> | null, error: result.error?.message ?? null }
 }
 
 export async function listNotifications(organizationId: string): Promise<RpcResult<NotificationRecord[]>> {
@@ -841,11 +868,37 @@ export async function payHawalaBeneficiary(command: unknown): Promise<RpcResult<
   return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
 }
 
-export async function requestHawalaPayoutApproval(command: unknown): Promise<RpcResult<ApprovalRecord>> {
-  const parsed = parseHawalaPayoutCommand(command)
+export async function beginHawalaPayoutDraft(input: { organizationId: string; transferId: string; deviceId: string; clientCommandId: string }): Promise<RpcResult<HawalaPayoutDraft>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
-  const result = await client.rpc('request_hawala_payout_approval', { command: parsed })
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('begin_hawala_payout_v9', { command: {
+    organization_id: input.organizationId,
+    transfer_id: input.transferId,
+    device_id: input.deviceId,
+    client_command_id: input.clientCommandId,
+  } })
+  return { data: result.data as HawalaPayoutDraft | null, error: result.error?.message ?? null }
+}
+
+export async function completeHawalaPayoutDraft(command: unknown): Promise<RpcResult<HawalaTransferRecord>> {
+  const input = command as Record<string, unknown>
+  const parsed = parseHawalaPayoutCommand({ ...input, app_unlock_grant: getActiveAppUnlockGrant(String(input.organization_id ?? ''), String(input.device_id ?? '')) })
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const session = await client.auth.getSession()
+  if (!session.data.session) return { data: null, error: 'Authentication required' }
+  const result = await client.rpc('complete_hawala_payout_v9', { command: { ...parsed, payout_draft_id: input.payout_draft_id } })
+  return { data: result.data as HawalaTransferRecord | null, error: result.error?.message ?? null }
+}
+
+export async function requestHawalaPayoutApproval(command: unknown): Promise<RpcResult<ApprovalRecord>> {
+  const input = command as Record<string, unknown>
+  const parsed = parseHawalaPayoutCommand(input)
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('request_hawala_payout_approval', { command: { ...parsed, payout_draft_id: input.payout_draft_id } })
   return { data: result.data as ApprovalRecord | null, error: result.error?.message ?? null }
 }
 
@@ -1179,18 +1232,18 @@ export async function getPrivateCounterpartyDocuments(organizationId: string, co
   return { data: result.data as PrivateDocumentRecord[] | null, error: result.error?.message ?? null }
 }
 
-export async function getPrivateDocumentUrl(organizationId: string, documentId: string): Promise<RpcResult<string>> {
+export async function getPrivateDocumentUrl(organizationId: string, documentId: string, deviceId: string): Promise<RpcResult<string>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }
   const result = await client.functions.invoke('private-document-url', {
-    body: { organization_id: organizationId, document_id: documentId, action: 'view' },
+    body: { organization_id: organizationId, document_id: documentId, device_id: deviceId, app_unlock_grant: getActiveAppUnlockGrant(organizationId, deviceId), action: 'view' },
   })
   const signedUrl = (result.data as { signedUrl?: string } | null)?.signedUrl
   if (result.error || !signedUrl) return { data: null, error: result.error?.message ?? 'Document access denied' }
   return { data: signedUrl, error: null }
 }
 
-export async function uploadPrivateHawalaIdentityDocument(organizationId: string, transferId: string, side: 'tazkira_front' | 'tazkira_back', file: File): Promise<RpcResult<PrivateDocumentRecord>> {
+export async function uploadPrivateHawalaIdentityDocument(organizationId: string, payoutDraftId: string, side: 'tazkira_front' | 'tazkira_back', file: File): Promise<RpcResult<PrivateDocumentRecord>> {
   const sanitized = await sanitizeIdentityImage(file)
   if (!sanitized.file) return { data: null, error: sanitized.error ?? 'Image could not be processed safely' }
   const safeFile = sanitized.file
@@ -1201,10 +1254,10 @@ export async function uploadPrivateHawalaIdentityDocument(organizationId: string
   const documentId = crypto.randomUUID()
   const digest = await crypto.subtle.digest('SHA-256', await safeFile.arrayBuffer())
   const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
-  const storagePath = `${organizationId}/${transferId}/${documentId}.jpg`
+  const storagePath = `${organizationId}/${payoutDraftId}/${documentId}.jpg`
   const upload = await client.storage.from('sarafi-private-documents').upload(storagePath, safeFile, { contentType: safeFile.type, upsert: false })
   if (upload.error) return { data: null, error: upload.error.message }
-  const inserted = await client.from('attachments').insert({ id: documentId, organization_id: organizationId, entity_type: `hawala:${side}`, entity_id: transferId, storage_path: storagePath, content_type: safeFile.type, size_bytes: safeFile.size, sha256, uploaded_by: session.data.session.user.id }).select('id,organization_id,entity_id,entity_type,storage_path,content_type,size_bytes,sha256,uploaded_by,created_at').single()
+  const inserted = await client.from('attachments').insert({ id: documentId, organization_id: organizationId, entity_type: `hawala_payout_draft:${side}`, entity_id: payoutDraftId, storage_path: storagePath, content_type: safeFile.type, size_bytes: safeFile.size, sha256, uploaded_by: session.data.session.user.id }).select('id,organization_id,entity_id,entity_type,storage_path,content_type,size_bytes,sha256,uploaded_by,created_at').single()
   if (inserted.error) { await client.storage.from('sarafi-private-documents').remove([storagePath]); return { data: null, error: inserted.error.message } }
   await client.rpc('record_sensitive_document_access', { target_org: organizationId, target_entity: documentId, action: 'upload' })
   return { data: inserted.data as PrivateDocumentRecord, error: null }

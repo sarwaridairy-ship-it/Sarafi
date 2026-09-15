@@ -21,6 +21,10 @@ export type Capability =
   | "money_accounts.manage"
   | "organization.manage"
   | "security.manage"
+  | "app_lock.self.manage"
+  | "app_lock.policy.manage"
+  | "app_lock.unlock"
+  | "app_lock.sensitive_action"
   | "compliance.review"
   | "data.import"
   | "billing.manage"
@@ -68,6 +72,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "customers.manage", "reconciliation.submit", "reconciliation.approve", "approval.request",
     "approval.decide", "team.view", "team.invite", "team.manage", "team.capabilities.manage",
     "rates.manage", "money_accounts.manage", "organization.manage", "security.manage",
+    "app_lock.self.manage", "app_lock.policy.manage", "app_lock.unlock", "app_lock.sensitive_action",
     "compliance.review", "data.import", "billing.manage", "ownership.transfer", "owner.delete",
     "owner.capital.post",
     "dashboard.owner", "transactions.view", "debt.view", "debt.create.receivable", "debt.create.payable",
@@ -82,6 +87,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "customers.manage", "reconciliation.submit", "reconciliation.approve", "approval.request",
     "approval.decide", "team.view", "team.invite", "team.manage", "team.capabilities.manage",
     "rates.manage", "money_accounts.manage", "organization.manage", "security.manage",
+    "app_lock.self.manage", "app_lock.policy.manage", "app_lock.unlock", "app_lock.sensitive_action",
     "compliance.review", "data.import",
     "dashboard.owner", "transactions.view", "debt.view", "debt.create.receivable", "debt.create.payable",
     "debt.settle.receivable", "debt.settle.payable", "hawala.view", "hawala.send", "hawala.incoming",
@@ -94,6 +100,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "financial.reverse",
     "reconciliation.submit", "reconciliation.approve", "approval.request", "approval.decide",
     "team.view", "rates.manage",
+    "app_lock.self.manage", "app_lock.unlock", "app_lock.sensitive_action",
     "dashboard.manager", "transactions.view", "debt.view", "debt.create.receivable", "debt.create.payable",
     "debt.settle.receivable", "debt.settle.payable", "hawala.view", "hawala.send", "hawala.incoming",
     "hawala.payout", "hawala.transition", "hawala.settle",
@@ -101,6 +108,7 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
   accountant: [
     "workspace.view", "financial.overview", "financial.report", "reconciliation.submit", "team.view",
     "dashboard.accountant", "transactions.view", "debt.view", "hawala.view",
+    "app_lock.self.manage", "app_lock.unlock", "app_lock.sensitive_action",
   ],
   cashier: [
     "workspace.view", "financial.post.fx", "financial.post.money", "financial.post.debt",
@@ -108,13 +116,15 @@ const roleCapabilityDefaults: Record<WorkspaceRole, Capability[]> = {
     "dashboard.cashier", "transactions.view", "debt.view", "debt.create.receivable",
     "debt.settle.receivable", "hawala.view", "hawala.send", "hawala.incoming", "hawala.payout",
     "hawala.transition",
+    "app_lock.self.manage", "app_lock.unlock", "app_lock.sensitive_action",
   ],
   compliance_officer: [
     "workspace.view", "team.view", "compliance.review", "dashboard.compliance",
     "transactions.view", "hawala.view", "documents.list", "documents.upload", "documents.view",
     "documents.download", "documents.archive",
+    "app_lock.self.manage", "app_lock.unlock", "app_lock.sensitive_action",
   ],
-  viewer: ["workspace.view", "financial.overview", "financial.report", "dashboard.viewer", "transactions.view", "debt.view", "hawala.view"],
+  viewer: ["workspace.view", "financial.overview", "financial.report", "dashboard.viewer", "transactions.view", "debt.view", "hawala.view", "app_lock.self.manage", "app_lock.unlock", "app_lock.sensitive_action"],
 };
 
 export const financialPostCapabilities: Capability[] = [
@@ -209,9 +219,9 @@ const sectionCapabilities: Partial<Record<string, Capability[]>> = {
   Rates: ["rates.manage", "financial.overview"],
   Reports: ["financial.report"],
   "Team & Devices": ["team.view", "team.manage"],
-  Control: ["organization.manage", "team.manage", "rates.manage", "security.manage", "billing.manage"],
+  Control: ["organization.manage", "team.manage", "rates.manage", "security.manage", "app_lock.policy.manage", "billing.manage"],
   "Business Settings": ["organization.manage"],
-  Security: ["security.manage"],
+  Security: ["app_lock.self.manage", "app_lock.policy.manage", "security.manage"],
   Reconciliation: ["reconciliation.submit", "reconciliation.approve"],
   "Cashbox Close": ["reconciliation.submit", "reconciliation.approve"],
   Hawala: ["hawala.view", "hawala.send", "hawala.incoming", "hawala.payout", "hawala.transition", "hawala.settle", "financial.post.hawala", "financial.overview", "compliance.review"],

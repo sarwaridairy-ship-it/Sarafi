@@ -1,36 +1,26 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Language } from "./lib/i18n";
-import { localCurrencyName } from "./lib/currencyNames";
 import {
   createOrganizationBranch,
   createOrganizationCashbox,
   decideComplianceAlert,
-  decideSupportAccess,
   getComplianceWorkspace,
   getOrganizationControlPlane,
-  getOrganizationDataExport,
-  listCurrencyCatalog,
   listCounterparties,
   listHawalaPartners,
-  listNotificationPreferences,
   getWorkspaceSettings,
-  revokeSupportAccess,
   saveComplianceCase,
   saveExpenseCategory,
   saveKycProfile,
   setOrganizationBranchState,
   setOrganizationCashboxState,
   setOrganizationFeatureState,
-  setNotificationPreference,
-  setOrganizationCurrency,
   updateOrganizationProfile,
   updateWorkspaceSettings,
   type ComplianceWorkspaceRecord,
   type CounterpartyRecord,
-  type CurrencyCatalogRecord,
   type HawalaPartnerRecord,
   type KycProfileRecord,
-  type NotificationPreferenceRecord,
   type OrganizationControlPlane,
   type WorkspaceSettingsRecord,
 } from "./lib/financialApi";
@@ -365,12 +355,6 @@ const professionalCopy = {
 
 type ProfessionalCopyKey = keyof typeof professionalCopy.en;
 const p = (language: Language, key: ProfessionalCopyKey) => professionalCopy[language][key];
-const preferenceTypes = ["approval_required", "compliance_alert", "cashbox_variance"] as const;
-const preferenceLabel = (language: Language, type: typeof preferenceTypes[number]) => p(language, ({
-  approval_required: "approvalNotification",
-  compliance_alert: "complianceNotification",
-  cashbox_variance: "cashboxNotification",
-})[type] as ProfessionalCopyKey);
 const serviceLabel = (language: Language, code: string) => {
   if (code.startsWith("sanctions_provider:")) return p(language, "screeningService");
   const labels: Record<string, ProfessionalCopyKey> = {
@@ -436,12 +420,9 @@ const controlCopy: Record<Language, Record<string, string>> = {
   },
 };
 
-export function SettingsView({ language, organizationId, organizationName, branchName, roleLabel, canManage, onDashboard }: { language: Language; organizationId: string | null; organizationName: string; branchName: string; roleLabel: string; canManage: boolean; onDashboard: () => void }) {
+export function SettingsView({ language, organizationId, organizationName, branchName, canManage, area, onDashboard, onRoute }: { language: Language; organizationId: string | null; organizationName: string; branchName: string; canManage: boolean; area: "business" | "branches"; onDashboard: () => void; onRoute: (path: string) => void }) {
   const c = controlCopy[language];
-  const [settingsSection, setSettingsSection] = useState<"business" | "branches" | "currencies" | "security">(() => {
-    const requested = window.sessionStorage.getItem("sarafi-settings-section");
-    return requested === "branches" || requested === "currencies" || requested === "security" ? requested : "business";
-  });
+  const settingsSection = area;
   const [settings, setSettings] = useState<WorkspaceSettingsRecord | null>(null);
   const [controls, setControls] = useState<OrganizationControlPlane | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error" | "preview">(organizationId === "inspection" ? "preview" : "loading");
@@ -458,9 +439,6 @@ export function SettingsView({ language, organizationId, organizationName, branc
   const [rateToleranceBps, setRateToleranceBps] = useState("50");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<"saved" | "failed" | null>(null);
-  const [preferences, setPreferences] = useState<NotificationPreferenceRecord[]>([]);
-  const [preferenceBusy, setPreferenceBusy] = useState<string | null>(null);
-  const [preferenceMessage, setPreferenceMessage] = useState<"saved" | "failed" | null>(null);
   const [displayName, setDisplayName] = useState(organizationName);
   const [legalName, setLegalName] = useState(organizationName);
   const [licenseNumber, setLicenseNumber] = useState("");
@@ -471,37 +449,9 @@ export function SettingsView({ language, organizationId, organizationName, branc
   const [newCategory, setNewCategory] = useState("");
   const [controlBusy, setControlBusy] = useState("");
   const [controlMessage, setControlMessage] = useState("");
-  const [currencies, setCurrencies] = useState<CurrencyCatalogRecord[]>(() => organizationId === "inspection" ? [
-    ["AFN", "Afghan Afghani", "افغانی", "افغانۍ", "؋"],
-    ["USD", "United States Dollar", "دالر امریکایی", "امریکايي ډالر", "$"],
-    ["EUR", "Euro", "یورو", "یورو", "€"],
-    ["AED", "UAE Dirham", "درهم امارات", "اماراتي درهم", "د.إ"],
-    ["PKR", "Pakistani Rupee", "روپیه پاکستانی", "پاکستانۍ روپۍ", "₨"],
-    ["GBP", "British Pound", "پوند انگلیس", "بریتانوي پونډ", "£"],
-    ["IRR", "Iranian Toman", "تومان ایران", "ایراني تومان", "﷼"],
-    ["SAR", "Saudi Riyal", "ریال سعودی", "سعودي ریال", "﷼"],
-    ["CNY", "Chinese Yuan", "یوان چین", "چینايي یوان", "¥"],
-    ["INR", "Indian Rupee", "روپیه هندی", "هندي روپۍ", "₹"],
-    ["CHF", "Swiss Franc", "فرانک سویس", "سویسي فرانک", "Fr"],
-    ["AUD", "Australian Dollar", "دالر استرالیا", "اسټرالیايي ډالر", "A$"],
-    ["CAD", "Canadian Dollar", "دالر کانادا", "کاناډايي ډالر", "C$"],
-    ["RUB", "Russian Ruble", "روبل روسیه", "روسي روبل", "₽"],
-    ["DKK", "Danish Krone", "کرون دنمارک", "ډنمارکي کرون", "kr"],
-    ["SEK", "Swedish Krona", "کرون سویدن", "سویډني کرون", "kr"],
-    ["NOK", "Norwegian Krone", "کرون ناروی", "ناروېژي کرون", "kr"],
-    ["TRY", "Turkish Lira", "لیره ترکیه", "ترکي لیره", "₺"],
-    ["KWD", "Kuwaiti Dinar", "دینار کویت", "کویټي دینار", "د.ك"],
-    ["QAR", "Qatari Riyal", "ریال قطر", "قطري ریال", "ر.ق"],
-    ["BHD", "Bahraini Dinar", "دینار بحرین", "بحریني دینار", "د.ب"],
-    ["JPY", "Japanese Yen", "ین جاپان", "جاپاني ین", "¥"],
-  ].map(([code, name_en, name_dari, name_pashto, symbol]) => ({ code, name_en, name_dari, name_pashto, symbol, minor_unit: 2, enabled: true })) : []);
-  const [currencySearch, setCurrencySearch] = useState("");
   const [connectedPartners, setConnectedPartners] = useState<HawalaPartnerRecord[]>(() => organizationId === "inspection" ? [
     { id: "inspection-partner", counterparty_id: null, name: "Rahimi Exchange", active: true, endpoint_type: "external_partner", recipient_organization_id: "inspection-recipient", recipient_branch_id: "inspection-herat", reciprocal_partner_id: "inspection-reciprocal", endpoint_verified_at: "2026-09-11T08:00:00+04:30", endpoint_active: true, recipient_organization_name: "Rahimi Exchange", recipient_branch_name: "Herat Main", recipient_location: "Herat" },
   ] : []);
-  useEffect(() => {
-    window.sessionStorage.removeItem("sarafi-settings-section");
-  }, []);
   const reloadControls = async () => {
     if (!organizationId || organizationId === "inspection") return;
     const result = await getOrganizationControlPlane(organizationId);
@@ -512,12 +462,10 @@ export function SettingsView({ language, organizationId, organizationName, branc
     if (!organizationId || organizationId === "inspection") return;
     let active = true;
     const controlRequest = canManage ? getOrganizationControlPlane(organizationId) : Promise.resolve({ data: null, error: null });
-    void Promise.all([getWorkspaceSettings(organizationId), listNotificationPreferences(organizationId), controlRequest, listCurrencyCatalog(organizationId), listHawalaPartners(organizationId)]).then(([result, preferenceResult, controlResult, currencyResult, partnerResult]) => {
+    void Promise.all([getWorkspaceSettings(organizationId), controlRequest, listHawalaPartners(organizationId)]).then(([result, controlResult, partnerResult]) => {
       if (!active) return;
       setSettings(result.data);
-      setPreferences(preferenceResult.data ?? []);
       setControls(controlResult.data);
-      setCurrencies(currencyResult.data ?? []);
       setConnectedPartners(partnerResult.data ?? []);
       if (result.data) {
         setDraftLanguage(result.data.default_language as Language);
@@ -539,28 +487,10 @@ export function SettingsView({ language, organizationId, organizationName, branc
         setLicenseExpiry(controlResult.data.organization.license_expires_on ?? "");
         setNewCashboxBranch(controlResult.data.branches.find((item) => item.active)?.id ?? "");
       }
-      setState(result.error || currencyResult.error || partnerResult.error || (canManage && controlResult.error) || !result.data ? "error" : "ready");
+      setState(result.error || partnerResult.error || (canManage && controlResult.error) || !result.data ? "error" : "ready");
     });
     return () => { active = false; };
   }, [canManage, organizationId]);
-  const changePreference = async (notificationType: typeof preferenceTypes[number], inApp: boolean) => {
-    if (!organizationId) return;
-    if (organizationId === "inspection") {
-      setPreferences((current) => [...current.filter((item) => item.notification_type !== notificationType), { id: notificationType, notification_type: notificationType, in_app: inApp, push: false, threshold_base: null }]);
-      setPreferenceMessage("saved");
-      return;
-    }
-    setPreferenceBusy(notificationType);
-    setPreferenceMessage(null);
-    const result = await setNotificationPreference({ organizationId, notificationType, inApp });
-    setPreferenceBusy(null);
-    if (!result.data || result.error) {
-      setPreferenceMessage("failed");
-      return;
-    }
-    setPreferences((current) => [...current.filter((item) => item.notification_type !== notificationType), result.data!]);
-    setPreferenceMessage("saved");
-  };
   const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!organizationId || !canManage) return;
@@ -631,56 +561,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
     setControlBusy(feature);
     await finishControlAction(await setOrganizationFeatureState(organizationId, feature, enabled));
   };
-  const changeCurrency = async (currencyCode: string, enabled: boolean) => {
-    if (!organizationId || !canManage || currencyCode === "AFN") return;
-    if (organizationId === "inspection") {
-      setCurrencies((current) => current.map((item) => item.code === currencyCode ? { ...item, enabled } : item));
-      setControlMessage(c.saved);
-      return;
-    }
-    setControlBusy(`currency-${currencyCode}`);
-    const result = await setOrganizationCurrency(organizationId, currencyCode, enabled);
-    setControlBusy("");
-    if (result.error) {
-      setControlMessage(c.failed);
-      return;
-    }
-    setCurrencies((current) => current.map((item) => item.code === currencyCode ? { ...item, enabled } : item));
-    setControlMessage(c.saved);
-  };
-  const downloadOrganizationData = async () => {
-    if (!organizationId || !canManage) return;
-    setControlBusy("export");
-    const result = await getOrganizationDataExport(organizationId);
-    setControlBusy("");
-    if (!result.data || result.error) { setControlMessage(c.failed); return; }
-    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `sarafi-${organizationId}-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setControlMessage(c.saved);
-  };
-  const decideSupport = async (requestId: string, decision: "approved" | "rejected") => {
-    const reason = window.prompt(c.reasonPrompt)?.trim();
-    if (!reason) return;
-    setControlBusy(requestId);
-    await finishControlAction(await decideSupportAccess(requestId, decision, reason));
-  };
-  const revokeSupport = async (requestId: string) => {
-    const reason = window.prompt(c.reasonPrompt)?.trim();
-    if (!reason) return;
-    setControlBusy(requestId);
-    await finishControlAction(await revokeSupportAccess(requestId, reason));
-  };
   const languageLabel = language === "en" ? "English" : language === "fa-AF" ? "دری" : "پښتو";
-  const currencyLabel = (currency: CurrencyCatalogRecord) => localCurrencyName(language, currency.code, currency);
-  const visibleCurrencies = currencies.filter((currency) => {
-    const query = currencySearch.trim().toLocaleLowerCase();
-    return !query || currency.code.toLocaleLowerCase().includes(query) || currencyLabel(currency).toLocaleLowerCase().includes(query);
-  });
   const verifiedPartners = connectedPartners.filter((partner) => partner.endpoint_active && partner.endpoint_verified_at);
   const timezoneOptions = [
     { value: "Asia/Kabul", label: language === "en" ? "Kabul" : "کابل" },
@@ -707,6 +588,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
         license: "License information",
         primaryBranch: "Primary branch",
         verifiedPartner: "Verified Hawala endpoint",
+        openPartner: "Open partner account",
         noPartners: "No verified partner connection is available yet.",
         advanced: "Advanced operating controls",
       }
@@ -726,6 +608,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
           license: "معلومات جواز",
           primaryBranch: "شعبه اصلی",
           verifiedPartner: "مقصد تأییدشده حواله",
+          openPartner: "باز کردن حساب همکار",
           noPartners: "هنوز همکار تأییدشده‌ای وصل نیست.",
           advanced: "کنترول‌های پیشرفته کاری",
         }
@@ -744,6 +627,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
           license: "د جواز معلومات",
           primaryBranch: "اصلي څانګه",
           verifiedPartner: "د حوالې تایید شوی مقصد",
+          openPartner: "د همکار حساب پرانیستل",
           noPartners: "تر اوسه تایید شوی همکار نه دی نښلول شوی.",
           advanced: "پرمختللي کاري کنټرولونه",
         };
@@ -753,18 +637,6 @@ export function SettingsView({ language, organizationId, organizationName, branc
       {state === "loading" ? <div className="professional-state" role="status">{p(language, "loading")}</div> : null}
       {state === "error" ? <div className="professional-state error" role="alert">{p(language, "unavailable")}</div> : null}
       {state === "preview" ? <div className="professional-state"><b>{p(language, "preview")}</b><span>{p(language, "previewNote")}</span></div> : null}
-      <div className="settings-section-rail" role="tablist" aria-label={settingsNavigation.label}>
-        <button type="button" role="tab" aria-selected={settingsSection === "business"} className={settingsSection === "business" ? "active" : ""} onClick={() => setSettingsSection("business")}>
-          <span className="settings-section-icon"><AppIcon name="home" /></span>
-          <span><b>{settingsNavigation.business}</b><small>{settingsNavigation.businessIntro}</small></span>
-          <em>{branchName || "—"}</em>
-        </button>
-        <button type="button" role="tab" aria-selected={settingsSection === "branches"} className={settingsSection === "branches" ? "active" : ""} onClick={() => setSettingsSection("branches")}>
-          <span className="settings-section-icon"><AppIcon name="cashbox" /></span>
-          <span><b>{settingsNavigation.branches}</b><small>{settingsNavigation.branchesIntro}</small></span>
-          <em>{controls?.branches.length ?? (organizationId === "inspection" ? 1 : 0)}</em>
-        </button>
-      </div>
       <div className="settings-grid">
         <article className="settings-card settings-command-card" hidden={settingsSection !== "business"}>
           <div className="settings-card-title"><AppIcon name="home" /><div><h2>{p(language, "operatingContext")}</h2><p>{organizationName}</p></div></div>
@@ -815,43 +687,10 @@ export function SettingsView({ language, organizationId, organizationName, branc
           </form> : null}
         </details>
         {saveMessage ? <div className={`settings-save-message ${saveMessage}`} role="status">{p(language, saveMessage === "saved" ? "settingsSaved" : "settingsFailed")}</div> : null}
-        <article className="settings-card settings-card-wide" hidden={settingsSection !== "security"}>
-          <div className="settings-card-title"><AppIcon name="check" /><div><h2>{p(language, "notificationChoices")}</h2><p>{p(language, "notificationIntro")}</p></div></div>
-          <div className="notification-preferences">
-            {preferenceTypes.map((type) => {
-              const saved = preferences.find((item) => item.notification_type === type);
-              return <label key={type}><span>{preferenceLabel(language, type)}</span><input type="checkbox" checked={saved?.in_app ?? true} disabled={preferenceBusy === type} onChange={(event) => void changePreference(type, event.target.checked)} /></label>;
-            })}
-          </div>
-          {preferenceMessage && <div className={`settings-save-message ${preferenceMessage}`} role="status">{p(language, preferenceMessage === "saved" ? "notificationSaved" : "notificationFailed")}</div>}
-        </article>
-        <article className="settings-card settings-card-wide currency-settings-card" hidden={settingsSection !== "currencies"}>
-          <div className="settings-card-title"><AppIcon name="rates" /><div><h2>{c.currencies}</h2><p>{c.currenciesIntro}</p></div></div>
-          <label className="currency-settings-search">{c.searchCurrency}<input type="search" value={currencySearch} onChange={(event) => setCurrencySearch(event.target.value)} /></label>
-          <div className="currency-settings-list" role="table" aria-label={c.currencies}>
-            <div className="currency-setting currency-setting-head" role="row">
-              <span role="columnheader">{c.currencySymbol}</span><span role="columnheader">{c.currencyName}</span><span role="columnheader">{c.currencyStatus}</span>
-            </div>
-            {visibleCurrencies.map((currency) => <label className={`currency-setting ${currency.enabled ? "enabled" : ""}`} key={currency.code} role="row">
-              <span className="currency-symbol" role="cell">{currency.symbol}</span>
-              <span className="currency-local-name" role="cell"><b>{currencyLabel(currency)}</b><small dir="ltr">{currency.code}</small></span>
-              <span className="currency-use-control" role="cell">{currency.code === "AFN" ? <em>{c.baseCurrency}</em> : <input type="checkbox" checked={currency.enabled} disabled={!canManage || controlBusy === `currency-${currency.code}`} onChange={(event) => void changeCurrency(currency.code, event.target.checked)} aria-label={`${currencyLabel(currency)} · ${c.usedCurrency}`} />}</span>
-            </label>)}
-          </div>
-          {!canManage ? <p className="muted-copy">{p(language, "ownerSettingsOnly")}</p> : null}
-        </article>
-        <article className="settings-card settings-card-wide" hidden={settingsSection !== "security"}>
-          <div className="settings-card-title"><AppIcon name="shield" /><div><h2>{p(language, "accessSecurity")}</h2><p>{p(language, "ledgerProtection")}</p></div></div>
-          <div className="security-grid">
-            <DetailRow label={p(language, "currentRole")} value={roleLabel} status="good" />
-            <div className="security-callout"><AppIcon name="check" /><span>{p(language, "signedInPosting")}</span></div>
-            <div className="security-callout"><AppIcon name="shield" /><span>{p(language, "ledgerProtection")}</span></div>
-          </div>
-        </article>
         {!controls && settingsSection === "branches" ? <article className="settings-card settings-card-wide">
           <div className="settings-card-title"><AppIcon name="cashbox" /><div><h2>{c.branchesCashboxes}</h2><p>{settingsNavigation.branchesIntro}</p></div></div>
           <section className="connected-partner-list" aria-label={settingsNavigation.branches}>
-            {verifiedPartners.length ? verifiedPartners.map((partner) => <div className="balance-row" key={partner.id}><span className="currency-badge usd">P</span><span className="balance-name"><b>{partner.recipient_organization_name ?? partner.name}</b><small>{partner.recipient_branch_name ?? "—"} · {partner.recipient_location ?? "—"}</small></span><strong>{settingsNavigation.verifiedPartner}</strong></div>) : <p className="muted-copy">{settingsNavigation.noPartners}</p>}
+            {verifiedPartners.length ? verifiedPartners.map((partner) => <div className="balance-row" key={partner.id}><span className="currency-badge usd">P</span><span className="balance-name"><b>{partner.recipient_organization_name ?? partner.name}</b><small>{partner.recipient_branch_name ?? "—"} · {partner.recipient_location ?? "—"}</small></span><strong>{settingsNavigation.verifiedPartner}</strong><button className="text-button" type="button" onClick={() => onRoute(`/app/${organizationId ?? "inspection"}/hawala/partners/${partner.id}`)}>{settingsNavigation.openPartner}</button></div>) : <p className="muted-copy">{settingsNavigation.noPartners}</p>}
           </section>
         </article> : null}
         {canManage && controls && <>
@@ -863,7 +702,7 @@ export function SettingsView({ language, organizationId, organizationName, branc
               <div className="balance-list">{controls.cashboxes.map((cashbox) => <div className="balance-row" key={cashbox.id}><span className="currency-badge usd">C</span><span className="balance-name"><b>{cashbox.name}</b><small>{controls.branches.find((branch) => branch.id === cashbox.branch_id)?.name ?? "—"}</small></span><strong>{cashbox.active ? c.active : c.inactive}</strong><button className="text-button" disabled={controlBusy === cashbox.id} onClick={() => void changeCashboxState(cashbox.id, !cashbox.active)}>{cashbox.active ? c.deactivate : c.activate}</button></div>)}</div>
               <form className="inline-management-form" onSubmit={addCashbox}><label>{c.branchName}<select required value={newCashboxBranch} onChange={(event) => setNewCashboxBranch(event.target.value)}>{controls.branches.filter((branch) => branch.active).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>{c.cashboxName}<input required minLength={2} value={newCashboxName} onChange={(event) => setNewCashboxName(event.target.value)} /></label><button className="primary-action" disabled={controlBusy === "cashbox"}>{c.addCashbox}</button></form>
               <section className="connected-partner-list" aria-label={settingsNavigation.branches}>
-                {verifiedPartners.length ? verifiedPartners.map((partner) => <div className="balance-row" key={partner.id}><span className="currency-badge usd">P</span><span className="balance-name"><b>{partner.recipient_organization_name ?? partner.name}</b><small>{partner.recipient_branch_name ?? "—"} · {partner.recipient_location ?? "—"}</small></span><strong>{settingsNavigation.verifiedPartner}</strong></div>) : <p className="muted-copy">{settingsNavigation.noPartners}</p>}
+                {verifiedPartners.length ? verifiedPartners.map((partner) => <div className="balance-row" key={partner.id}><span className="currency-badge usd">P</span><span className="balance-name"><b>{partner.recipient_organization_name ?? partner.name}</b><small>{partner.recipient_branch_name ?? "—"} · {partner.recipient_location ?? "—"}</small></span><strong>{settingsNavigation.verifiedPartner}</strong><button className="text-button" type="button" onClick={() => onRoute(`/app/${organizationId ?? "inspection"}/hawala/partners/${partner.id}`)}>{settingsNavigation.openPartner}</button></div>) : <p className="muted-copy">{settingsNavigation.noPartners}</p>}
               </section>
             </div>
           </article>
@@ -878,18 +717,6 @@ export function SettingsView({ language, organizationId, organizationName, branc
             <div className="settings-card-title"><AppIcon name="settings" /><div><h2>{c.services}</h2></div></div>
             <div className="notification-preferences">{["hawala", "advanced_compliance", "advanced_analytics", "imports"].map((feature) => <label key={feature}><span>{serviceLabel(language, feature)}</span><input type="checkbox" disabled={controlBusy === feature} checked={controls.features.find((item) => item.code === feature)?.enabled ?? false} onChange={(event) => void changeFeature(feature, event.target.checked)} /></label>)}</div>
           </details>
-          <article className="settings-card" hidden={settingsSection !== "security"}>
-            <div className="settings-card-title"><AppIcon name="report" /><div><h2>{c.dataExport}</h2><p>{c.exportHelp}</p></div></div>
-            <button className="primary-action" disabled={controlBusy === "export"} onClick={() => void downloadOrganizationData()}>{c.downloadData}</button>
-          </article>
-          <article className="settings-card" hidden={settingsSection !== "security"}>
-            <div className="settings-card-title"><AppIcon name="shield" /><div><h2>{c.supportRequests}</h2><p>{c.ownerApproval}</p></div></div>
-            <div className="compliance-record-list">{controls.support_requests.length ? controls.support_requests.map((request) => <div key={request.id}><span><b>{request.reason}</b><small>{c.scope}: {request.requested_scope.join(", ")} · {request.requested_hours} {c.hours}</small><small>{new Date(request.requested_at).toLocaleString(language)}</small></span><strong>{c[request.status] ?? request.status}</strong>{request.status === "pending" && <><button className="text-button" disabled={controlBusy === request.id} onClick={() => void decideSupport(request.id, "approved")}>{c.approveSupport}</button><button className="text-button danger" disabled={controlBusy === request.id} onClick={() => void decideSupport(request.id, "rejected")}>{c.rejectSupport}</button></>}{request.status === "approved" && !request.expires_at ? null : request.status === "approved" ? <button className="text-button danger" disabled={controlBusy === request.id} onClick={() => void revokeSupport(request.id)}>{c.revokeSupport}</button> : null}</div>) : <p className="muted-copy">{c.noSupport}</p>}</div>
-          </article>
-          <article className="settings-card settings-card-wide" hidden={settingsSection !== "security"}>
-            <div className="settings-card-title"><AppIcon name="shield" /><div><h2>{c.securityHistory}</h2></div></div>
-            <div className="compliance-record-list">{controls.security_events.length ? controls.security_events.slice(0, 20).map((event) => <div key={event.id}><span><b>{event.event_type.replaceAll("_", " ")}</b><small>{new Date(event.created_at).toLocaleString(language)}</small></span><strong>✓</strong></div>) : <p className="muted-copy">{c.noSecurityEvents}</p>}</div>
-          </article>
         </>}
         {controlMessage && <div className="settings-save-message saved" role="status">{controlMessage}</div>}
       </div>

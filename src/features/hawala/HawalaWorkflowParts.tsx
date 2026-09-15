@@ -1,10 +1,11 @@
+import { useRef } from "react";
 import type { CurrencyCatalogRecord, HawalaPartnerRecord, HawalaPayoutMatch, HawalaTransferRecord, MoneyAccountRecord } from "../../lib/financialApi";
 import { localCurrencyName } from "../../lib/currencyNames";
 import type { Language } from "../../lib/i18n";
 import { isHawalaEndpointReady } from "./hawalaEndpoint";
 
 export type HawalaRecipientType = "all" | "internal_branch" | "external_partner";
-export type HawalaListTab = "incoming" | "outgoing" | "completed";
+export type HawalaListTab = "incoming" | "outgoing" | "payout" | "completed";
 
 export function HawalaRecipientSearch({ language, partners, visiblePartners, recipientType, search, selectedPartnerId, onRecipientTypeChange, onSearchChange, onPartnerChange }: {
   language: Language;
@@ -63,22 +64,31 @@ export function HawalaIdentityCapture({ language, front, back, frontPreview, bac
   onFrontChange: (file: File | null) => void;
   onBackChange: (file: File | null) => void;
 }) {
+  const frontCameraRef = useRef<HTMLInputElement>(null);
+  const frontLibraryRef = useRef<HTMLInputElement>(null);
+  const backCameraRef = useRef<HTMLInputElement>(null);
+  const backLibraryRef = useRef<HTMLInputElement>(null);
   const copy = language === "en"
-    ? { title: "Tazkira evidence", intro: "Use a clear, well-lit photo with all four corners visible. Location metadata is removed before upload.", front: "Front side", back: "Back side", choose: "Take or choose photo", remove: "Remove and retake", frontAlt: "Tazkira front preview", backAlt: "Tazkira back preview", privacy: "Private evidence is retained only under the organization’s approved identity-document policy. Access is logged." }
+    ? { title: "Tazkira evidence", intro: "One clear photo is required. Add another side or page only when needed by your shop policy.", front: "Tazkira photo", back: "Another side or page (optional)", camera: "Open camera", library: "Choose existing photo", remove: "Remove and retake", frontAlt: "Tazkira preview", backAlt: "Additional Tazkira preview", privacy: "Location metadata is removed before upload. Private access is time-limited and logged." }
     : language === "fa-AF"
-      ? { title: "سند تذکره", intro: "عکس روشن بگیرید و چهار گوشه تذکره را نشان دهید. معلومات موقعیت پیش از بارگذاری پاک می‌شود.", front: "روی تذکره", back: "پشت تذکره", choose: "عکس بگیرید یا انتخاب کنید", remove: "پاک‌کردن و عکس دوباره", frontAlt: "پیش‌نمایش روی تذکره", backAlt: "پیش‌نمایش پشت تذکره", privacy: "سند خصوصی تنها مطابق پالیسی تأییدشده نگهداری می‌شود و هر دسترسی ثبت می‌گردد." }
-      : { title: "د تذکرې ثبوت", intro: "روښانه انځور واخلئ او څلور واړه کونجونه ښکاره کړئ. د ځای معلومات له پورته کولو مخکې پاکېږي.", front: "مخکنی اړخ", back: "شاتنی اړخ", choose: "انځور واخلئ یا وټاکئ", remove: "لرې کول او بیا انځور", frontAlt: "د تذکرې د مخ کتنه", backAlt: "د تذکرې د شا کتنه", privacy: "شخصي سند یوازې د تایید شوې پالیسۍ له مخې ساتل کېږي او هر لاسرسی ثبتېږي." };
+      ? { title: "سند تذکره", intro: "یک عکس روشن لازم است. طرف یا صفحه دوم را فقط در صورت نیاز پالیسی صرافی اضافه کنید.", front: "عکس تذکره", back: "طرف یا صفحه دیگر (اختیاری)", camera: "بازکردن کمره", library: "انتخاب عکس موجود", remove: "پاک‌کردن و عکس دوباره", frontAlt: "پیش‌نمایش تذکره", backAlt: "پیش‌نمایش عکس اضافی تذکره", privacy: "معلومات موقعیت پیش از بارگذاری پاک می‌شود. دسترسی خصوصی وقت‌دار و ثبت‌شده است." }
+      : { title: "د تذکرې ثبوت", intro: "یو روښانه انځور اړین دی. بل اړخ یا پاڼه یوازې هغه وخت زیاته کړئ چې د صرافۍ تګلاره یې غواړي.", front: "د تذکرې انځور", back: "بل اړخ یا پاڼه (اختیاري)", camera: "کمره پرانیستل", library: "موجود انځور ټاکل", remove: "لرې کول او بیا انځور", frontAlt: "د تذکرې کتنه", backAlt: "د تذکرې د اضافي انځور کتنه", privacy: "د ځای معلومات له پورته کولو مخکې پاکېږي. شخصي لاسرسی وخت‌لرونکی او ثبت شوی دی." };
   const side = (kind: "front" | "back") => {
     const file = kind === "front" ? front : back;
     const preview = kind === "front" ? frontPreview : backPreview;
     const change = kind === "front" ? onFrontChange : onBackChange;
+    const cameraRef = kind === "front" ? frontCameraRef : backCameraRef;
+    const libraryRef = kind === "front" ? frontLibraryRef : backLibraryRef;
     return (
       <div className="hawala-identity-side">
-        <label>
-          <span>{kind === "front" ? copy.front : copy.back}</span>
-          {preview ? <img src={preview} alt={kind === "front" ? copy.frontAlt : copy.backAlt} /> : <b>{copy.choose}</b>}
-          <input required type="file" accept="image/*" capture="environment" onChange={(event) => change(event.target.files?.[0] ?? null)} />
-        </label>
+        <strong>{kind === "front" ? copy.front : copy.back}</strong>
+        {preview ? <img src={preview} alt={kind === "front" ? copy.frontAlt : copy.backAlt} /> : <div className="hawala-camera-placeholder" aria-hidden="true">▣</div>}
+        <div className="hawala-capture-actions">
+          <button className="secondary-action" type="button" onClick={() => cameraRef.current?.click()}>{copy.camera}</button>
+          <button className="text-button" type="button" onClick={() => libraryRef.current?.click()}>{copy.library}</button>
+        </div>
+        <input ref={cameraRef} className="sr-only" tabIndex={-1} type="file" accept="image/*" capture="environment" aria-label={`${kind === "front" ? copy.front : copy.back} · ${copy.camera}`} onChange={(event) => change(event.target.files?.[0] ?? null)} />
+        <input ref={libraryRef} className="sr-only" tabIndex={-1} type="file" accept="image/*" aria-label={`${kind === "front" ? copy.front : copy.back} · ${copy.library}`} onChange={(event) => change(event.target.files?.[0] ?? null)} />
         {file ? <button type="button" className="text-button" onClick={() => change(null)}>{copy.remove}</button> : null}
       </div>
     );
@@ -86,7 +96,7 @@ export function HawalaIdentityCapture({ language, front, back, frontPreview, bac
   return <section className="hawala-identity-capture" aria-labelledby="hawala-identity-title"><h3 id="hawala-identity-title">{copy.title}</h3><p>{copy.intro}</p><div>{side("front")}{side("back")}</div><small>{copy.privacy}</small></section>;
 }
 
-export function HawalaPayoutConfirmation({ language, match, accounts, moneyAccountId, identityReference, identityConfirmed, identityFront, identityBack, frontPreview, backPreview, busy, accountLabel, chooseAccountLabel, formatAmount, onMoneyAccountChange, onIdentityReferenceChange, onIdentityConfirmedChange, onFrontChange, onBackChange, onConfirm }: {
+export function HawalaPayoutConfirmation({ language, match, accounts, moneyAccountId, identityReference, identityConfirmed, identityFront, identityBack, requiredImageCount, frontPreview, backPreview, busy, accountLabel, chooseAccountLabel, formatAmount, onMoneyAccountChange, onIdentityReferenceChange, onIdentityConfirmedChange, onFrontChange, onBackChange, onConfirm }: {
   language: Language;
   match: HawalaPayoutMatch;
   accounts: MoneyAccountRecord[];
@@ -95,6 +105,7 @@ export function HawalaPayoutConfirmation({ language, match, accounts, moneyAccou
   identityConfirmed: boolean;
   identityFront: File | null;
   identityBack: File | null;
+  requiredImageCount: 1 | 2;
   frontPreview: string;
   backPreview: string;
   busy: boolean;
@@ -113,7 +124,7 @@ export function HawalaPayoutConfirmation({ language, match, accounts, moneyAccou
     : language === "fa-AF"
       ? { reference: "مرجع هویت بررسی‌شده", referenceHint: "نوع سند و رقم‌های آخر", confirmed: "هویت گیرنده را با مستفید حواله مطابقت دادم.", action: "پول را بدهید و حواله را تکمیل کنید" }
       : { reference: "کتل شوې پېژندپاڼې مرجع", referenceHint: "د سند ډول او وروستۍ شمېرې", confirmed: "ما د اخیستونکي هویت د حوالې له ګټه اخیستونکي سره برابر کړ.", action: "پیسې ورکړئ او حواله بشپړه کړئ" };
-  const disabled = busy || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2 || !identityFront || !identityBack;
+  const disabled = busy || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2 || !identityFront || (requiredImageCount === 2 && !identityBack);
   return (
     <>
       <article className="payout-match"><span><strong>{match.beneficiary_name}</strong><small>{match.destination_location}</small></span><b dir="ltr">{formatAmount(match.amount)} {match.currency_code}</b></article>
@@ -147,11 +158,11 @@ export function HawalaReceivedList({ language, transfers, tab, search, currencyF
   onOpen: (transfer: HawalaTransferRecord) => void;
 }) {
   const copy = language === "en"
-    ? { send: "Send Hawala", incoming: "Received Hawala", outgoing: "Sent Hawala", completed: "Completed", search: "Search", searchHint: "Search name, partner, or Hawala number", currency: "Currency", allCurrencies: "All currencies", status: "Status", allStatuses: "All statuses", review: "Review payout", open: "Open" }
+    ? { send: "Send Hawala", incoming: "Received", outgoing: "Sent", payout: "Needs Payout", completed: "Completed", search: "Search", searchHint: "Search name, partner, or Hawala number", currency: "Currency", allCurrencies: "All currencies", status: "Status", allStatuses: "All statuses", review: "Review payout", open: "Open" }
     : language === "fa-AF"
-      ? { send: "فرستادن حواله", incoming: "حواله‌های رسیده", outgoing: "حواله‌های فرستاده‌شده", completed: "تکمیل‌شده", search: "جستجو", searchHint: "جستجوی نام، همکار یا شماره حواله", currency: "اسعار", allCurrencies: "همه اسعار", status: "حالت", allStatuses: "همه حالت‌ها", review: "بررسی پرداخت", open: "بازکردن" }
-      : { send: "حواله لېږل", incoming: "رارسېدلې حوالې", outgoing: "لېږل شوې حوالې", completed: "بشپړې", search: "لټون", searchHint: "نوم، همکار یا د حوالې شمېره ولټوئ", currency: "اسعار", allCurrencies: "ټول اسعار", status: "حالت", allStatuses: "ټول حالتونه", review: "ورکړه کتل", open: "پرانیستل" };
-  const tabs: Array<[HawalaListTab, string]> = [["incoming", copy.incoming], ["outgoing", copy.outgoing], ["completed", copy.completed]];
+      ? { send: "فرستادن حواله", incoming: "رسیده", outgoing: "فرستاده", payout: "منتظر پرداخت", completed: "تکمیل‌شده", search: "جستجو", searchHint: "جستجوی نام، همکار یا شماره حواله", currency: "اسعار", allCurrencies: "همه اسعار", status: "حالت", allStatuses: "همه حالت‌ها", review: "بررسی پرداخت", open: "بازکردن" }
+      : { send: "حواله لېږل", incoming: "رارسېدلې", outgoing: "لېږل شوې", payout: "ورکړې ته منتظر", completed: "بشپړې", search: "لټون", searchHint: "نوم، همکار یا د حوالې شمېره ولټوئ", currency: "اسعار", allCurrencies: "ټول اسعار", status: "حالت", allStatuses: "ټول حالتونه", review: "ورکړه کتل", open: "پرانیستل" };
+  const tabs: Array<[HawalaListTab, string]> = [["incoming", copy.incoming], ["outgoing", copy.outgoing], ["payout", copy.payout], ["completed", copy.completed]];
   return (
     <>
       <section className="hawala-inbox-controls">

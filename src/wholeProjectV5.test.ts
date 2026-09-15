@@ -289,7 +289,7 @@ describe("whole-project v5 accounting and privacy contract", () => {
     expect(migration).toContain("'hawala_incoming'");
     expect(migration).toContain("'hawala_settle'");
     expect(rateResolver).toContain("getTransactionRateContext");
-    expect(rateResolver).toContain("Your draft stays on this page");
+    expect(rateResolver).toContain("Your complete draft stays on this page");
     expect(migration).toContain("create or replace function public.get_transaction_detail");
     expect(migration).toContain("create or replace function public.get_debt_detail_v5");
     expect(migration).toContain("create or replace function public.get_counterparty_detail_v5");

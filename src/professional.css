@@ -2587,10 +2587,8 @@ td {
 .balances .currency-badge.usd { color:#245f4d; background:#def1e7; }
 .activity { padding-top:16px; }
 
-.transaction-inline-form { display:grid; justify-content:center; width:100%; padding:0 0 28px; background:transparent; }
 .transaction-page-form { width:min(720px,100%); max-height:none; margin:0 auto; border:0; border-radius:0; box-shadow:none; }
 .transaction-page-form.trade-entry-form { width:min(900px,100%); max-width:900px; }
-.transaction-inline-form .close { display:none; }
 .transaction-back { max-width: 230px; text-align: end; }
 .transaction-detail-page { display:grid; gap:24px; }
 .transaction-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
@@ -2638,9 +2636,6 @@ td {
 .status-cancelled { color:#8d3e3a; background:#fde9e6; }
 .modal-head { margin-bottom:12px; }
 .modal-head h2 { color:#102a36; font-size:21px; }
-.trade-mode-switch { display:grid; grid-template-columns:repeat(2,1fr); gap:5px; margin:0 0 16px; padding:4px; border:1px solid #d8e1dd; border-radius:11px; background:#f3f5f2; }
-.trade-mode-switch button { min-height:39px; padding:7px; border:0; border-radius:8px; color:#586b70; background:transparent; font:750 11px var(--font-sans); cursor:pointer; }
-.trade-mode-switch button.active { color:#fff; background:#0d756c; box-shadow:0 4px 12px rgba(13,117,108,.16); }
 .exchange-entry-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(210px,.9fr) minmax(0,1fr); align-items:stretch; gap:10px; margin-bottom:14px; }
 .financial-task-form .exchange-money-card,
 .financial-task-form .exchange-rate-card { min-width:0; min-height:168px; margin:0; padding:14px; border:1px solid #d6e1dc; border-radius:13px; background:#fff; box-shadow:0 6px 18px rgba(16,52,49,.04); }
@@ -2674,14 +2669,6 @@ td {
 .rate-box { border-radius:9px; }
 .rate-box .rate-warning { margin-inline-start:auto; color:#9a5a17; font-weight:800; }
 .rate-box.exchange-rate-card .rate-warning { margin-inline-start:0; }
-.rate-governance { display:grid; gap:12px; margin:0 0 20px; padding:15px; border:1px solid #d8e1dd; border-radius:10px; background:#fbfcfa; }
-.rate-governance.needs-attention { border-color:#dfb879; background:#fffaf0; }
-.rate-governance > small,.rate-governance > p { margin:0; color:#62726f; font-size:11px; line-height:1.55; }
-.exchange-rate-governance > summary { min-height:36px; color:#315e57; cursor:pointer; font-size:12px; font-weight:800; }
-.rate-governance .choice-row { display:flex; flex-direction:row; align-items:center; gap:10px; margin:0; color:#263e43; font-weight:750; }
-.rate-governance .choice-row input { flex:0 0 auto; width:18px; min-height:18px; margin:0; }
-.rate-governance textarea { min-height:74px; resize:vertical; }
-
 .auth-shell { position:relative; overflow:hidden; padding:28px; background:#071d29; }
 .auth-shell::before { position:absolute; inset:0; content:""; pointer-events:none; background:radial-gradient(circle at 22% 30%,rgba(20,116,108,.22),transparent 34%),radial-gradient(circle at 78% 75%,rgba(200,154,72,.11),transparent 26%); }
 .auth-layout { position:relative; grid-template-columns:minmax(0,1fr) minmax(360px,430px); gap:clamp(34px,7vw,92px); width:min(1040px,100%); }
@@ -2774,7 +2761,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .balances .balance-row strong { font-size:9px; }
   .modal-head h2 { font-size:18px; }
   .form-grid { grid-template-columns:1fr 1fr; gap:8px; }
-  .trade-mode-switch button { min-height:38px; padding-inline:4px; font-size:9px; }
   .auth-shell { padding:15px; place-items:start center; overflow:auto; }
   .auth-layout { display:block; width:min(430px,100%); }
   .auth-intro { padding:6px 2px 14px; }

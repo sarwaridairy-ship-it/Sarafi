@@ -5,12 +5,14 @@ import { parseFxTradeCommand, parseHawalaPayoutCommand } from "./domain/commands
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const migration = read("../supabase/migrations/20260911195348_whole_project_v7_authority.sql");
 const rateResolver = read("./features/rates/InlineRateResolver.tsx");
+const rateControl = read("./features/rates/TransactionRateControl.tsx");
 const app = read("./App.tsx");
 const css = read("./styles/calm-premium.css");
 const appLockClient = read("./lib/appLock.ts");
 const appLockServer = read("../supabase/functions/app-lock/index.ts");
 const routes = read("./app/routes.ts");
 const router = read("./app/router.tsx");
+const v9Migration = read("../supabase/migrations/20260915134012_exact_instruction_v9.sql");
 
 const payout = {
   organization_id: "11111111-1111-4111-8111-111111111111",
@@ -24,8 +26,8 @@ const payout = {
 
 describe("whole-project v7 acceptance contracts", () => {
   it("uses a compact one-rate resolver with exact reversible quotes", () => {
-    expect(rateResolver).toContain('className={`inline-rate-resolver compact-rate');
-    expect(rateResolver).toContain("new Decimal(1).div(rate)");
+    expect(rateControl).toContain("transaction-rate-control");
+    expect(rateControl).toContain("new Decimal(1).div(parsed)");
     expect(rateResolver).toContain('rateSide?: "buy" | "sell" | "valuation"');
     expect(rateResolver).not.toContain("Rate for this transaction");
     expect(rateResolver).not.toContain("این نرخ چگونه حساب شده؟");
@@ -60,16 +62,17 @@ describe("whole-project v7 acceptance contracts", () => {
     expect(migration).toContain("snapshot_sha256");
     expect(migration).toContain("when p.rate_status = 'current'");
     expect(app).toContain("getMoneyValuationSnapshot");
-    expect(app).toContain('net_position_base: "11000"');
-    expect(app).toContain('comparison_value: "171.875"');
+    expect(app).toContain('net_position_base: inspectionMoneyRateIncomplete ? "8400" : "11000"');
+    expect(app).toContain('comparison_value: inspectionMoneyRateIncomplete ? null : "171.875"');
   });
 
-  it("requires both private Tazkira sides for the only payout path", () => {
+  it("requires one private Tazkira image and permits a policy-controlled second image", () => {
     expect(parseHawalaPayoutCommand(payout).reference_code).toBe("HW-7K2M-9841");
-    expect(() => parseHawalaPayoutCommand({ ...payout, identity_document_ids: payout.identity_document_ids.slice(0, 1) })).toThrow();
-    expect(migration).toContain("hawala_payout_documents_v7");
-    expect(migration).toContain("HAWALA_IDENTITY_DOCUMENTS_REQUIRED");
-    expect(migration).toContain("entity_type in ('hawala:tazkira_front', 'hawala:tazkira_back')");
+    expect(parseHawalaPayoutCommand({ ...payout, identity_document_ids: payout.identity_document_ids.slice(0, 1) }).identity_document_ids).toHaveLength(1);
+    expect(() => parseHawalaPayoutCommand({ ...payout, identity_document_ids: [...payout.identity_document_ids, payout.money_account_id] })).toThrow();
+    expect(v9Migration).toContain("hawala_tazkira_images_required");
+    expect(v9Migration).toContain("HAWALA_IDENTITY_DOCUMENTS_REQUIRED");
+    expect(v9Migration).toContain("entity_type in ('hawala_payout_draft:tazkira_front', 'hawala_payout_draft:tazkira_back')");
   });
 
   it("routes Hawala only to a verified exact recipient and keeps Paid payout-only", () => {

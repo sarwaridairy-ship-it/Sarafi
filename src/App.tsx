@@ -28,6 +28,7 @@ import {
   getReceiptForJournalEntry,
   getOwnerDashboard,
   getWorkspaceSettings,
+  getOrganizationControlPlane,
   getTeamControlPlane,
   getMembershipCapabilityMatrix,
   getMyWorkspaceContext,
@@ -66,7 +67,8 @@ import {
   recordHawalaSend,
   recordHawalaIncoming,
   transitionHawalaStatus,
-  payHawalaBeneficiary,
+  beginHawalaPayoutDraft,
+  completeHawalaPayoutDraft,
   requestHawalaPayoutApproval,
   resumeApprovedHawalaPayout,
   settleHawalaPartner,
@@ -113,6 +115,8 @@ import {
   listNotifications,
   markNotificationState,
   setOrganizationRateCurrencies,
+  setRateGroupExchangeRate,
+  updateAppLockPolicy,
   type DocumentTemplateRecord,
 } from "./lib/financialApi";
 import { getSupabaseClient } from "./lib/supabase";
@@ -153,12 +157,14 @@ import {
 } from "./app/capabilities";
 import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot, workspaceSectionPath } from "./app/routes";
 import type { InlineRateResolverProps } from "./features/rates/InlineRateResolver";
+import { TransactionRateControl } from "./features/rates/TransactionRateControl";
 import { ReferenceScanner } from "./features/hawala/ReferenceScanner";
 import { MoneyValuationSummary } from "./features/money/MoneyValuationSummary";
 import { HawalaPayoutConfirmation, HawalaReceivedList, HawalaRecipientSearch, type HawalaListTab, type HawalaRecipientType } from "./features/hawala/HawalaWorkflowParts";
 import { isHawalaEndpointReady } from "./features/hawala/hawalaEndpoint";
 import { AppLockSettings } from "./features/security/AppLockSettings";
 import { AppLockGate } from "./features/security/AppLockGate";
+import { AppLockPolicySettings } from "./features/security/AppLockPolicySettings";
 
 const loadExports = () => import("./lib/exports");
 const ImportWorkspace = lazy(() => import("./ImportWorkspace").then((module) => ({ default: module.ImportWorkspace })));
@@ -509,6 +515,7 @@ function App() {
         import.meta.env.VITE_AUTH_GATE_DISABLED === "true"));
   const inspectionRateScenario = inspectionMode
     ? new URLSearchParams(location.search).get("rate")
+      ?? new URLSearchParams(location.search).get("rateScenario")
     : null;
   const emptyWorkspaceInspection = inspectionMode && new URLSearchParams(location.search).get("workspace") === "empty";
   const platformInspectionPreview = platformAdminRoute && inspectionMode && new URLSearchParams(location.search).get("preview") === "1";
@@ -604,7 +611,6 @@ function App() {
     inspectionRateScenario === "current",
   );
   const [tradeFee, setTradeFee] = useState("");
-  const [tradeNote, setTradeNote] = useState("");
   const [tradeCounterparty, setTradeCounterparty] = useState("");
   const [tradeCounterparties, setTradeCounterparties] = useState<CounterpartyRecord[]>([]);
   const [currencyAddTarget, setCurrencyAddTarget] = useState<"primary" | "counter" | null>(null);
@@ -747,9 +753,12 @@ function App() {
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null,
   );
-  const inspectionLockPreview = inspectionMode && new URLSearchParams(window.location.search).get("lock") === "1";
+  const inspectionLockPreview = import.meta.env.MODE === "e2e"
+    && new URLSearchParams(location.search).get("lock") === "1";
   const [appLocked, setAppLocked] = useState(inspectionLockPreview);
   const [appLockConfigured, setAppLockConfigured] = useState(false);
+  const [appLockRequired, setAppLockRequired] = useState(false);
+  const [appLockMaximumTimeout, setAppLockMaximumTimeout] = useState<AppLockStatus["maximumTimeoutSeconds"]>(900);
   const [appLockSettings, setAppLockSettings] = useState<Pick<AppLockStatus, "autoLockSeconds" | "lockOnBackground">>({ autoLockSeconds: 900, lockOnBackground: true });
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole>(
     inspectionMode &&
@@ -855,8 +864,10 @@ function App() {
     void getAppLockStatus(organizationId, deviceId).then((result) => {
       if (!active || !result.data) return;
       setAppLockConfigured(result.data.configured);
+      setAppLockRequired(result.data.required);
+      setAppLockMaximumTimeout(result.data.maximumTimeoutSeconds);
       setAppLockSettings({ autoLockSeconds: result.data.autoLockSeconds, lockOnBackground: result.data.lockOnBackground });
-      if (result.data.configured && !getActiveAppUnlockGrant(organizationId, deviceId)) setAppLocked(true);
+      if ((result.data.configured || result.data.required) && !getActiveAppUnlockGrant(organizationId, deviceId)) setAppLocked(true);
     });
     return () => { active = false; };
   }, [linkedDevice?.id, organizationId, user]);
@@ -1445,7 +1456,6 @@ function App() {
         fee_amount: tradeFee || undefined,
         fee_currency: "AFN",
         counterparty_id: tradeCounterparty || undefined,
-        memo: tradeNote || undefined,
         publish_rates: exchangeRatePublications.length
           ? exchangeRatePublications
           : undefined,
@@ -1518,7 +1528,6 @@ function App() {
     setDashboardRefresh((value) => value + 1);
     setAmount("");
     setTradeFee("");
-    setTradeNote("");
     setTradeCounterparty("");
     setTradeCommandId(crypto.randomUUID());
     setRateOverrideEnabled(false);
@@ -1601,7 +1610,6 @@ function App() {
     setTradeSide(nextSide);
     setAmount("");
     setTradeFee("");
-    setTradeNote("");
     setTradeCounterparty("");
     setTradeCommandId(crypto.randomUUID());
     setRateOverrideEnabled(false);
@@ -2055,7 +2063,6 @@ function App() {
         custom: "Rate for this customer",
         useShop: "Use shop rate",
         feeAfn: "Commission (AFN)",
-        noteOptional: "Add a note (optional)",
         addCurrency: "Add currency",
         chooseCurrency: "Choose a currency",
         currencyAdded: "Currency added to this shop.",
@@ -2075,7 +2082,6 @@ function App() {
           custom: "نرخ همین مشتری",
           useShop: "گذاشتن نرخ صرافی",
           feeAfn: "کمیشن (AFN)",
-          noteOptional: "یادداشت (اختیاری)",
           addCurrency: "افزودن اسعار",
           chooseCurrency: "یک اسعار را انتخاب کنید",
           currencyAdded: "اسعار به فهرست صرافی افزوده شد.",
@@ -2094,7 +2100,6 @@ function App() {
           custom: "د همدې پېرېدونکي نرخ",
           useShop: "د صرافۍ نرخ وکاروئ",
           feeAfn: "کمېشن (AFN)",
-          noteOptional: "یادښت (اختیاري)",
           addCurrency: "اسعار زیاتول",
           chooseCurrency: "اسعار وټاکئ",
           currencyAdded: "اسعار د صرافۍ لېست ته زیات شول.",
@@ -2139,11 +2144,10 @@ function App() {
     setToast(rateWorkflowCopy.currencyAdded);
   };
   const tradeRateTargetCurrency = tradeReceiveCurrency;
+  const tradeRateEffectiveFrom = tradeCurrency !== "AFN"
+    ? rateContext.effectiveFrom
+    : tradeReceiveRateContext.effectiveFrom;
   const displayedTradeRate = effectiveTradeRate;
-  let visibleTradeRate = displayedTradeRate;
-  if (tradeQuoteReversed && displayedTradeRate) {
-    try { visibleTradeRate = new Decimal(1).div(displayedTradeRate).toSignificantDigits(10).toString(); } catch { visibleTradeRate = ""; }
-  }
   const tradeRateMissing = (tradeCurrency !== "AFN" && rateContext.missing)
     || (tradeReceiveCurrency !== "AFN" && tradeReceiveRateContext.missing);
   const tradeRateStale = (tradeCurrency !== "AFN" && rateContext.stale)
@@ -2395,7 +2399,7 @@ function App() {
       />
     );
 
-  if (appLocked && (organizationId !== "inspection" || inspectionLockPreview)) return <AppLockGate language={language} organizationId={organizationId} organizationName={organizationName} userName={user?.email ?? "inspection@sarafi.local"} deviceId={linkedDevice?.id ?? (inspectionLockPreview ? "inspection-device" : "")} onUnlocked={() => setAppLocked(false)} onSignOut={() => void handleSignOut()} />;
+  if ((appLocked || inspectionLockPreview) && (organizationId !== "inspection" || inspectionLockPreview)) return <AppLockGate language={language} organizationId={organizationId} organizationName={organizationName} userName={user?.email ?? "inspection@sarafi.local"} deviceId={linkedDevice?.id ?? (inspectionLockPreview ? "inspection-device" : "")} requiresConfiguration={appLockRequired && !appLockConfigured} maximumTimeoutSeconds={appLockMaximumTimeout} onConfigured={() => setAppLockConfigured(true)} onUnlocked={() => setAppLocked(false)} onSignOut={() => void handleSignOut()} />;
 
   return (
     <div className={`app-shell ${isRtl(language) ? "rtl" : ""}`}>
@@ -2559,6 +2563,7 @@ function App() {
                 <label>{u("changeLanguage")}<select value={language} onChange={(event) => setLanguage(event.target.value as Language)}><option value="en">English</option><option value="fa-AF">دری</option><option value="ps-AF">پښتو</option></select></label>
                 <button type="button" onClick={() => setPrivacy((value) => !value)}><AppIcon name={privacy ? "eye" : "eyeOff"} size={18} />{privacy ? u("showAmounts") : u("hideAmounts")}</button>
                 <button type="button" onClick={() => { setShowHelp(true); setShowProfileMenu(false); }}>?<span>{u("openHelp")}</span></button>
+                <button type="button" onClick={() => { openSection("Security", true); setShowProfileMenu(false); }}><AppIcon name="shield" size={18} /><span>{language === "en" ? "Security and App Lock" : language === "fa-AF" ? "امنیت و قفل برنامه" : "امنیت او د اپ قفل"}</span></button>
                 {appLockConfigured ? <button type="button" onClick={lockWorkspace}><AppIcon name="shield" size={18} /><span>{language === "en" ? "Lock app" : language === "fa-AF" ? "قفل برنامه" : "اپ قفلول"}</span></button> : null}
                 {!inspectionMode ? <button type="button" className="profile-sign-out" onClick={() => void handleSignOut()}>↪<span>{u("signOut")}</span></button> : null}
               </section> : null}
@@ -2653,7 +2658,7 @@ function App() {
             </Suspense>
           )}
       {routeAuthorized && fxFormActive && transactionFormActive && (
-        <div className="transaction-inline-form">
+        <div className="transaction-route">
           {fxApprovalBusy && !fxApprovalDraft ? <div className="empty-live" role="status">{language === "en" ? "Loading approval draft…" : language === "fa-AF" ? "بارگیری پیش‌نویس تأیید…" : "د تایید مسوده پورته کېږي…"}</div> : null}
           {fxApprovalDraft ? (
             <section className="approval-draft-status" aria-live="polite">
@@ -2698,27 +2703,6 @@ function App() {
                 {language === "en" ? "Back to transaction types" : language === "fa-AF" ? "بازگشت به نوع معامله" : "د معاملې ډولونو ته ستنېدل"}
               </button>
             </div>
-            {!exchangeFxRouteActive ? <div className="trade-mode-switch" role="tablist" aria-label={t("newTransaction")}>
-              {([
-                ["BUY_FX", t("buy")],
-                ["SELL_FX", t("sell")],
-              ] as const).map(([side, label]) => (
-                <button
-                  key={side}
-                  type="button"
-                  role="tab"
-                  aria-selected={tradeSide === side}
-                  className={tradeSide === side ? "active" : ""}
-                  disabled={tradeBusy}
-                  onClick={() => {
-                    if (tradeSide === side) setTradeReviewing(false);
-                    else openTrade(side);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div> : null}
             <fieldset
               className="trade-fields"
               disabled={tradeReviewing || tradeBusy}
@@ -2773,34 +2757,19 @@ function App() {
                   </select>
                 </label>
 
-                {!sourceRateNeedsResolution && !targetRateNeedsResolution ? <div className="rate-box exchange-rate-card compact-trade-rate transaction-rate-only">
-                  <div className="transaction-rate-mode" role="group" aria-label={t("exchangeRate")} dir={isRtl(language) ? "rtl" : "ltr"}>
-                    <button type="button" className={!rateOverrideEnabled ? "active" : ""} aria-pressed={!rateOverrideEnabled} onClick={restoreApprovedTradeRate}>{language === "en" ? "Online" : "آنلاین"}</button>
-                    <button type="button" className={rateOverrideEnabled ? "active" : ""} aria-pressed={rateOverrideEnabled} onClick={() => changeDisplayedTradeRate(displayedTradeRate || "")}>{language === "en" ? "Manual" : language === "fa-AF" ? "دستی" : "لاسي"}</button>
-                  </div>
-                  <div className="transaction-rate-quote" dir="ltr">
-                    <span>1 {tradeQuoteReversed ? tradeRateTargetCurrency : tradeCurrency}</span>
-                    <span aria-hidden="true">=</span>
-                    <input
-                      required
-                      readOnly={!rateOverrideEnabled}
-                      min="0.000001"
-                      step="any"
-                      inputMode="decimal"
-                      value={visibleTradeRate}
-                      onChange={(event) => {
-                        if (!tradeQuoteReversed) changeDisplayedTradeRate(event.target.value);
-                        else {
-                          try { changeDisplayedTradeRate(new Decimal(1).div(event.target.value).toString()); } catch { changeDisplayedTradeRate(""); }
-                        }
-                      }}
-                      placeholder="0.00"
-                      aria-label={rateWorkflowCopy.newRate}
-                    />
-                    <span>{tradeQuoteReversed ? tradeCurrency : tradeRateTargetCurrency}</span>
-                    <button className="compact-rate-swap" type="button" onClick={() => setTradeQuoteReversed((value) => !value)} aria-label={language === "en" ? "Reverse quote" : language === "fa-AF" ? "برعکس‌ساختن نرخ" : "نرخ سرچپه کول"}>⇄</button>
-                  </div>
-                </div> : null}
+                {!sourceRateNeedsResolution && !targetRateNeedsResolution ? <TransactionRateControl
+                  language={language}
+                  automatic={!rateOverrideEnabled}
+                  canonicalRate={displayedTradeRate}
+                  sourceCurrency={tradeCurrency}
+                  targetCurrency={tradeRateTargetCurrency}
+                  reversed={tradeQuoteReversed}
+                  updatedAt={tradeRateEffectiveFrom}
+                  disabled={tradeBusy}
+                  onAutomaticChange={(automatic) => automatic ? restoreApprovedTradeRate() : changeDisplayedTradeRate(displayedTradeRate || "")}
+                  onCanonicalRateChange={changeDisplayedTradeRate}
+                  onReverse={() => setTradeQuoteReversed((value) => !value)}
+                /> : null}
 
                 <label className="exchange-money-card">
                   <span className="exchange-card-label" dir={isRtl(language) ? "rtl" : "ltr"}>
@@ -2911,17 +2880,6 @@ function App() {
                   />
                 </label>
               </div>
-              <details className="trade-optional-fields">
-                <summary>{rateWorkflowCopy.noteOptional}</summary>
-                <label>
-                  {t("note")}
-                  <input
-                    value={tradeNote}
-                    onChange={(event) => setTradeNote(event.target.value)}
-                    placeholder={t("optionalNote")}
-                  />
-                </label>
-              </details>
             </fieldset>
             {(
               <details className="trade-account-flow compact-account-flow">
@@ -2941,8 +2899,7 @@ function App() {
               </details>
             )}
             {tradeReviewing && tradePreview && (
-              <div className="confirmation-backdrop">
-              <section className="trade-confirmation confirmation-window" role="dialog" aria-modal="true" aria-labelledby="trade-confirmation-title">
+              <section className="trade-confirmation inline-transaction-review" aria-labelledby="trade-confirmation-title">
                 <h3 id="trade-confirmation-title">{u("confirmationTitle")}</h3>
                 <p>{u("confirmationIntro")}</p>
                 <div className="setup-summary receipt-review-summary">
@@ -2969,7 +2926,6 @@ function App() {
                   <button className="primary-action" type="submit" disabled={tradeBusy} autoFocus>{tradeBusy ? t("working") : u("confirmTransaction")} <span>→</span></button>
                 </div>
               </section>
-              </div>
             )}
             {!tradeReviewing && <button
               className="primary-action full"
@@ -2984,7 +2940,7 @@ function App() {
         </div>
       )}
       {routeAuthorized && operationKind && transactionFormActive && (
-        <div className="transaction-inline-form">
+        <div className="transaction-route">
           <form
             className="financial-task-form transaction-page-form operation-entry-form"
             onSubmit={submitOperation}
@@ -3061,6 +3017,7 @@ function App() {
               currency={operationCurrency}
               language={language}
               canPublish={capability("rates.manage")}
+              canRequestApproval={capability("approval.request")}
               value={operationRatePublication}
               onChange={setOperationRatePublication}
               onReadyChange={setOperationRateReady}
@@ -3241,7 +3198,7 @@ function App() {
         </div>
       )}
       {routeAuthorized && openingFormActive && (
-        <div className="transaction-inline-form">
+        <div className="transaction-route">
           <form
             className="financial-task-form transaction-page-form"
             onSubmit={submitOpeningBalance}
@@ -3296,6 +3253,7 @@ function App() {
               currency={openingCurrency}
               language={language}
               canPublish={capability("rates.manage")}
+              canRequestApproval={capability("approval.request")}
               value={openingRatePublication}
               onChange={setOpeningRatePublication}
               onReadyChange={setOpeningRateReady}
@@ -3514,6 +3472,7 @@ function SecurityOverviewView({
   organizationId,
   deviceId,
   canManage,
+  canManagePolicy,
   onToast,
   onStatusChange,
   onLockNow,
@@ -3523,6 +3482,7 @@ function SecurityOverviewView({
   organizationId: string | null;
   deviceId: string;
   canManage: boolean;
+  canManagePolicy: boolean;
   onToast: (message: string) => void;
   onStatusChange: (status: AppLockStatus) => void;
   onLockNow: () => void;
@@ -3531,9 +3491,14 @@ function SecurityOverviewView({
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [lockBusy, setLockBusy] = useState(false);
-  const [lockStatus, setLockStatus] = useState<AppLockStatus>({ configured: organizationId === "inspection", lockedUntil: null, passkeyEnabled: isPasskeyFeatureEnabled(), autoLockSeconds: 900, lockOnBackground: true });
+  const [lockStatus, setLockStatus] = useState<AppLockStatus>({ configured: organizationId === "inspection", required: false, lockedUntil: null, passkeyEnabled: isPasskeyFeatureEnabled(), autoLockSeconds: 900, lockOnBackground: true, maximumTimeoutSeconds: 900 });
   const [autoLockSeconds, setAutoLockSeconds] = useState<AppLockStatus["autoLockSeconds"]>(900);
   const [lockOnBackground, setLockOnBackground] = useState(true);
+  const [requiredLockRoles, setRequiredLockRoles] = useState<string[]>([]);
+  const [maximumLockTimeout, setMaximumLockTimeout] = useState<30 | 60 | 300 | 900>(900);
+  const [sensitiveReunlockSeconds, setSensitiveReunlockSeconds] = useState(300);
+  const [hawalaTazkiraImagesRequired, setHawalaTazkiraImagesRequired] = useState<1 | 2>(1);
+  const [policyBusy, setPolicyBusy] = useState(false);
   const copy = language === "en"
     ? {
         kicker: "Control Center",
@@ -3550,11 +3515,11 @@ function SecurityOverviewView({
         auditLayer: "Audit trail",
         choose: "Choose an area to review",
         appLock: "App lock",
-        appLockCopy: "Use a six-digit server-protected PIN or a passkey. PIN setup requires two-step verification.",
+        appLockCopy: "Use a six-digit server-protected PIN or Fingerprint / Face ID. PIN setup requires two-step verification.",
         pin: "New six-digit PIN",
         confirmPin: "Confirm PIN",
         savePin: "Save app PIN",
-        passkey: "Register passkey",
+        passkey: "Use Fingerprint / Face ID",
         mismatch: "The PINs do not match.",
         saved: "App lock is ready.",
       }
@@ -3573,7 +3538,7 @@ function SecurityOverviewView({
           approvalLayer: "تأییدها",
           auditLayer: "تاریخچه",
           choose: "یک بخش را برای بررسی انتخاب کنید",
-          appLock: "قفل برنامه", appLockCopy: "از رمز شش‌رقمی محفوظ در سرور یا کلید عبور استفاده کنید. ساخت رمز به تأیید دومرحله‌ای نیاز دارد.", pin: "رمز شش‌رقمی جدید", confirmPin: "تکرار رمز", savePin: "ذخیره رمز برنامه", passkey: "ثبت کلید عبور", mismatch: "رمزها یکسان نیست.", saved: "قفل برنامه آماده است.",
+          appLock: "قفل برنامه", appLockCopy: "از رمز شش‌رقمی محفوظ در سرور یا اثر انگشت / تشخیص چهره استفاده کنید. ساخت رمز به تأیید دومرحله‌ای نیاز دارد.", pin: "رمز شش‌رقمی جدید", confirmPin: "تکرار رمز", savePin: "ذخیره رمز برنامه", passkey: "استفاده از اثر انگشت / تشخیص چهره", mismatch: "رمزها یکسان نیست.", saved: "قفل برنامه آماده است.",
         }
       : {
           kicker: "د کنټرول مرکز",
@@ -3589,7 +3554,7 @@ function SecurityOverviewView({
           approvalLayer: "تاییدونه",
           auditLayer: "تاریخ",
           choose: "د کتنې لپاره یوه برخه وټاکئ",
-          appLock: "د اپ قفل", appLockCopy: "شپږ عددي په سرور کې خوندي PIN یا پاسکي وکاروئ. د PIN جوړول دوه پړاوه تایید غواړي.", pin: "نوی شپږ عددي PIN", confirmPin: "PIN بیا ولیکئ", savePin: "د اپ PIN خوندي کول", passkey: "پاسکي ثبتول", mismatch: "PIN یو شان نه دی.", saved: "د اپ قفل چمتو دی.",
+          appLock: "د اپ قفل", appLockCopy: "شپږ عددي په سرور کې خوندي PIN یا د ګوتې نښه / د مخ پېژندنه وکاروئ. د PIN جوړول دوه پړاوه تایید غواړي.", pin: "نوی شپږ عددي PIN", confirmPin: "PIN بیا ولیکئ", savePin: "د اپ PIN خوندي کول", passkey: "د ګوتې نښه / د مخ پېژندنه کارول", mismatch: "PIN یو شان نه دی.", saved: "د اپ قفل چمتو دی.",
         };
   const lockControls = ({
     en: { enabled: "Enabled", disabled: "Not enabled", autoLock: "Auto-lock after", seconds30: "30 seconds", minute1: "1 minute", minutes5: "5 minutes", minutes15: "15 minutes", background: "Lock when the app goes to the background", save: "Save lock settings", lockNow: "Lock Now", reset: "Reset app lock", recovery: "Forgot the PIN? Sign out, use your password and two-step verification, then reset it here.", settingsSaved: "Lock settings saved.", resetDone: "App lock reset." },
@@ -3607,6 +3572,18 @@ function SecurityOverviewView({
     });
     return () => { active = false; };
   }, [deviceId, organizationId]);
+  useEffect(() => {
+    if (!organizationId || organizationId === "inspection" || !canManagePolicy) return;
+    let active = true;
+    void getWorkspaceSettings(organizationId).then((result) => {
+      if (!active || !result.data) return;
+      setRequiredLockRoles(result.data.app_lock_required_roles ?? []);
+      setMaximumLockTimeout(result.data.app_lock_max_timeout_seconds ?? 900);
+      setSensitiveReunlockSeconds(result.data.app_lock_sensitive_reunlock_seconds ?? 300);
+      setHawalaTazkiraImagesRequired(result.data.hawala_tazkira_images_required ?? 1);
+    });
+    return () => { active = false; };
+  }, [canManagePolicy, organizationId]);
   const savePin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!organizationId || !/^\d{6}$/.test(pin)) return;
@@ -3640,6 +3617,13 @@ function SecurityOverviewView({
     const nextStatus: AppLockStatus = { ...lockStatus, configured: false, lockedUntil: null };
     setLockStatus(nextStatus); onStatusChange(nextStatus); onToast(lockControls.resetDone);
   };
+  const saveOrganizationLockPolicy = async () => {
+    if (!organizationId || !canManagePolicy) return;
+    setPolicyBusy(true);
+    const result = organizationId === "inspection" ? { error: null } : await updateAppLockPolicy({ organizationId, requiredRoles: requiredLockRoles, maxTimeoutSeconds: maximumLockTimeout, sensitiveReunlockSeconds, hawalaTazkiraImagesRequired });
+    setPolicyBusy(false);
+    onToast(result.error ?? lockControls.settingsSaved);
+  };
   return (
     <section className="professional-workspace security-overview">
       <header className="security-overview-hero">
@@ -3660,7 +3644,6 @@ function SecurityOverviewView({
       <p className="security-overview-prompt">{copy.choose}</p>
       <div className="control-center-grid">
         <button className="control-center-card" onClick={() => onNavigate("Team & Devices")}><AppIcon name="people" /><span><strong>{copy.devices}</strong><small>{copy.devicesCopy}</small></span><span aria-hidden="true">→</span></button>
-        <button className="control-center-card" onClick={() => { window.sessionStorage.setItem("sarafi-settings-section", "security"); onNavigate("Business Settings"); }}><AppIcon name="shield" /><span><strong>{copy.controls}</strong><small>{copy.controlsCopy}</small></span><span aria-hidden="true">→</span></button>
       </div>
       <AppLockSettings
         status={lockStatus}
@@ -3682,6 +3665,19 @@ function SecurityOverviewView({
         onLockNow={onLockNow}
         onReset={() => void resetAppLock()}
       />
+      {canManagePolicy ? <AppLockPolicySettings
+        language={language}
+        requiredRoles={requiredLockRoles}
+        maxTimeoutSeconds={maximumLockTimeout}
+        sensitiveReunlockSeconds={sensitiveReunlockSeconds}
+        hawalaTazkiraImagesRequired={hawalaTazkiraImagesRequired}
+        busy={policyBusy}
+        onRequiredRolesChange={setRequiredLockRoles}
+        onMaxTimeoutSecondsChange={setMaximumLockTimeout}
+        onSensitiveReunlockSecondsChange={setSensitiveReunlockSeconds}
+        onHawalaTazkiraImagesRequiredChange={setHawalaTazkiraImagesRequired}
+        onSave={() => void saveOrganizationLockPolicy()}
+      /> : null}
     </section>
   );
 }
@@ -3766,14 +3762,15 @@ function WorkspaceView({
     return (
       <ManageSarafi
         language={language}
+        organizationId={organizationId}
         roleLabel={roleLabel}
         canManageTeam={canManageTeam}
         canManageMoney={canManageMoney}
-        onNavigate={onNavigate}
+        onRoute={onRoute}
       />
     );
   if (section === "Security")
-    return <SecurityOverviewView language={language} organizationId={organizationId} deviceId={deviceId} canManage={hasCapability(capabilities, "security.manage")} onToast={onToast} onStatusChange={onAppLockChanged} onLockNow={onLockNow} onNavigate={onNavigate} />;
+    return <SecurityOverviewView language={language} organizationId={organizationId} deviceId={deviceId} canManage={hasCapability(capabilities, "app_lock.self.manage")} canManagePolicy={hasCapability(capabilities, "app_lock.policy.manage")} onToast={onToast} onStatusChange={onAppLockChanged} onLockNow={onLockNow} onNavigate={onNavigate} />;
   if (section === "Business Settings")
     return (
       <SettingsView
@@ -3781,9 +3778,10 @@ function WorkspaceView({
         organizationId={organizationId}
         organizationName={organizationName}
         branchName={branchName}
-        roleLabel={roleLabel}
         canManage={canManageMoney}
+        area={pathname.endsWith("/control/branches") ? "branches" : "business"}
         onDashboard={onDashboard}
+        onRoute={onRoute}
       />
     );
   if (["Compliance", "Compliance Reviews", "Compliance Cases"].includes(section))
@@ -3812,8 +3810,10 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         branchId={branchId}
+        businessDate={businessDate}
         activityRefresh={activityRefresh}
         onDashboard={onDashboard}
+        canResolveRates={hasCapability(capabilities, "rates.manage")}
       />
     );
   if (section === "People")
@@ -3822,6 +3822,7 @@ function WorkspaceView({
         language={language}
         organizationId={organizationId}
         branchId={branchId}
+        deviceId={deviceId}
         canListDocuments={hasCapability(capabilities, "documents.list")}
         canUploadDocuments={hasCapability(capabilities, "documents.upload")}
         canViewDocuments={hasCapability(capabilities, "documents.view")}
@@ -5205,34 +5206,40 @@ function MoneyLocationView({
   language,
   organizationId,
   branchId,
+  businessDate,
   activityRefresh,
   onDashboard,
+  canResolveRates,
 }: {
   language: Language;
   organizationId: string | null;
   branchId: string | null;
+  businessDate: string;
   activityRefresh: number;
   onDashboard: () => void;
+  canResolveRates: boolean;
 }) {
   const t = (key: Parameters<typeof translate>[1]) => translate(language, key);
   const [valuation, setValuation] = useState<MoneyValuationSnapshot | null>(null);
   const [valuationError, setValuationError] = useState("");
   const [comparisonCurrency, setComparisonCurrency] = useState("USD");
   const [scopeMode, setScopeMode] = useState<"all" | "branch">("all");
+  const inspectionMoneyRateScenario = new URLSearchParams(window.location.search).get("rateScenario") ?? "current";
+  const inspectionMoneyRateIncomplete = inspectionMoneyRateScenario === "missing" || inspectionMoneyRateScenario === "stale";
   const inspectionValuation: MoneyValuationSnapshot = {
     snapshot_id: "inspection-valuation-v7", snapshot_sha256: "7".repeat(64), snapshot_date: "2026-09-11", captured_at: "2026-09-11T22:55:00+04:30",
-    base_currency: "AFN", comparison_currency: "USD", valuation_rate_set_id: "inspection-rate-set", valuation_effective_at: "2026-09-11T22:55:00+04:30", quality: "current", total_complete: true, excluded_currency_count: 0, missing_currencies: [], stale_currencies: [],
-    totals: { available_base: "11000", available_valued_base: "11000", receivables_base: "0", payables_base: "0", hawala_net_base: "0", net_position_base: "11000", book_value_base: "11000", valuation_difference_base: "0", comparison_value: "171.875", comparison_rate: "64" },
+    base_currency: "AFN", comparison_currency: "USD", valuation_rate_set_id: "inspection-rate-set", valuation_effective_at: "2026-09-11T22:55:00+04:30", business_timezone: "Asia/Kabul", valuation_rate_source: "daily_rate_board", active_rate_board: "Kabul approved daily board", valuation_editor: "S. Rahimi", quality: inspectionMoneyRateIncomplete ? "partial" : "current", total_complete: !inspectionMoneyRateIncomplete, excluded_currency_count: inspectionMoneyRateIncomplete ? 1 : 0, missing_currencies: inspectionMoneyRateScenario === "missing" ? ["TRY"] : [], stale_currencies: inspectionMoneyRateScenario === "stale" ? ["TRY"] : [],
+    totals: { available_base: inspectionMoneyRateIncomplete ? null : "11000", available_valued_base: inspectionMoneyRateIncomplete ? "8400" : "11000", receivables_base: "0", payables_base: "0", hawala_net_base: "0", net_position_base: inspectionMoneyRateIncomplete ? "8400" : "11000", book_value_base: "11000", valuation_difference_base: inspectionMoneyRateIncomplete ? "-2600" : "0", comparison_value: inspectionMoneyRateIncomplete ? null : "171.875", comparison_rate: "64" },
     currencies: [
       { currency_code: "AFN", available: "2000", receivable: "0", payable: "0", hawala_net: "0", native_net: "2000", rate: "1", rate_status: "current", available_base: "2000", current_base: "2000", book_base: "2000" },
-      { currency_code: "TRY", available: "2000", receivable: "0", payable: "0", hawala_net: "0", native_net: "2000", rate: "1.3", rate_status: "current", available_base: "2600", current_base: "2600", book_base: "2600" },
+      { currency_code: "TRY", available: "2000", receivable: "0", payable: "0", hawala_net: "0", native_net: "2000", rate: inspectionMoneyRateScenario === "missing" ? null : "1.3", rate_status: inspectionMoneyRateScenario === "missing" ? "missing" : inspectionMoneyRateScenario === "stale" ? "stale" : "current", available_base: inspectionMoneyRateIncomplete ? null : "2600", current_base: inspectionMoneyRateIncomplete ? null : "2600", book_base: "2600" },
       { currency_code: "USD", available: "100", receivable: "0", payable: "0", hawala_net: "0", native_net: "100", rate: "64", rate_status: "current", available_base: "6400", current_base: "6400", book_base: "6400" },
     ], locations: [],
   };
   const activeValuation = organizationId === "inspection" ? inspectionValuation : valuation;
   const copy = ({
     en: {
-      title: "My Money", intro: "Exact available balances valued from one approved daily rate snapshot.", total: "Total available money — today's estimated value", equivalent: "Equivalent", scope: "Scope", allLocations: "All branches and cashboxes", thisBranch: "This branch", snapshot: "Valuation snapshot", compare: "Compare in", refresh: "Refresh", breakdown: "Available money by currency", native: "Available balance", dailyRate: "Daily rate to", currentValue: "Available value", quality: "Valuation quality", currentQuality: "All available-money rates are approved and current", partialQuality: "Total incomplete", handling: "Rate handling", missingRule: "Missing rate: total stays incomplete", staleRule: "Stale rate: total stays incomplete", bookValue: "Book value", receivables: "Receivables", payables: "Payables", hawalaNet: "Hawala position", locations: "View by location", hideLocations: "Hide locations", missingCurrencies: "Needs a current rate",
+      title: "My Money", intro: "Exact available balances valued from one approved daily rate snapshot.", total: "Total available money — today's estimated value", equivalent: "Equivalent", scope: "Scope", allLocations: "All branches and cashboxes", thisBranch: "This branch", snapshot: "Valuation snapshot", compare: "Compare in", refresh: "Refresh", breakdown: "Available money by currency", native: "Available balance", dailyRate: "Daily rate to", currentValue: "Available value", quality: "Valuation quality", currentQuality: "All available-money rates are approved and current", partialQuality: "Total incomplete", handling: "Rate handling", missingRule: "Missing rate: total stays incomplete", staleRule: "Stale rate: total stays incomplete", bookValue: "Book value", receivables: "Receivables", payables: "Payables", hawalaNet: "Hawala position", locations: "View by location", hideLocations: "Hide locations", missingCurrencies: "Needs a current rate", fixRates: "Fix rates",
       balances: "Cashbox balances",
       balancesIntro: "One clear card for every cashbox.",
       cashbox: "Cashbox",
@@ -5250,7 +5257,7 @@ function MoneyLocationView({
       loading: "Loading cashboxes…",
     },
     "fa-AF": {
-      title: "پول من", intro: "پول موجود هر اسعار با یک مجموعه نرخ روزانه تأییدشده ارزش‌گذاری می‌شود.", total: "تمام پول موجود — ارزش تخمینی امروز", equivalent: "برابر با", scope: "ساحه", allLocations: "همه شعبه‌ها و صندوق‌ها", thisBranch: "همین شعبه", snapshot: "مجموعه نرخ ارزش‌گذاری", compare: "مقایسه به", refresh: "تازه‌سازی", breakdown: "پول موجود به تفکیک اسعار", native: "پول موجود", dailyRate: "نرخ روزانه به", currentValue: "ارزش پول موجود", quality: "کیفیت ارزش‌گذاری", currentQuality: "همه نرخ‌های پول موجود تأییدشده و تازه است", partialQuality: "جمع کامل نیست", handling: "برخورد با نرخ", missingRule: "نرخ نیست: جمع کامل نشان داده نمی‌شود", staleRule: "نرخ کهنه: جمع کامل نشان داده نمی‌شود", bookValue: "ارزش دفتری", receivables: "طلب‌ها", payables: "قرض‌ها", hawalaNet: "وضعیت حواله", locations: "نمایش به تفکیک محل", hideLocations: "پنهان‌کردن محل‌ها", missingCurrencies: "به نرخ تازه نیاز دارد",
+      title: "پول من", intro: "پول موجود هر اسعار با یک مجموعه نرخ روزانه تأییدشده ارزش‌گذاری می‌شود.", total: "تمام پول موجود — ارزش تخمینی امروز", equivalent: "برابر با", scope: "ساحه", allLocations: "همه شعبه‌ها و صندوق‌ها", thisBranch: "همین شعبه", snapshot: "مجموعه نرخ ارزش‌گذاری", compare: "مقایسه به", refresh: "تازه‌سازی", breakdown: "پول موجود به تفکیک اسعار", native: "پول موجود", dailyRate: "نرخ روزانه به", currentValue: "ارزش پول موجود", quality: "کیفیت ارزش‌گذاری", currentQuality: "همه نرخ‌های پول موجود تأییدشده و تازه است", partialQuality: "جمع کامل نیست", handling: "برخورد با نرخ", missingRule: "نرخ نیست: جمع کامل نشان داده نمی‌شود", staleRule: "نرخ کهنه: جمع کامل نشان داده نمی‌شود", bookValue: "ارزش دفتری", receivables: "طلب‌ها", payables: "قرض‌ها", hawalaNet: "وضعیت حواله", locations: "نمایش به تفکیک محل", hideLocations: "پنهان‌کردن محل‌ها", missingCurrencies: "به نرخ تازه نیاز دارد", fixRates: "اصلاح نرخ‌ها",
       balances: "موجودی صندوق‌ها",
       balancesIntro: "برای هر صندوق یک کارت ساده.",
       cashbox: "صندوق",
@@ -5268,7 +5275,7 @@ function MoneyLocationView({
       loading: "صندوق‌ها بار می‌شود…",
     },
     "ps-AF": {
-      title: "زما پیسې", intro: "د هر اسعار شته پیسې د یوې تایید شوې ورځنۍ نرخ ټولګې له مخې ارزول کېږي.", total: "ټولې شته پیسې — د نن اټکلي ارزښت", equivalent: "برابر", scope: "ساحه", allLocations: "ټولې څانګې او صندوقونه", thisBranch: "همدا څانګه", snapshot: "د ارزونې نرخ ټولګه", compare: "پرتله په", refresh: "تازه کول", breakdown: "شته پیسې د اسعارو له مخې", native: "شته پیسې", dailyRate: "ورځنی نرخ په", currentValue: "د شته پیسو ارزښت", quality: "د ارزونې کیفیت", currentQuality: "د شته پیسو ټول نرخونه تایید او تازه دي", partialQuality: "ټولیزه شمېره بشپړه نه ده", handling: "د نرخ چلند", missingRule: "نرخ نشته: بشپړه مجموعه نه ښودل کېږي", staleRule: "زوړ نرخ: بشپړه مجموعه نه ښودل کېږي", bookValue: "دفتري ارزښت", receivables: "اخیستنې", payables: "ورکړې", hawalaNet: "د حوالې حالت", locations: "د ځای له مخې کتل", hideLocations: "ځایونه پټول", missingCurrencies: "تازه نرخ ته اړتیا لري",
+      title: "زما پیسې", intro: "د هر اسعار شته پیسې د یوې تایید شوې ورځنۍ نرخ ټولګې له مخې ارزول کېږي.", total: "ټولې شته پیسې — د نن اټکلي ارزښت", equivalent: "برابر", scope: "ساحه", allLocations: "ټولې څانګې او صندوقونه", thisBranch: "همدا څانګه", snapshot: "د ارزونې نرخ ټولګه", compare: "پرتله په", refresh: "تازه کول", breakdown: "شته پیسې د اسعارو له مخې", native: "شته پیسې", dailyRate: "ورځنی نرخ په", currentValue: "د شته پیسو ارزښت", quality: "د ارزونې کیفیت", currentQuality: "د شته پیسو ټول نرخونه تایید او تازه دي", partialQuality: "ټولیزه شمېره بشپړه نه ده", handling: "د نرخ چلند", missingRule: "نرخ نشته: بشپړه مجموعه نه ښودل کېږي", staleRule: "زوړ نرخ: بشپړه مجموعه نه ښودل کېږي", bookValue: "دفتري ارزښت", receivables: "اخیستنې", payables: "ورکړې", hawalaNet: "د حوالې حالت", locations: "د ځای له مخې کتل", hideLocations: "ځایونه پټول", missingCurrencies: "تازه نرخ ته اړتیا لري", fixRates: "نرخونه سمول",
       balances: "د صندوقونو پیسې",
       balancesIntro: "د هر صندوق لپاره یو ساده کارت.",
       cashbox: "صندوق",
@@ -5292,21 +5299,42 @@ function MoneyLocationView({
     .format(new Date(value));
   const loadValuation = useCallback(async () => {
     if (!organizationId || organizationId === "inspection") return;
-    const valuationResult = await getMoneyValuationSnapshot({ organizationId, comparisonCurrency, branchId: scopeMode === "branch" ? branchId : null });
+    const valuationResult = await getMoneyValuationSnapshot({ organizationId, businessDate, comparisonCurrency, branchId: scopeMode === "branch" ? branchId : null });
     if (valuationResult.data) { setValuation(valuationResult.data); setValuationError(""); }
     if (valuationResult.error) setValuationError(valuationResult.error);
-  }, [branchId, comparisonCurrency, organizationId, scopeMode]);
+  }, [branchId, businessDate, comparisonCurrency, organizationId, scopeMode]);
+  const resolveDailyRate = async (currency: string, dailyRate: string) => {
+    if (!organizationId || organizationId === "inspection") return "A live organization is required.";
+    const control = await getOrganizationControlPlane(organizationId);
+    if (control.error || !control.data) return control.error ?? "The active rate board is unavailable.";
+    const activeGroup = control.data.rate_groups.find((group) => group.active);
+    if (!activeGroup) return "Create or activate a rate board before saving this rate.";
+    const current = activeGroup.rates
+      .filter((item) => item.active && item.from_currency === currency && item.to_currency === activeValuation?.base_currency)
+      .toSorted((left, right) => new Date(right.effective_from).getTime() - new Date(left.effective_from).getTime())[0];
+    let buyRate = dailyRate;
+    let sellRate = dailyRate;
+    if (current) {
+      const halfSpread = new Decimal(current.sell_rate).minus(current.buy_rate).div(2);
+      buyRate = Decimal.max(new Decimal(dailyRate).minus(halfSpread), new Decimal("0.000001")).toString();
+      sellRate = new Decimal(dailyRate).plus(halfSpread).toString();
+    }
+    const result = await setRateGroupExchangeRate({ organizationId, groupId: activeGroup.id, branchId: scopeMode === "branch" ? branchId : null, sourceCurrency: currency, targetCurrency: activeValuation?.base_currency ?? "AFN", buyRate, sellRate, spreadTolerance: current?.spread_tolerance ?? undefined });
+    if (result.error) return result.error;
+    await loadValuation();
+    return null;
+  };
 
   useEffect(() => {
     let active = true;
     if (!organizationId || organizationId === "inspection") return;
-    void getMoneyValuationSnapshot({ organizationId, comparisonCurrency, branchId: scopeMode === "branch" ? branchId : null }).then((valuationResult) => {
+    void getMoneyValuationSnapshot({ organizationId, businessDate, comparisonCurrency, branchId: scopeMode === "branch" ? branchId : null }).then((valuationResult) => {
       if (!active) return;
       if (valuationResult.data) { setValuation(valuationResult.data); setValuationError(""); }
       if (valuationResult.error) setValuationError(valuationResult.error);
     });
     return () => { active = false; };
-  }, [activityRefresh, branchId, comparisonCurrency, organizationId, scopeMode]);
+  }, [activityRefresh, branchId, businessDate, comparisonCurrency, organizationId, scopeMode]);
 
   return (
     <section className="money-workspace money-valuation-workspace">
@@ -5322,12 +5350,12 @@ function MoneyLocationView({
       </div>
       <section className="money-valuation-controls" aria-label={copy.snapshot}>
         <label><span>{copy.scope}</span><select value={scopeMode} onChange={(event) => setScopeMode(event.target.value as "all" | "branch")}><option value="all">{copy.allLocations}</option><option value="branch">{copy.thisBranch}</option></select></label>
-        <span><small>{copy.snapshot}</small><b>{activeValuation?.valuation_effective_at ? formatSnapshotTime(activeValuation.valuation_effective_at) : "—"}</b></span>
+        <span className="money-snapshot-source"><small>{copy.snapshot}</small><b>{activeValuation?.valuation_effective_at ? formatSnapshotTime(activeValuation.valuation_effective_at) : "—"}</b>{activeValuation?.active_rate_board ? <em>{activeValuation.active_rate_board}{activeValuation.valuation_editor ? ` · ${activeValuation.valuation_editor}` : ""}</em> : null}</span>
         <label><span>{copy.compare}</span><select value={comparisonCurrency} onChange={(event) => setComparisonCurrency(event.target.value)}><option value="USD">USD</option><option value="AFN">AFN</option><option value="EUR">EUR</option></select></label>
         <button className="text-button" type="button" onClick={() => void loadValuation()}>{copy.refresh}</button>
       </section>
       {valuationError ? <div className="money-valuation-warning" role="alert">{valuationError}</div> : null}
-      {activeValuation ? <MoneyValuationSummary language={language} valuation={activeValuation} labels={copy} currencyLabel={t("currency")} formatAmount={formatFinancialAmount} /> : null}
+      {activeValuation ? <MoneyValuationSummary language={language} valuation={activeValuation} labels={copy} currencyLabel={t("currency")} formatAmount={formatFinancialAmount} onResolveRate={canResolveRates ? resolveDailyRate : undefined} /> : null}
     </section>
   );
 }
@@ -5336,6 +5364,7 @@ function PeopleView({
   language,
   organizationId,
   branchId,
+  deviceId,
   canListDocuments,
   canUploadDocuments,
   canViewDocuments,
@@ -5347,6 +5376,7 @@ function PeopleView({
   language: Language;
   organizationId: string | null;
   branchId: string | null;
+  deviceId: string;
   canListDocuments: boolean;
   canUploadDocuments: boolean;
   canViewDocuments: boolean;
@@ -5471,7 +5501,7 @@ function PeopleView({
   };
   const previewDocument = async (documentId: string) => {
     if (!canViewDocuments || !organizationId) return;
-    const result = await getPrivateDocumentUrl(organizationId, documentId);
+    const result = await getPrivateDocumentUrl(organizationId, documentId, deviceId);
     if (result.error) onToast(u("requestFailed"));
     else if (result.data)
       window.open(result.data, "_blank", "noopener,noreferrer");
@@ -6464,7 +6494,7 @@ function RatesView({
               return <div className="market-rate-row" role="row" key={`${activeMarket?.marketCode}-${item.currency}`}>
                 <span className="market-currency-cell" role="cell">
                   <span className="market-currency-mark" aria-hidden="true">{currency?.symbol ?? currencySymbols[item.currency] ?? item.currency.slice(0, 1)}</span>
-                  <span><strong>{item.currency}{item.quotedUnits > 1 ? " 1K" : ""}</strong><small>{currency ? currencyName(language, currency) : localCurrencyName(language, item.currency)}</small></span>
+                  <span><strong>{item.currency}{item.quotedUnits > 1 ? " 1K" : ""}</strong><small>{currency?.name_dari ?? localCurrencyName("fa-AF", item.currency)}</small></span>
                 </span>
                 <bdi role="cell" data-label={t("buyRate")}>{displayedRate(item.buy, item.quotedUnits)}</bdi>
                 <bdi role="cell" data-label={t("sellRate")}>{displayedRate(item.sell, item.quotedUnits)}</bdi>
@@ -7606,7 +7636,7 @@ function HawalaView({
       ? (language === "en" ? "Outgoing" : language === "fa-AF" ? "خروجی" : "تلونکې")
       : (language === "en" ? "Legacy record" : language === "fa-AF" ? "ثبت قدیمی" : "پخوانی ثبت");
   const [transfers, setTransfers] = useState<HawalaTransferRecord[]>(() => organizationId === "inspection" ? [
-    { id: "inspection-incoming", beneficiary_name: "Ahmad Rahimi", origin_location: "Kabul Central", destination_location: "Herat Main", currency_code: "USD", amount: "100", fee: "2", reference_code: "INCOMING-1001", status: "ready", created_at: "2026-09-11T18:20:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "valid", recipient_type: "external_partner", recipient_organization_id: "inspection", recipient_branch_id: "inspection-branch", expires_at: "2026-09-14T18:20:00+04:30" },
+    { id: "inspection-incoming", beneficiary_name: "Ahmad Rahimi", origin_location: "Kabul Central", destination_location: "Herat Main", currency_code: "USD", amount: "100", fee: "2", reference_code: "HW-7K2M-9841", status: "ready", created_at: "2026-09-11T18:20:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "valid", recipient_type: "external_partner", recipient_organization_id: "inspection", recipient_branch_id: "inspection-branch", expires_at: "2026-09-14T18:20:00+04:30" },
     { id: "inspection-incoming-2", beneficiary_name: "Farid Ahmad", origin_location: "Kabul Central", destination_location: "Herat Main", currency_code: "AFN", amount: "50000", fee: "300", reference_code: "HW-4Q9P-2810", status: "acknowledged", created_at: "2026-09-11T17:10:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "valid" },
     { id: "inspection-outgoing", beneficiary_name: "Maryam Wafa", origin_location: "Kabul Central", destination_location: "Mazar Partner", currency_code: "USD", amount: "200", fee: "3", reference_code: "HW-8B6R-1032", status: "sent", created_at: "2026-09-11T16:00:00+04:30", direction: "outgoing", hawala_partner_id: "inspection-partner", integrity_state: "valid" },
     { id: "inspection-completed", beneficiary_name: "Sediq Rahmani", origin_location: "Herat Main", destination_location: "Kabul Central", currency_code: "AFN", amount: "25000", fee: "200", reference_code: "HW-2A8N-6604", status: "paid", created_at: "2026-09-10T14:30:00+04:30", direction: "incoming", hawala_partner_id: "inspection-partner", integrity_state: "valid" },
@@ -7673,6 +7703,7 @@ function HawalaView({
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
   const [identityFront, setIdentityFront] = useState<File | null>(null);
   const [identityBack, setIdentityBack] = useState<File | null>(null);
+  const [requiredPayoutImages, setRequiredPayoutImages] = useState<1 | 2>(1);
   const identityFrontPreview = useMemo(() => identityFront ? URL.createObjectURL(identityFront) : "", [identityFront]);
   const identityBackPreview = useMemo(() => identityBack ? URL.createObjectURL(identityBack) : "", [identityBack]);
   useEffect(() => () => { if (identityFrontPreview) URL.revokeObjectURL(identityFrontPreview); }, [identityFrontPreview]);
@@ -7716,7 +7747,8 @@ function HawalaView({
         listMoneyAccounts(organizationId),
         listCurrencyCatalog(organizationId),
         listHawalaPartners(organizationId),
-      ]).then(([result, accountResult, currencyResult, partnerResult]) => {
+        getWorkspaceSettings(organizationId),
+      ]).then(([result, accountResult, currencyResult, partnerResult, settingsResult]) => {
         if (result.data) setTransfers(result.data);
         if (accountResult.data) {
           setAccounts(accountResult.data);
@@ -7729,6 +7761,7 @@ function HawalaView({
           setCreatePartnerId((current) => current || firstReadyPartner?.id || "");
           setDestination((current) => current || firstReadyPartner?.recipient_location || firstReadyPartner?.recipient_branch_name || firstReadyPartner?.name || "");
         }
+        if (settingsResult.data) setRequiredPayoutImages(settingsResult.data.hawala_tazkira_images_required ?? 1);
       });
   }, [language, organizationId, branchId]);
   useEffect(() => {
@@ -7841,7 +7874,7 @@ function HawalaView({
     setSearchBusy(true);
     if (organizationId === "inspection") {
       setPayoutMatch(payoutCode.trim().toUpperCase() === "INCOMING-1001" ? {
-        transfer_id: "inspection-incoming", reference_code: "INCOMING-1001", beneficiary_name: "Ahmad Rahimi", destination_location: "Kabul",
+        transfer_id: "inspection-incoming", reference_code: "HW-7K2M-9841", beneficiary_name: "Ahmad Rahimi", destination_location: "Herat Main",
         currency_code: "AFN", amount: "25000", branch_id: "inspection-branch", hawala_partner_id: "inspection-partner",
       } : null);
       setSearchBusy(false);
@@ -7854,7 +7887,7 @@ function HawalaView({
   };
   const confirmPayout = async () => {
     const matchedPayout = activePayoutMatch;
-    if (!organizationId || !matchedPayout || !moneyAccountId || !identityConfirmed || identityReference.trim().length < 2 || !identityFront || !identityBack) return;
+    if (!organizationId || !matchedPayout || !moneyAccountId || !deviceId || !identityConfirmed || identityReference.trim().length < 2 || !identityFront || (requiredPayoutImages === 2 && !identityBack)) return;
     if (organizationId === "inspection") {
       const preview = { id: "inspection-incoming", beneficiary_name: matchedPayout.beneficiary_name, origin_location: "—", destination_location: matchedPayout.destination_location, currency_code: matchedPayout.currency_code, amount: matchedPayout.amount, fee: "0", reference_code: matchedPayout.reference_code, status: "paid", created_at: new Date().toISOString(), direction: "incoming" as const, payout_journal_entry_id: "inspection-payout-entry" };
       await completeHawalaTransfer(preview, language === "en" ? "Hawala payout" : language === "fa-AF" ? "دادن پول حواله" : "د حوالې ورکړه", pathname, preview.payout_journal_entry_id);
@@ -7862,13 +7895,26 @@ function HawalaView({
       return;
     }
     setTransitionBusy(matchedPayout.reference_code);
-    const [frontUpload, backUpload] = await Promise.all([
-      uploadPrivateHawalaIdentityDocument(organizationId, matchedPayout.transfer_id, "tazkira_front", identityFront),
-      uploadPrivateHawalaIdentityDocument(organizationId, matchedPayout.transfer_id, "tazkira_back", identityBack),
-    ]);
-    if (!frontUpload.data || !backUpload.data) {
+    const draftResult = await beginHawalaPayoutDraft({
+      organizationId,
+      transferId: matchedPayout.transfer_id,
+      deviceId,
+      clientCommandId: crypto.randomUUID(),
+    });
+    if (!draftResult.data) {
       setTransitionBusy(null);
-      onToast(localizedFinancialError(language, frontUpload.error ?? backUpload.error ?? "HAWALA_IDENTITY_DOCUMENTS_REQUIRED", u("couldNotSave")));
+      onToast(localizedFinancialError(language, draftResult.error ?? "HAWALA_PAYOUT_DRAFT_REQUIRED", u("couldNotSave")));
+      return;
+    }
+    const existingSides = new Set(draftResult.data.documents.map((document) => document.side));
+    const identityUploads = await Promise.all([
+      ...(!existingSides.has("tazkira_front") ? [uploadPrivateHawalaIdentityDocument(organizationId, draftResult.data.id, "tazkira_front", identityFront)] : []),
+      ...(identityBack && !existingSides.has("tazkira_back") ? [uploadPrivateHawalaIdentityDocument(organizationId, draftResult.data.id, "tazkira_back", identityBack)] : []),
+    ]);
+    const failedUpload = identityUploads.find((upload) => !upload.data);
+    if (failedUpload) {
+      setTransitionBusy(null);
+      onToast(localizedFinancialError(language, failedUpload.error ?? "HAWALA_IDENTITY_DOCUMENTS_REQUIRED", u("couldNotSave")));
       return;
     }
     const command = {
@@ -7877,12 +7923,13 @@ function HawalaView({
       money_account_id: moneyAccountId,
       identity_confirmed: true as const,
       recipient_identity_reference: identityReference,
-      identity_document_ids: [frontUpload.data.id, backUpload.data.id],
+      identity_document_ids: [...draftResult.data.documents.map((document) => document.id), ...identityUploads.map((upload) => upload.data!.id)],
       device_id: deviceId || undefined,
       approval_reason: "Beneficiary payout above the configured approval threshold",
-      client_command_id: crypto.randomUUID(),
+      client_command_id: draftResult.data.client_command_id,
+      payout_draft_id: draftResult.data.id,
     };
-    const result = await payHawalaBeneficiary(command);
+    const result = await completeHawalaPayoutDraft(command);
     if (result.error?.includes("HAWALA_APPROVAL_REQUIRED")) {
       const approval = await requestHawalaPayoutApproval(command);
       if (approval.data?.status === "approved") {
@@ -7990,8 +8037,9 @@ function HawalaView({
   const visiblePartners = partners.filter((partner) => (recipientType === "all" || partner.endpoint_type === recipientType)
     && (!normalizedPartnerSearch || `${partner.name} ${partner.recipient_organization_name ?? ""} ${partner.recipient_branch_name ?? ""} ${partner.recipient_location ?? ""}`.toLocaleLowerCase().includes(normalizedPartnerSearch)));
   const visibleHawalaTransfers = transfers.filter((transfer) => {
-    const tabMatches = routeHawalaListTab === "incoming" ? transfer.direction === "incoming"
-      : routeHawalaListTab === "outgoing" ? transfer.direction === "outgoing"
+    const tabMatches = routeHawalaListTab === "incoming" ? transfer.direction === "incoming" && !["paid", "completed"].includes(transfer.status)
+      : routeHawalaListTab === "outgoing" ? transfer.direction === "outgoing" && !["paid", "completed"].includes(transfer.status)
+      : routeHawalaListTab === "payout" ? transfer.direction === "incoming" && transfer.status === "ready"
       : ["paid", "completed"].includes(transfer.status);
     const searchMatches = !normalizedHawalaSearch || `${transfer.reference_code} ${transfer.beneficiary_name} ${transfer.origin_location} ${transfer.destination_location}`.toLocaleLowerCase().includes(normalizedHawalaSearch);
     return tabMatches && searchMatches
@@ -8037,6 +8085,7 @@ function HawalaView({
               currency={settlementRateLine.currency_code}
               language={language}
               canPublish={hasCapability(capabilities, "rates.manage")}
+              canRequestApproval={hasCapability(capabilities, "approval.request")}
               value={settlementRatePublication}
               onChange={setSettlementRatePublication}
               onReadyChange={setSettlementRateReady}
@@ -8060,6 +8109,7 @@ function HawalaView({
               identityConfirmed={identityConfirmed}
               identityFront={identityFront}
               identityBack={identityBack}
+              requiredImageCount={requiredPayoutImages}
               frontPreview={identityFrontPreview}
               backPreview={identityBackPreview}
               busy={transitionBusy === activePayoutMatch.reference_code}
@@ -8109,6 +8159,7 @@ function HawalaView({
             currency={currency}
             language={language}
             canPublish={hasCapability(capabilities, "rates.manage")}
+            canRequestApproval={hasCapability(capabilities, "approval.request")}
             value={createRatePublication}
             onChange={setCreateRatePublication}
             onReadyChange={setCreateRateReady}

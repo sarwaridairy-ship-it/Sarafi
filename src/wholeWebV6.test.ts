@@ -34,8 +34,10 @@ describe("whole-web v6 acceptance contracts", () => {
     expect(router).toContain("errorElement");
     expect(router).toContain('lazy(() => import("../App"))');
     expect(app).toContain("<Outlet");
-    expect(app.indexOf("<Outlet")).toBeLessThan(app.indexOf('className="transaction-inline-form"'));
-    expect(app.indexOf("</main>", app.indexOf("<Outlet"))).toBeGreaterThan(app.lastIndexOf('className="transaction-inline-form"'));
+    expect(app.lastIndexOf("<main", app.indexOf("<Outlet"))).toBeGreaterThanOrEqual(0);
+    expect(app.indexOf("</main>", app.indexOf("<Outlet"))).toBeGreaterThan(app.indexOf("<Outlet"));
+    expect(app).toContain('className="transaction-route"');
+    expect(app).not.toContain('className="transaction-inline-form"');
     expect(app).not.toContain("sectionFromPath");
     expect(app).toContain("useParams");
     expect(app).not.toContain('pathname.match(/\\/debts\\/');

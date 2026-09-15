@@ -23,6 +23,7 @@ export type MoneyValuationLabels = {
   locations: string;
   hideLocations: string;
   missingCurrencies: string;
+  fixRates: string;
 };
 
 type SharedProps = {
@@ -31,6 +32,7 @@ type SharedProps = {
   labels: MoneyValuationLabels;
   currencyLabel: string;
   formatAmount: (value: string | number) => string;
+  onResolveRate?: (currency: string, rate: string) => Promise<string | null>;
 };
 
 function rateStatusLabel(language: Language, status: MoneyValuationSnapshot["currencies"][number]["rate_status"]) {
@@ -72,10 +74,25 @@ export function CurrencyValuationTable({ language, valuation, labels, currencyLa
 }
 
 export function MoneyValuationSummary(props: SharedProps) {
-  const { language, valuation, labels, formatAmount } = props;
+  const { language, valuation, labels, formatAmount, onResolveRate } = props;
   const [showLocations, setShowLocations] = useState(false);
+  const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+  const [savingRate, setSavingRate] = useState("");
+  const [rateError, setRateError] = useState("");
   const availableCurrencyCount = valuation.currencies.filter((item) => new Decimal(item.available || 0).isPositive()).length;
   const availableCurrencyCopy = language === "en" ? "available currencies" : language === "fa-AF" ? "اسعار موجود" : "شته اسعار";
+  const unresolvedCurrencies = [...new Set([...valuation.missing_currencies, ...valuation.stale_currencies])];
+  const saveLabel = language === "en" ? "Save daily rate" : language === "fa-AF" ? "ذخیره نرخ روزانه" : "ورځنی نرخ ساتل";
+  const rateLabel = language === "en" ? "AFN daily rate" : language === "fa-AF" ? "نرخ روزانه به افغانی" : "په افغانۍ ورځنی نرخ";
+  const saveRate = async (currency: string) => {
+    const next = rateDrafts[currency]?.trim() ?? "";
+    if (!onResolveRate || !next || !new Decimal(next).isPositive()) return;
+    setSavingRate(currency);
+    setRateError("");
+    const error = await onResolveRate(currency, next);
+    setSavingRate("");
+    if (error) setRateError(error);
+  };
 
   return (
     <>
@@ -103,7 +120,17 @@ export function MoneyValuationSummary(props: SharedProps) {
           <section>
             <h2>{labels.quality}</h2>
             <p className={valuation.total_complete ? "positive" : "money-partial"}>● {valuation.total_complete ? labels.currentQuality : labels.partialQuality}</p>
-            {!valuation.total_complete ? <small>{labels.missingCurrencies}: {[...valuation.missing_currencies, ...valuation.stale_currencies].join(", ") || "—"}</small> : null}
+            {!valuation.total_complete ? <>
+              <small>{labels.missingCurrencies}: {[...valuation.missing_currencies, ...valuation.stale_currencies].join(", ") || "—"}</small>
+              {onResolveRate ? <div className="money-inline-rate-fixes" aria-label={labels.fixRates}>
+                <strong>{labels.fixRates}</strong>
+                {unresolvedCurrencies.map((currency) => <form key={currency} onSubmit={(event) => { event.preventDefault(); void saveRate(currency); }}>
+                  <label><span>{currency} · {rateLabel}</span><input required min="0.000001" step="any" inputMode="decimal" dir="ltr" value={rateDrafts[currency] ?? ""} onChange={(event) => setRateDrafts((current) => ({ ...current, [currency]: event.target.value }))} /></label>
+                  <button className="text-button" disabled={savingRate === currency}>{savingRate === currency ? "…" : saveLabel}</button>
+                </form>)}
+                {rateError ? <small className="money-rate-error" role="alert">{rateError}</small> : null}
+              </div> : null}
+            </> : null}
           </section>
           <section><h2>{labels.handling}</h2><p>● {labels.missingRule}</p><p>● {labels.staleRule}</p></section>
         </aside>

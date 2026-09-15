@@ -24,6 +24,7 @@
     "security:provision-business-admin": "node scripts/security/provision-premium-business-admin.mjs",
     "security:premium-web": "node scripts/security/run-premium-web-acceptance.mjs",
     "security:master-web": "node scripts/security/run-master-web-completion.mjs",
+    "security:v9": "node scripts/security/run-v9-live-certification.mjs",
     "performance:step18": "npm run build && node scripts/performance/check-step18.mjs",
     "preview": "vite preview"
   },

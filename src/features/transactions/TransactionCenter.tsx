@@ -74,7 +74,6 @@ const families: Family[] = [
     actions: [
       { label: { en: "Send Hawala", "fa-AF": "فرستادن حواله", "ps-AF": "حواله لېږل" }, route: "/hawala/send", capability: "hawala.send" },
       { label: { en: "Hawala Inbox", "fa-AF": "صندوق حواله‌ها", "ps-AF": "د حوالو صندوق" }, route: "/hawala/incoming", capability: "hawala.incoming" },
-      { label: { en: "Settle partner", "fa-AF": "تصفیه همکار", "ps-AF": "له همکار سره تصفیه" }, route: "/hawala/partners", capability: "hawala.settle" },
     ],
   },
 ];

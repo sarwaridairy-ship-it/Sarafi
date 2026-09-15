@@ -6,6 +6,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const app = read("./App.tsx");
 const transactionCenter = read("./features/transactions/TransactionCenter.tsx");
 const inlineRateResolver = read("./features/rates/InlineRateResolver.tsx");
+const transactionRateControl = read("./features/rates/TransactionRateControl.tsx");
 const moneyValuation = read("./features/money/MoneyValuationSummary.tsx");
 const hawalaWorkflow = read("./features/hawala/HawalaWorkflowParts.tsx");
 const appLockGate = read("./features/security/AppLockGate.tsx");
@@ -27,21 +28,21 @@ describe("SARAFI exact user requirements v8", () => {
 
   it("opens compact rate quotes in AFN-to-foreign direction and preserves reciprocal math", () => {
     expect(app).toContain("useState(true)");
-    expect(inlineRateResolver).toContain("const [reversed, setReversed] = useState(true)");
-    expect(inlineRateResolver).toContain("new Decimal(1).div(rate)");
+    expect(inlineRateResolver).toContain("reversed: true, automatic: true");
+    expect(transactionRateControl).toContain("new Decimal(1).div(parsed)");
     expect(app).toContain("<summary>{copy.addCurrency}");
     expect(new Decimal(1).div("70.25").mul("70.25").toDecimalPlaces(12).toString()).toBe("1");
     expect(app).not.toContain("exchange-rate-governance");
   });
 
-  it("keeps transaction rates to online, manual, and a reversible quote only", () => {
-    expect(app).toContain("transaction-rate-only");
-    expect(app).toContain("simplifiedTransaction");
+  it("keeps transaction rates to automatic, manual entry, and a reversible quote only", () => {
+    expect(transactionRateControl).toContain('automatic: "Automatic"');
+    expect(transactionRateControl).toContain("transaction-rate-line");
     expect(app).toContain('manualTransactionRateReason = "Manual transaction rate"');
     expect(app).not.toContain("Reason for manual rate");
     expect(app).not.toContain("compact-trade-rate-scope");
-    expect(inlineRateResolver).toContain('className="transaction-rate-mode"');
-    expect(inlineRateResolver).toContain('simplifiedTransaction ? "transaction"');
+    expect(inlineRateResolver).toContain('publication_scope: "transaction"');
+    expect(transactionRateControl).not.toContain('online: "Online"');
   });
 
   it("values available money only and marks missing available rates incomplete", () => {
@@ -86,7 +87,7 @@ describe("SARAFI exact user requirements v8", () => {
   });
 
   it("keeps the v8 workflows in focused React components", () => {
-    expect(inlineRateResolver).toContain("function CompactRateRow");
+    expect(transactionRateControl).toContain("function TransactionRateControl");
     expect(moneyValuation).toContain("function MoneyValuationSummary");
     expect(moneyValuation).toContain("function CurrencyValuationTable");
     expect(hawalaWorkflow).toContain("function HawalaRecipientSearch");

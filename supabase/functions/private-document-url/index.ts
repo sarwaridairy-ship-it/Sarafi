@@ -31,14 +31,14 @@ Deno.serve(async (request) => {
     return response(503, { error: "Document service is unavailable" });
   }
 
-  let payload: { organization_id?: string; document_id?: string; action?: string };
+  let payload: { organization_id?: string; document_id?: string; device_id?: string; app_unlock_grant?: string; action?: string };
   try {
     payload = await request.json();
   } catch {
     return response(400, { error: "Invalid request body" });
   }
-  if (!payload.organization_id || !payload.document_id) {
-    return response(400, { error: "Organization and document are required" });
+  if (!payload.organization_id || !payload.document_id || !payload.device_id || !payload.app_unlock_grant) {
+    return response(400, { error: "Organization, document, trusted device, and fresh unlock are required" });
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -56,6 +56,8 @@ Deno.serve(async (request) => {
     {
       target_org: payload.organization_id,
       target_document: payload.document_id,
+      target_device: payload.device_id,
+      raw_grant: payload.app_unlock_grant,
       requested_action: payload.action === "download" ? "download" : "view",
     },
   );

@@ -335,15 +335,12 @@
 }
 
 .app-shell { position: relative; }
-.transaction-inline-form {
-  background: var(--calm-canvas);
-  display: block;
-  inset-block: 64px 0;
-  inset-inline: 226px 0;
-  overflow: auto;
-  padding: 24px 32px 54px;
-  position: fixed;
-  z-index: 3;
+.transaction-route {
+  display: grid;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
+  padding: 0 0 28px;
 }
 
 .calm-dialog { max-height: calc(100dvh - 32px); max-width: 560px; overflow: auto; }
@@ -525,84 +522,18 @@
   .transaction-family-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.inline-rate-resolver { margin: 4px 0 18px; }
-.compact-rate { display:grid; gap:10px; min-width:0; padding:10px 12px; border:1px solid #bfd4cb; border-radius:12px; background:#f7fbf9; }
-.compact-rate.needs-attention { border-color:#d8b36d; background:#fffaf0; }
-.compact-rate-row { display:grid; grid-template-columns:auto minmax(150px,1fr) 44px minmax(105px,auto) auto; align-items:center; gap:10px; min-width:0; }
-.compact-rate-mode { display:inline-flex; min-height:34px; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; color:#0d6255; background:#e1f0eb; font-size:11px; font-weight:850; white-space:nowrap; }
-.compact-rate-mode i { width:9px; height:9px; border-radius:50%; background:#3dbb87; }
-.compact-rate-mode.manual { color:#875b18; background:#fff0d2; }
-.compact-rate-mode.manual i { background:#c89232; }
-.compact-rate-quote { min-width:0; overflow:hidden; color:#173c38; font-size:18px; text-align:center; text-overflow:ellipsis; white-space:nowrap; }
-.compact-rate-swap,.compact-rate-change { min-height:38px; border:1px solid #cbdad4; border-radius:9px; color:#0f6457; background:#fff; font-weight:800; cursor:pointer; }
+.compact-rate-swap { min-height:38px; border:1px solid #cbdad4; border-radius:9px; color:#0f6457; background:#fff; font-weight:800; cursor:pointer; }
 .compact-rate-swap { width:44px; font-size:18px; }
-.compact-rate-change { padding:6px 13px; white-space:nowrap; }
-.compact-rate-time { color:#667a75; font-size:10px; line-height:1.35; }
-.compact-rate > p { margin:0; color:#7f571b; font-size:11px; }
-.compact-rate-details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-.compact-rate-details span { display:grid; gap:3px; padding:8px 10px; border-radius:8px; background:#fff; }
-.compact-rate-details small { color:#657872; }
-.compact-rate-editor { display:grid; grid-template-columns:minmax(130px,.7fr) minmax(180px,1.3fr); gap:10px; }
-.compact-rate-editor label { display:grid; gap:5px; min-width:0; font-size:11px; font-weight:750; }
-.compact-rate-editor input { box-sizing:border-box; width:100%; min-height:42px; border:1px solid #cbd8d3; border-radius:8px; padding:8px 10px; font:inherit; }
-.compact-rate-scope { grid-column:1/-1; display:flex; gap:7px; }
-.compact-rate-scope button { min-height:38px; padding:7px 11px; border:1px solid #cad8d2; border-radius:9px; color:#48635e; background:#fff; font-weight:750; }
-.compact-rate-scope button.active { border-color:#176b5b; color:#fff; background:#176b5b; }
 .exchange-entry-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .exchange-entry-row > :first-child { grid-column:1; grid-row:1; }
-.exchange-entry-row > .compact-trade-rate { grid-column:1/-1; grid-row:2; }
+.exchange-entry-row > .transaction-rate-control { grid-column:1/-1; grid-row:2; }
 .exchange-entry-row > :last-child { grid-column:2; grid-row:1; }
-.financial-task-form .compact-trade-rate { display:grid; grid-template-columns:auto minmax(180px,1fr) 44px minmax(100px,auto) auto; align-items:center; gap:10px; min-height:64px; padding:9px 12px; background:#f4faf7; }
-.financial-task-form .compact-trade-rate .rate-input-shell { min-width:0; }
-.financial-task-form .compact-trade-rate .rate-input-shell input[readonly] { cursor:default; }
-.compact-trade-rate-reason { grid-column:1/-1; display:grid!important; grid-template-columns:minmax(130px,.35fr) minmax(0,1fr)!important; align-items:center!important; gap:10px!important; margin:0!important; color:#526963; font-size:11px; font-weight:800; }
-.financial-task-form .compact-trade-rate-reason input { box-sizing:border-box; width:100%; min-height:40px; border:1px solid #cbd8d3; border-radius:8px; padding:7px 10px; background:#fff; font:inherit; }
-.compact-trade-rate-scope,.financial-task-form .compact-rate-approval { grid-column:1/-1; margin:0; }
-.inline-rate-context span { display: grid; gap: 3px; }
-.inline-rate-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
-.inline-rate-context span { padding: 10px 12px; border: 1px solid var(--line, #d8e1dd); border-radius: 8px; background: color-mix(in srgb, white 88%, var(--surface-soft, #f3f7f5)); }
-.inline-rate-context small,
-.inline-rate-resolver .applied-rate-row small { color: var(--muted, #62726f); }
-.inline-rate-bridge { align-items:stretch; display:grid; gap:8px; grid-template-columns:minmax(82px,.7fr) minmax(190px,1.6fr) auto minmax(82px,.7fr); }
-.inline-rate-currency { align-content:center; background:#fff; border:1px solid var(--line, #d8e1dd); border-radius:10px; display:grid; gap:4px; min-width:0; padding:11px; text-align:center; }
-.inline-rate-currency small { color:var(--muted, #62726f); }
-.inline-rate-currency b { color:var(--calm-emerald-strong, #0d5c4f); font-size:18px; }
-.inline-rate-values { background:#edf7f3; border:1px solid #afd0c1; border-radius:10px; display:grid; gap:6px; grid-template-columns:repeat(2,minmax(0,1fr)); padding:7px; }
-.inline-rate-values span { background:#fff; border-radius:7px; display:grid; gap:3px; padding:7px; text-align:center; }
-.inline-rate-values small { color:var(--muted, #62726f); font-size:10px; }
-.inline-rate-values b { color:#0c5d52; font-size:16px; }
-.inline-rate-arrow { align-self:center; color:var(--calm-emerald, #176b5b); font-size:20px; font-weight:900; }
-.inline-rate-details { border-top:1px solid var(--line, #d8e1dd); padding-top:8px; }
-.inline-rate-details > summary { color:var(--muted, #62726f); cursor:pointer; font-size:11px; font-weight:750; }
-.inline-rate-details .inline-rate-context { margin-top:8px; }
-.inline-rate-resolver fieldset { margin: 0; padding: 12px; border: 1px solid var(--line, #d8e1dd); border-radius: 8px; }
 .approval-draft-status { align-items: center; background: var(--calm-surface); border: 1px solid var(--calm-line); border-radius: var(--calm-radius); display: flex; gap: 16px; justify-content: space-between; margin-block-end: 16px; padding: 18px; }
 .approval-draft-status h2,
 .approval-draft-status p { margin-block: 4px; }
-.exchange-rate-governance { display: grid; gap: 12px; }
 
 @media (max-width: 700px) {
-  .financial-task-form .compact-trade-rate { grid-template-columns:auto minmax(0,1fr) 42px auto; min-height:auto; }
-  .financial-task-form .compact-trade-rate .compact-rate-time { grid-column:2/-1; }
-  .compact-trade-rate-reason { grid-template-columns:1fr!important; }
-  .compact-rate-row { grid-template-columns:auto minmax(0,1fr) 42px auto; gap:6px; }
-  .compact-rate-time { grid-column:2/-1; }
-  .compact-rate-quote { font-size:14px; text-align:start; }
-  .compact-rate-change { padding-inline:8px; }
-  .compact-rate-editor { grid-template-columns:1fr; }
-  .compact-rate-scope { grid-column:auto; display:grid; grid-template-columns:1fr 1fr; }
-  .inline-rate-bridge { gap:5px; grid-template-columns:minmax(62px,.65fr) minmax(138px,1.5fr) auto minmax(62px,.65fr); }
-  .inline-rate-currency { padding:8px 5px; }
-  .inline-rate-currency b { font-size:14px; }
-  .inline-rate-values { gap:4px; padding:5px; }
-  .inline-rate-values span { padding:6px 3px; }
-  .inline-rate-values b { font-size:13px; }
-  .transaction-inline-form {
-    inset-block-start: 56px;
-    inset-inline-start: 0;
-    padding: 12px 12px calc(84px + env(safe-area-inset-bottom));
-  }
-  .transaction-page-form { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
+  .transaction-page-form { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
   .calm-home,
   .calm-page { gap: 15px; padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .calm-home-header,
@@ -705,6 +636,14 @@
 .money-valuation-aside p { margin:8px 0; color:#66756f; font-size:11px; line-height:1.5; }
 .money-valuation-aside .money-partial { color:#946019; }
 .money-valuation-aside small { color:#75817c; }
+.money-inline-rate-fixes { border-top:1px solid #e3e9e6; display:grid; gap:10px; margin-top:14px; padding-top:14px; }
+.money-inline-rate-fixes form { align-items:end; display:grid; gap:8px; grid-template-columns:minmax(0,1fr) auto; }
+.money-inline-rate-fixes label { display:grid; gap:5px; min-width:0; }
+.money-inline-rate-fixes label span { color:#566963; font-size:11px; }
+.money-inline-rate-fixes input { min-width:0; width:100%; }
+.money-inline-rate-fixes .money-rate-error { color:#a03e36; }
+.money-snapshot-source { display:grid; gap:3px; }
+.money-snapshot-source em { color:#74817c; font-size:10px; font-style:normal; }
 .money-valuation-workspace .account-control-panel { padding:18px; }
 @media (max-width:900px) {
   .money-valuation-controls { grid-template-columns:1fr 1fr; }
@@ -726,7 +665,7 @@
   .money-valuation-aside { grid-template-columns:1fr; }
 }
 
-/* v7 Hawala inbox and mandatory private identity capture. */
+/* Hawala inbox and private, camera-first identity capture. */
 .hawala-inbox-controls { display:grid; grid-template-columns:minmax(480px,1.2fr) minmax(420px,1fr); align-items:center; gap:14px; margin:0 0 18px; padding:8px; border:1px solid #d7e1dd; border-radius:13px; background:#fff; }
 .hawala-inbox-tabs { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
 .hawala-inbox-tabs button { min-height:42px; padding:6px 8px; border:0; border-radius:9px; color:#5c706a; background:transparent; font:750 11px var(--font-sans); cursor:pointer; }
@@ -747,12 +686,12 @@
 .hawala-identity-capture h3 { margin:0; color:#26423d; font-size:14px; }
 .hawala-identity-capture p,.hawala-identity-capture > small { margin:0; color:#647771; font-size:11px; line-height:1.55; }
 .hawala-identity-capture > div { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.hawala-identity-side { display:grid; align-content:start; gap:7px; }
-.hawala-identity-capture label { display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:8px; min-height:190px; padding:12px; border:1px solid #bdd2c9; border-radius:12px; color:#365c54; background:#f7faf8; }
-.hawala-identity-capture label > span { font-size:11px; font-weight:800; }
-.hawala-identity-capture label > b { display:grid; min-height:92px; place-items:center; border:1px dashed #b7c8c2; border-radius:8px; color:#657872; font-size:11px; text-align:center; }
+.hawala-identity-side { display:grid; align-content:start; gap:9px; min-width:0; padding:12px; border:1px solid #bdd2c9; border-radius:12px; color:#365c54; background:#f7faf8; }
+.hawala-identity-side > strong { font-size:11px; font-weight:800; }
+.hawala-camera-placeholder { display:grid; min-height:112px; place-items:center; border:1px dashed #b7c8c2; border-radius:8px; color:#657872; font-size:28px; }
+.hawala-capture-actions { display:grid; grid-template-columns:1fr; gap:5px; }
+.hawala-capture-actions button { width:100%; min-height:40px; }
 .hawala-identity-capture img { width:100%; height:112px; object-fit:contain; border-radius:8px; background:#e8efec; }
-.hawala-identity-capture input[type="file"] { width:100%; min-height:42px; padding:7px; border:1px solid #d3ded9; border-radius:8px; background:#fff; font-size:10px; }
 @media (max-width:1199px) {
   .hawala-inbox-controls { grid-template-columns:1fr; }
 }
@@ -1084,16 +1023,11 @@
 .online-rate-board,
 .named-report-results { min-width: 0; max-width: 100%; }
 .app-shell { overflow-x: clip; }
-.transaction-inline-form { box-sizing: border-box; max-width: none; min-width: 0; width: auto; }
 .transaction-page-form .modal-head { gap: 12px; min-width: 0; width: 100%; }
 .transaction-page-form .modal-head > div { min-width: 0; }
 .transaction-page-form .transaction-back { flex: 0 1 230px; min-width: 0; overflow-wrap: anywhere; }
 .mobile-nav { overflow-x: hidden; }
 .mobile-nav button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-
-@media (max-width: 900px) {
-  .transaction-inline-form { inset-inline-start:0; }
-}
 
 .rates-market-only .online-rate-board {
   background: #fff;
@@ -1438,6 +1372,19 @@
 .app-lock-preferences select { box-sizing:border-box; width:100%; min-height:42px; border:1px solid #cbd8d3; border-radius:9px; padding:8px; background:#fff; }
 .app-lock-recovery { display:block; margin-top:10px; color:#667872; line-height:1.45; }
 .security-app-lock-card .inline-actions { flex-wrap:wrap; margin:0; }
+.app-lock-policy-settings { grid-template-columns:1fr; margin-top:16px; }
+.app-lock-policy-settings > header { display:block; }
+.app-lock-policy-settings fieldset { min-width:0; margin:0; padding:14px; border:1px solid #d8e1de; border-radius:12px; }
+.app-lock-policy-settings legend { padding-inline:6px; color:#38524c; font-size:11px; font-weight:800; }
+.app-lock-policy-roles > div { display:grid; gap:8px; grid-template-columns:repeat(4,minmax(0,1fr)); }
+.app-lock-policy-roles label { align-items:center; display:flex; gap:8px; min-width:0; }
+.security-app-lock-card.app-lock-policy-settings input[type="checkbox"] { flex:0 0 18px; width:18px; min-height:18px; height:18px; margin:0; padding:0; letter-spacing:0; }
+.app-lock-policy-grid { display:grid!important; gap:12px!important; grid-template-columns:repeat(3,minmax(0,1fr)); }
+.app-lock-policy-grid label { display:grid; gap:6px; }
+.app-lock-policy-grid select { box-sizing:border-box; width:100%; min-width:0; min-height:42px; border:1px solid #cbd8d3; border-radius:9px; padding:8px; background:#fff; }
+@media (max-width:760px) {
+  .app-lock-policy-roles > div,.app-lock-policy-grid { grid-template-columns:1fr; }
+}
 .market-rate-row { grid-template-columns:minmax(170px,1.5fr) repeat(3,minmax(72px,.72fr)) minmax(90px,.8fr) minmax(72px,.65fr) minmax(72px,.6fr); }
 .rate-mode-pill { color:#176b5b; font-size:.72rem; font-weight:800; }
 .rate-row-update { justify-self:start; min-height:32px; padding:5px 8px; }
@@ -1448,9 +1395,6 @@
 @media (max-width: 1050px) {
   .hawala-inbox-controls { grid-template-columns:1fr; }
   .hawala-send-action { justify-self:start; }
-  .financial-task-form .compact-trade-rate { grid-template-columns:auto minmax(0,1fr) 42px; }
-  .financial-task-form .compact-trade-rate .compact-rate-time { grid-column:2; }
-  .financial-task-form .compact-trade-rate .compact-rate-change { grid-column:3; }
 }
 
 @media (max-width: 720px) {
@@ -1465,17 +1409,6 @@
   .hawala-selected-recipient > b { grid-column:2; }
   .money-location-details article { align-items:stretch; display:grid; }
   .money-location-details article > div { justify-items:start; }
-}
-
-@media (max-width: 420px) {
-  .financial-task-form .compact-trade-rate { grid-template-columns:minmax(0,1fr) 40px; }
-  .financial-task-form .compact-trade-rate .compact-rate-mode { grid-column:1/-1; justify-self:start; }
-  .financial-task-form .compact-trade-rate .rate-input-shell { grid-column:1; }
-  .financial-task-form .compact-trade-rate .rate-input-shell { grid-template-columns:auto minmax(0,1fr) auto; }
-  .financial-task-form .compact-trade-rate .rate-input-shell small { display:block; font-size:7px; }
-  .financial-task-form .compact-trade-rate .compact-rate-swap { grid-column:2; }
-  .financial-task-form .compact-trade-rate .compact-rate-time { grid-column:1; }
-  .financial-task-form .compact-trade-rate .compact-rate-change { grid-column:2; }
 }
 
 @media (max-width: 720px) {
@@ -1503,93 +1436,51 @@
   .connected-partner-list .balance-row > strong { grid-column:2; }
 }
 
-/* Transaction rates: one source choice and one reversible quote. */
-.financial-task-form .compact-trade-rate.transaction-rate-only,
-.inline-rate-resolver.transaction-rate-only {
+/* Compact transaction rate: one canonical Decimal rate, one automatic switch. */
+.transaction-rate-control {
   box-sizing:border-box;
   display:grid;
-  grid-template-columns:auto minmax(0,1fr);
-  align-items:center;
-  gap:10px 14px;
+  gap:8px;
   min-width:0;
-  min-height:0;
-  margin:0;
-  padding:10px 12px;
+  margin:0 0 14px;
+  padding:11px 13px;
   border:1px solid #bfd4cb;
   border-radius:12px;
   background:#f7fbf9;
 }
-.transaction-rate-mode {
-  display:inline-grid;
-  grid-template-columns:repeat(2,minmax(64px,1fr));
-  gap:3px;
-  min-width:0;
-  padding:3px;
-  border:1px solid #c7d8d1;
-  border-radius:10px;
-  background:#eaf2ef;
-}
-.transaction-rate-mode button {
-  min-height:36px;
-  padding:6px 12px;
-  border:0;
-  border-radius:7px;
-  color:#506762;
-  background:transparent;
+.transaction-rate-control > header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.transaction-rate-control > header > strong { color:#173c38; font-size:.82rem; }
+.automatic-rate-switch {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:34px;
+  padding:4px 5px 4px 11px;
+  border:1px solid #aacabe;
+  border-radius:999px;
+  color:#315e55;
+  background:#edf5f2;
   font:inherit;
-  font-size:.76rem;
+  font-size:.73rem;
   font-weight:850;
-  white-space:nowrap;
   cursor:pointer;
 }
-.transaction-rate-mode button.active {
-  color:#fff;
-  background:#176b5b;
-  box-shadow:0 1px 2px rgb(14 75 64 / 18%);
-}
-.transaction-rate-mode button:disabled {
-  cursor:not-allowed;
-  opacity:.48;
-}
-.transaction-rate-mode button.active:disabled { opacity:1; }
-.transaction-rate-quote {
-  display:grid;
-  grid-template-columns:auto auto minmax(92px,1fr) auto 44px;
-  align-items:center;
-  gap:9px;
-  min-width:0;
-  color:#173c38;
-  font-weight:850;
-}
-.transaction-rate-quote > span { white-space:nowrap; }
-.transaction-rate-quote input {
-  box-sizing:border-box;
-  width:100%;
-  min-width:0;
-  min-height:40px;
-  padding:7px 10px;
-  border:1px solid #b9cec5;
-  border-radius:9px;
-  color:#173c38;
-  background:#fff;
-  font:inherit;
-  font-size:1rem;
-  font-weight:850;
-  text-align:center;
-}
-.transaction-rate-quote input[readonly] { cursor:default; }
-.transaction-rate-quote input:disabled { background:#f1f5f3; }
-.transaction-rate-quote .compact-rate-swap { flex:none; }
-
-@media (max-width: 720px) {
-  .financial-task-form .compact-trade-rate.transaction-rate-only,
-  .inline-rate-resolver.transaction-rate-only { grid-template-columns:1fr; }
-  .transaction-rate-mode { width:min(100%,260px); }
-}
+.automatic-rate-switch b { min-width:38px; padding:5px 7px; border-radius:999px; color:#fff; background:#176b5b; font-size:.65rem; text-align:center; }
+.automatic-rate-switch[aria-checked="false"] b { color:#65592f; background:#e7c46f; }
+.automatic-rate-switch:disabled { cursor:not-allowed; opacity:.72; }
+.transaction-rate-line { display:grid; grid-template-columns:auto auto minmax(88px,1fr) auto 42px; align-items:center; gap:8px; min-width:0; color:#173c38; font-weight:850; }
+.transaction-rate-line > span { white-space:nowrap; }
+.transaction-rate-line output { min-width:0; padding:7px 4px; font-size:1rem; text-align:center; overflow-wrap:anywhere; }
+.transaction-rate-line input { box-sizing:border-box; width:100%; min-width:0; min-height:40px; padding:7px 9px; border:1px solid #b9cec5; border-radius:9px; color:#173c38; background:#fff; font:inherit; font-weight:850; text-align:center; }
+.transaction-rate-meta { color:#62756f; font-size:.68rem; }
+.transaction-rate-warning,.transaction-rate-approval { margin:0; color:#8b5518; font-size:.74rem; font-weight:750; }
+.transaction-rate-control.unavailable { border-color:#d9b774; background:#fffaf0; }
+.transaction-rate-loading { margin-bottom:14px; padding:12px; border:1px solid #d9e3df; border-radius:11px; color:#60736d; background:#fafcfb; }
+.inline-transaction-review { position:static; display:grid; gap:12px; margin:14px 0; box-shadow:none; }
 
 @media (max-width: 420px) {
-  .financial-task-form .compact-trade-rate.transaction-rate-only { grid-template-columns:1fr; }
-  .transaction-rate-quote { grid-template-columns:auto auto minmax(68px,1fr) auto 40px; gap:5px; font-size:.76rem; }
-  .transaction-rate-quote input { min-height:38px; padding-inline:6px; font-size:.88rem; }
-  .transaction-rate-quote .compact-rate-swap { grid-column:auto; width:40px; }
+  .transaction-rate-control { padding:10px; }
+  .transaction-rate-line { grid-template-columns:auto auto minmax(58px,1fr) auto 38px; gap:4px; font-size:.73rem; }
+  .transaction-rate-line input,.transaction-rate-line output { font-size:.82rem; }
+  .automatic-rate-switch { gap:4px; padding-inline-start:8px; }
 }

@@ -127,6 +127,7 @@ const workspaceRoutes: Array<{ path: string; section: string }> = [
   { path: "app/:organizationId/compliance/cases", section: "Compliance Cases" },
   { path: "app/:organizationId/compliance/cases/:caseId", section: "Compliance Cases" },
   { path: "app/:organizationId/control", section: "Control" },
+  { path: "app/:organizationId/control/branches", section: "Business Settings" },
   { path: "app/:organizationId/control/team", section: "Team & Devices" },
   { path: "app/:organizationId/control/team/approvals/:approvalId", section: "Team & Devices" },
   { path: "app/:organizationId/control/team/devices/:deviceId", section: "Team & Devices" },
@@ -183,7 +184,10 @@ const router = createBrowserRouter([
         children: [
           {
             index: true,
-            loader: ({ params }: LoaderFunctionArgs) => redirect(`/app/${params.organizationId}/home`),
+            loader: ({ params, request }: LoaderFunctionArgs) => {
+              const requestedUrl = new URL(request.url);
+              return redirect(`/app/${params.organizationId}/home${requestedUrl.search}`);
+            },
           },
           ...workspaceRoutes.map(({ path, section }) => ({
             path: path.replace("app/:organizationId/", ""),

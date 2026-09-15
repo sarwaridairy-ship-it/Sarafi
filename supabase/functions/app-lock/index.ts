@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const headers = {
@@ -41,24 +42,43 @@ Deno.serve(async (request) => {
 
   const userId = userData.user.id;
   const { data: device } = await admin.from("devices").select("id,status").eq("id", body.device_id).eq("organization_id", body.organization_id).eq("user_id", userId).maybeSingle();
-  if (!device || device.status === "revoked") return reply(403, { error: "Registered active device is required" });
+  if (!device || device.status !== "trusted") return reply(403, { error: "Registered trusted device is required" });
+  const { data: organizationPolicy } = await admin.from("organization_settings")
+    .select("app_lock_required_roles,app_lock_max_timeout_seconds,app_lock_sensitive_reunlock_seconds")
+    .eq("organization_id", body.organization_id)
+    .maybeSingle();
+  const { data: membership } = await admin.from("organization_memberships")
+    .select("role_code")
+    .eq("organization_id", body.organization_id)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .maybeSingle();
+  if (!membership) return reply(403, { error: "Active organization membership is required" });
+  const requiredRoles = Array.isArray(organizationPolicy?.app_lock_required_roles) ? organizationPolicy.app_lock_required_roles : [];
+  const policyRequired = requiredRoles.includes(membership.role_code);
+  const maximumTimeoutSeconds = [30, 60, 300, 900].includes(organizationPolicy?.app_lock_max_timeout_seconds ?? 900)
+    ? Number(organizationPolicy?.app_lock_max_timeout_seconds ?? 900)
+    : 900;
+  const sensitiveReunlockSeconds = Math.max(30, Math.min(900, Number(organizationPolicy?.app_lock_sensitive_reunlock_seconds ?? 300)));
   const audit = async (eventType: string, metadata: Record<string, unknown> = {}) => {
     await admin.from("security_audit_events").insert({ organization_id: body.organization_id, actor_user_id: userId, target_device_id: body.device_id, event_type: eventType, metadata });
   };
   if (body.action === "status") {
     const { data } = await admin.from("app_lock_credentials").select("locked_until,auto_lock_seconds,lock_on_background").eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id).maybeSingle();
-    return reply(200, { configured: Boolean(data), lockedUntil: data?.locked_until ?? null, passkeyEnabled: true, autoLockSeconds: data?.auto_lock_seconds ?? 900, lockOnBackground: data?.lock_on_background ?? true });
+    return reply(200, { configured: Boolean(data), required: policyRequired, lockedUntil: data?.locked_until ?? null, passkeyEnabled: true, autoLockSeconds: Math.min(data?.auto_lock_seconds ?? maximumTimeoutSeconds, maximumTimeoutSeconds), lockOnBackground: data?.lock_on_background ?? true, maximumTimeoutSeconds, sensitiveReunlockSeconds });
   }
 
   if (["configure", "settings", "disable"].includes(body.action ?? "")) {
-    const { data: canManageSecurity } = await userClient.rpc("has_capability", { target_org: body.organization_id, capability: "security.manage", optional_scope: {} });
-    if (!canManageSecurity) return reply(403, { error: "Security management access is required" });
+    const { data: canManageOwnLock } = await userClient.rpc("has_capability", { target_org: body.organization_id, capability: "app_lock.self.manage", optional_scope: {} });
+    if (!canManageOwnLock) return reply(403, { error: "App Lock self-management access is required" });
     if (decodeJwt(token).aal !== "aal2") return reply(403, { error: "Two-step verification is required before changing app-lock controls" });
   }
 
   if (body.action === "configure") {
     if (!pinPattern.test(body.pin ?? "")) return reply(400, { error: "PIN must contain exactly six digits" });
-    const autoLockSeconds = [30, 60, 300, 900].includes(body.auto_lock_seconds ?? 900) ? body.auto_lock_seconds : 900;
+    const requestedAutoLockSeconds = body.auto_lock_seconds ?? maximumTimeoutSeconds;
+    if (![30, 60, 300, 900].includes(requestedAutoLockSeconds) || requestedAutoLockSeconds > maximumTimeoutSeconds) return reply(400, { error: "Choose an auto-lock time allowed by your organization" });
+    const autoLockSeconds = requestedAutoLockSeconds;
     const salt = randomBytes(16);
     const hash = scryptSync(body.pin!, salt, 32, scryptOptions);
     const { error } = await admin.from("app_lock_credentials").upsert({
@@ -72,7 +92,7 @@ Deno.serve(async (request) => {
   }
 
   if (body.action === "settings") {
-    if (![30, 60, 300, 900].includes(body.auto_lock_seconds ?? 0) || typeof body.lock_on_background !== "boolean") return reply(400, { error: "Choose valid app-lock settings" });
+    if (![30, 60, 300, 900].includes(body.auto_lock_seconds ?? 0) || Number(body.auto_lock_seconds) > maximumTimeoutSeconds || typeof body.lock_on_background !== "boolean") return reply(400, { error: "Choose valid app-lock settings allowed by your organization" });
     const { data, error } = await admin.from("app_lock_credentials").update({ auto_lock_seconds: body.auto_lock_seconds, lock_on_background: body.lock_on_background, updated_at: new Date().toISOString() }).eq("organization_id", body.organization_id).eq("user_id", userId).eq("device_id", body.device_id).select("auto_lock_seconds,lock_on_background").maybeSingle();
     if (error || !data) return reply(404, { error: "Configure an app PIN before saving lock settings" });
     await audit("app_lock_settings_updated", { auto_lock_seconds: data.auto_lock_seconds, lock_on_background: data.lock_on_background });
@@ -88,10 +108,12 @@ Deno.serve(async (request) => {
   }
 
   const issueGrant = async (method: "scrypt_pin" | "passkey") => {
+    const { data: canUnlock } = await userClient.rpc("has_capability", { target_org: body.organization_id, capability: "app_lock.unlock", optional_scope: {} });
+    if (!canUnlock) return reply(403, { error: "App Lock access is required" });
     const raw = randomBytes(32).toString("base64url");
     const sha = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)));
     const grantSha256 = Array.from(sha, (value) => value.toString(16).padStart(2, "0")).join("");
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + sensitiveReunlockSeconds * 1000).toISOString();
     const { error } = await admin.from("app_unlock_grants").insert({ organization_id: body.organization_id, user_id: userId, device_id: body.device_id, grant_sha256: grantSha256, authentication_method: method, purpose: "sensitive_actions", scope: {}, expires_at: expiresAt });
     if (error) return reply(503, { error: "Unlock grant could not be issued" });
     await audit("app_lock_unlocked", { authentication_method: method, purpose: "sensitive_actions", expires_at: expiresAt });

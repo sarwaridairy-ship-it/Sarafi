@@ -89,7 +89,7 @@ export const hawalaPayoutCommandSchema = z.object({
   money_account_id: uuid,
   identity_confirmed: z.literal(true),
   recipient_identity_reference: z.string().trim().min(2).max(120),
-  identity_document_ids: z.array(uuid).length(2),
+  identity_document_ids: z.array(uuid).min(1).max(2),
   app_unlock_grant: z.string().min(24).max(256).optional(),
   client_command_id: z.string().trim().min(1).max(128),
   device_id: uuid.optional(),

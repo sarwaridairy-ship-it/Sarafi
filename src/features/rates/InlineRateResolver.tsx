@@ -1,8 +1,8 @@
-import Decimal from "decimal.js";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { InlineRatePublication } from "../../domain/commands";
 import { getTransactionRateContext, type OperationRateContext } from "../../lib/financialApi";
 import type { Language } from "../../lib/i18n";
+import { TransactionRateControl } from "./TransactionRateControl";
 
 type LoadedRateContext = {
   key: string;
@@ -12,85 +12,19 @@ type LoadedRateContext = {
 
 const copy = {
   en: {
-    title: "Applied rate",
-    loading: "Checking the approved shop rate…",
-    current: "Auto",
-    stale: "This rate has expired. Refresh it here before saving.",
-    missing: "No approved rate exists. Add it here before saving.",
-    unavailable: "The rate could not be checked. Try again before saving.",
-    restricted: "A manager must publish the rate before this transaction can be saved. Your draft stays on this page.",
-    approval: "This one-transaction rate will be sent to a manager for approval.",
-    buy: "Shop buy rate",
-    sell: "Shop sell rate",
-    effective: "Effective",
-    expiry: "Expires",
-    required: "Change rate",
-    foreign: "Currency",
-    local: "Afghani",
-    details: "Change",
-    reason: "Reason for manual rate",
-    reasonPlaceholder: "Short operational reason",
-    reverse: "Reverse quote",
-    updated: "Updated",
-    transactionOnly: "This transaction only",
-    publish: "Save as shop rate",
-    online: "Online",
-    manual: "Manual",
-    manualRate: "Manual rate",
+    loading: "Checking the approved daily rate…",
+    restricted: "A manager must approve this rate. Your complete draft stays on this page.",
+    approval: "This rate will be sent to a manager for approval. Your complete draft will stay here.",
   },
   "fa-AF": {
-    title: "نرخ تطبیق‌شده",
-    loading: "نرخ صرافی را می‌بینیم…",
-    current: "خودکار",
-    stale: "این نرخ کهنه شده است. نرخ تازه را همین‌جا بنویسید.",
-    missing: "هنوز نرخ نیست. نرخ خرید و فروش را همین‌جا بنویسید.",
-    unavailable: "نرخ پیدا نشد. دوباره کوشش کنید.",
-    restricted: "مدیر باید نرخ را ثبت کند. فورم شما در همین صفحه می‌ماند.",
-    approval: "این نرخ فقط برای همین معامله به مدیر جهت تأیید فرستاده می‌شود.",
-    buy: "نرخ خرید",
-    sell: "نرخ فروش",
-    effective: "از این وقت",
-    expiry: "تا این وقت",
-    required: "تغییر نرخ",
-    foreign: "اسعار",
-    local: "افغانی",
-    details: "تغییر",
-    reason: "دلیل نرخ دستی",
-    reasonPlaceholder: "دلیل کوتاه کاری",
-    reverse: "برعکس‌ساختن نرخ",
-    updated: "تازه‌شده",
-    transactionOnly: "فقط همین معامله",
-    publish: "ثبت به‌حیث نرخ صرافی",
-    online: "آنلاین",
-    manual: "دستی",
-    manualRate: "نرخ دستی",
+    loading: "نرخ روزانه تأییدشده بررسی می‌شود…",
+    restricted: "مدیر باید این نرخ را تأیید کند. تمام معلومات فورم در همین صفحه می‌ماند.",
+    approval: "این نرخ برای تأیید به مدیر فرستاده می‌شود. تمام معلومات فورم محفوظ می‌ماند.",
   },
   "ps-AF": {
-    title: "کارېدلی نرخ",
-    loading: "د صرافۍ تایید شوی نرخ کتل کېږي…",
-    current: "اتومات",
-    stale: "د دې نرخ موده پای ته رسېدلې. له ثبت مخکې یې همدلته تازه کړئ.",
-    missing: "تایید شوی نرخ نشته. له ثبت مخکې یې همدلته ولیکئ.",
-    unavailable: "نرخ ونه کتل شو. له ثبت مخکې بیا هڅه وکړئ.",
-    restricted: "د دې معاملې له ثبت مخکې مدیر باید نرخ خپور کړي. ستاسو مسوده په همدې پاڼه کې پاتې کېږي.",
-    approval: "د همدې معاملې نرخ به مدیر ته د تایید لپاره ولېږل شي.",
-    buy: "د صرافۍ د پېر نرخ",
-    sell: "د صرافۍ د پلور نرخ",
-    effective: "د پلي کېدو وخت",
-    expiry: "د پای وخت",
-    required: "نرخ بدلول",
-    foreign: "اسعار",
-    local: "افغانۍ",
-    details: "بدلول",
-    reason: "د لاسي نرخ لامل",
-    reasonPlaceholder: "لنډ کاري لامل",
-    reverse: "نرخ سرچپه کول",
-    updated: "تازه شوی",
-    transactionOnly: "یوازې دا معامله",
-    publish: "د صرافۍ نرخ په توګه ثبتول",
-    online: "آنلاین",
-    manual: "لاسي",
-    manualRate: "لاسي نرخ",
+    loading: "تایید شوی ورځنی نرخ کتل کېږي…",
+    restricted: "مدیر باید دا نرخ تایید کړي. ستاسو ټوله مسوده په همدې پاڼه کې پاتې کېږي.",
+    approval: "دا نرخ به مدیر ته د تایید لپاره ولېږل شي. ستاسو ټوله مسوده به همدلته پاتې وي.",
   },
 } as const;
 
@@ -110,33 +44,6 @@ export type InlineRateResolverProps = {
   onReadyChange: (ready: boolean) => void;
 };
 
-export function CompactRateRow({ language, loading, needsResolution, quote, modeLabel, loadingLabel, reverseLabel, updatedLabel, effectiveFrom, source, detailsLabel, editing, onReverse, onToggleDetails }: {
-  language: Language;
-  loading: boolean;
-  needsResolution: boolean;
-  quote: string;
-  modeLabel: string;
-  loadingLabel: string;
-  reverseLabel: string;
-  updatedLabel: string;
-  effectiveFrom?: string;
-  source?: string;
-  detailsLabel: string;
-  editing: boolean;
-  onReverse: () => void;
-  onToggleDetails: () => void;
-}) {
-  return (
-    <div className="compact-rate-row" dir="ltr">
-      <span className={`compact-rate-mode ${needsResolution ? "manual" : ""}`}><i aria-hidden="true" />{modeLabel}</span>
-      <strong className="compact-rate-quote">{loading ? loadingLabel : quote}</strong>
-      <button className="compact-rate-swap" type="button" onClick={onReverse} aria-label={reverseLabel}>⇄</button>
-      <span className="compact-rate-time" dir={language === "en" ? "ltr" : "rtl"}>{effectiveFrom ? `${updatedLabel} ${new Date(effectiveFrom).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })}` : source ?? ""}</span>
-      <button className="compact-rate-change" type="button" onClick={onToggleDetails} aria-expanded={editing}>{detailsLabel}</button>
-    </div>
-  );
-}
-
 export function InlineRateResolver({
   organizationId,
   branchId,
@@ -144,7 +51,6 @@ export function InlineRateResolver({
   language,
   canPublish,
   canRequestApproval = false,
-  simplifiedTransaction = false,
   rateSide = "valuation",
   value,
   onChange,
@@ -152,10 +58,11 @@ export function InlineRateResolver({
 }: InlineRateResolverProps) {
   const text = copy[language];
   const normalizedCurrency = currency.toUpperCase();
-  const key = `${organizationId ?? ""}:${branchId ?? ""}:${normalizedCurrency}:AFN`;
+  const key = `${organizationId ?? ""}:${branchId ?? ""}:${normalizedCurrency}:AFN:${rateSide}`;
   const [loaded, setLoaded] = useState<LoadedRateContext | null>(null);
-  const [reversed, setReversed] = useState(true);
-  const [editing, setEditing] = useState(false);
+  const [rateUi, setRateUi] = useState({ key, reversed: true, automatic: true });
+  const reversed = rateUi.key === key ? rateUi.reversed : true;
+  const automatic = rateUi.key === key ? rateUi.automatic : true;
   const [inspectionNow] = useState(() => Date.now());
   const inspectionParams = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
   const inspectionScenario = inspectionParams?.get("rateScenario") ?? inspectionParams?.get("rate") ?? "current";
@@ -197,36 +104,23 @@ export function InlineRateResolver({
     : loaded?.key === key ? loaded.value : null;
   const error = loaded?.key === key ? loaded.error : null;
   const loading = normalizedCurrency !== "AFN" && organizationId !== "inspection" && loaded?.key !== key;
-  const needsResolution = Boolean(error || !context || context.missing || context.stale);
+  const unavailable = Boolean(error || !context || context.missing || context.stale);
   const relevantField = rateSide === "sell" ? "sell_rate" : "buy_rate";
   const contextRate = context?.[relevantField];
-  const manualRate = value?.[relevantField];
-  const displayedRate = needsResolution ? manualRate ?? contextRate : contextRate;
-  const quote = useMemo(() => {
-    if (!displayedRate) return "—";
-    try {
-      const rate = new Decimal(displayedRate);
-      if (!rate.isPositive()) return "—";
-      return reversed
-        ? `1 AFN = ${new Decimal(1).div(rate).toSignificantDigits(10).toString()} ${normalizedCurrency}`
-        : `1 ${normalizedCurrency} = ${rate.toString()} AFN`;
-    } catch {
-      return "—";
-    }
-  }, [displayedRate, normalizedCurrency, reversed]);
+  const fallbackRate = value?.[relevantField];
+  const canonicalRate = automatic && !unavailable ? contextRate : fallbackRate ?? contextRate;
+  const canResolve = canPublish || canRequestApproval;
   const publicationValid = Boolean(
     value
       && Number(value[relevantField]) > 0
-      && (value.reason?.trim().length ?? 0) >= 3
       && value.source_currency === normalizedCurrency
       && value.target_currency === "AFN",
   );
-  const canResolve = canPublish || canRequestApproval;
 
   useEffect(() => {
     if (normalizedCurrency === "AFN") return;
-    onReadyChange(!loading && !error && (!needsResolution || (canResolve && publicationValid)));
-  }, [canResolve, error, loading, needsResolution, normalizedCurrency, onReadyChange, organizationId, publicationValid]);
+    onReadyChange(!loading && (!unavailable || (canResolve && publicationValid)));
+  }, [canResolve, loading, normalizedCurrency, onReadyChange, publicationValid, unavailable]);
 
   if (normalizedCurrency === "AFN") return null;
 
@@ -238,105 +132,34 @@ export function InlineRateResolver({
       target_currency: "AFN",
       buy_rate: relevantField === "buy_rate" ? next : value?.buy_rate ?? context?.buy_rate ?? fallback,
       sell_rate: relevantField === "sell_rate" ? next : value?.sell_rate ?? context?.sell_rate ?? fallback,
-      reason: value?.reason ?? (simplifiedTransaction ? transactionManualRateReason : undefined),
-      publication_scope: simplifiedTransaction ? "transaction" : value?.publication_scope ?? "transaction",
+      reason: transactionManualRateReason,
+      publication_scope: "transaction",
     });
   };
-
-  const updatePublication = (changes: Partial<InlineRatePublication>) => {
-    const fallback = manualRate || contextRate || "";
-    onChange({
-      branch_id: branchId ?? undefined,
-      source_currency: normalizedCurrency,
-      target_currency: "AFN",
-      buy_rate: value?.buy_rate ?? context?.buy_rate ?? fallback,
-      sell_rate: value?.sell_rate ?? context?.sell_rate ?? fallback,
-      reason: value?.reason,
-      publication_scope: value?.publication_scope ?? "transaction",
-      ...changes,
-    });
+  const changeAutomatic = (nextAutomatic: boolean) => {
+    if (unavailable && nextAutomatic) return;
+    setRateUi((current) => ({ key, automatic: nextAutomatic, reversed: current.key === key ? current.reversed : true }));
+    if (nextAutomatic) onChange(undefined);
+    else updateRate(contextRate ?? "");
   };
 
-  if (simplifiedTransaction) {
-    const reciprocal = (rate: string | undefined) => {
-      if (!rate) return "";
-      try {
-        const parsed = new Decimal(rate);
-        return parsed.isPositive() ? new Decimal(1).div(parsed).toSignificantDigits(10).toString() : "";
-      } catch {
-        return "";
-      }
-    };
-    const visibleManualRate = reversed ? reciprocal(manualRate) : manualRate ?? "";
-    const visibleOnlineRate = reversed ? reciprocal(contextRate) : contextRate ?? "";
-    const manualAvailable = !loading && canResolve;
-    const chooseManual = () => {
-      if (!manualAvailable || value) return;
-      updateRate(contextRate ?? "");
-    };
-    const changeManualRate = (next: string) => {
-      if (!reversed) {
-        updateRate(next);
-        return;
-      }
-      if (!next) {
-        updateRate("");
-        return;
-      }
-      try {
-        const parsed = new Decimal(next);
-        updateRate(parsed.isPositive() ? new Decimal(1).div(parsed).toString() : "");
-      } catch {
-        updateRate("");
-      }
-    };
-
-    return (
-      <section className="inline-rate-resolver compact-rate transaction-rate-only" aria-label={text.title}>
-        <div className="transaction-rate-mode" role="group" aria-label={text.title} dir={language === "en" ? "ltr" : "rtl"}>
-          <button type="button" aria-pressed={false} disabled={needsResolution || loading}>{text.online}</button>
-          <button type="button" className="active" aria-pressed="true" disabled={!manualAvailable} onClick={chooseManual}>{text.manual}</button>
-        </div>
-        <div className="transaction-rate-quote" dir="ltr">
-          <span>1 {reversed ? "AFN" : normalizedCurrency}</span>
-          <span aria-hidden="true">=</span>
-          <input
-            required
-            min="0.000001"
-            step="any"
-            inputMode="decimal"
-            value={visibleManualRate}
-            onChange={(event) => changeManualRate(event.target.value)}
-            placeholder={visibleOnlineRate || "0.00"}
-            aria-label={text.manualRate}
-            disabled={!manualAvailable}
-          />
-          <span>{reversed ? normalizedCurrency : "AFN"}</span>
-          <button className="compact-rate-swap" type="button" onClick={() => setReversed((current) => !current)} aria-label={text.reverse}>⇄</button>
-        </div>
-      </section>
-    );
-  }
+  if (loading) return <div className="transaction-rate-loading" role="status">{text.loading}</div>;
 
   return (
-    <section className={`inline-rate-resolver compact-rate ${needsResolution ? "needs-attention" : ""}`} aria-label={text.title}>
-      <CompactRateRow language={language} loading={loading} needsResolution={needsResolution} quote={quote} modeLabel={needsResolution ? text.required : text.current} loadingLabel={text.loading} reverseLabel={text.reverse} updatedLabel={text.updated} effectiveFrom={context?.effective_from} source={context?.source} detailsLabel={text.details} editing={editing} onReverse={() => setReversed((current) => !current)} onToggleDetails={() => setEditing((current) => !current)} />
-      {loading ? <p role="status">{text.loading}</p> : null}
-      {!loading && error ? <p role="alert">{text.unavailable}</p> : null}
-      {!loading && needsResolution ? <p role="alert">{context?.stale ? text.stale : context?.missing ? text.missing : text.unavailable}</p> : null}
-      {!loading && needsResolution && !canResolve ? <p className="calm-empty">{text.restricted}</p> : null}
-      {!loading && editing && !needsResolution && context ? <div className="compact-rate-details"><span><small>{text.effective}</small><b>{context.effective_from ? new Date(context.effective_from).toLocaleString(language) : "—"}</b></span><span><small>{text.expiry}</small><b>{context.expires_at ? new Date(context.expires_at).toLocaleString(language) : "—"}</b></span></div> : null}
-      {!loading && needsResolution && canResolve ? (
-        <fieldset>
-          <legend>{text.required}</legend>
-          <div className="compact-rate-editor">
-            <label>{rateSide === "sell" ? text.sell : text.buy}<input required min="0.000001" step="any" inputMode="decimal" value={manualRate ?? ""} onChange={(event) => updateRate(event.target.value)} placeholder={contextRate ?? "0.00"} /></label>
-            <label>{text.reason}<input required minLength={3} maxLength={240} value={value?.reason ?? ""} onChange={(event) => updatePublication({ reason: event.target.value })} placeholder={text.reasonPlaceholder} /></label>
-            <div className="compact-rate-scope" role="group" aria-label={text.required}><button type="button" className={(value?.publication_scope ?? "transaction") === "transaction" ? "active" : ""} onClick={() => updatePublication({ publication_scope: "transaction" })}>{text.transactionOnly}</button>{canPublish ? <button type="button" className={value?.publication_scope === "rate_board" ? "active" : ""} onClick={() => updatePublication({ publication_scope: "rate_board" })}>{text.publish}</button> : null}</div>
-            {!canPublish && canRequestApproval ? <p className="compact-rate-approval">{text.approval}</p> : null}
-          </div>
-        </fieldset>
-      ) : null}
-    </section>
+    <TransactionRateControl
+      language={language}
+      automatic={automatic}
+      unavailable={unavailable}
+      canEdit={canResolve}
+      canonicalRate={canonicalRate}
+      sourceCurrency={normalizedCurrency}
+      targetCurrency="AFN"
+      reversed={reversed}
+      updatedAt={context?.effective_from}
+      approvalMessage={unavailable ? (canRequestApproval && !canPublish ? text.approval : !canResolve ? text.restricted : undefined) : undefined}
+      onAutomaticChange={changeAutomatic}
+      onCanonicalRateChange={updateRate}
+      onReverse={() => setRateUi((current) => ({ key, automatic: current.key === key ? current.automatic : true, reversed: !(current.key === key ? current.reversed : true) }))}
+    />
   );
 }
