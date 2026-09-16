@@ -70,6 +70,12 @@ jobs:
           test -n "$SARAFI_E2E_PASSWORD"
           test -n "$SARAFI_E2E_ORGANIZATION_ID"
           test -n "$SARAFI_E2E_ROLE_FIXTURES"
+      - name: Anonymous live security boundary
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_RUN_LIVE_TESTS: "true"
+        run: npx vitest run src/lib/liveSecurity.test.ts
       - name: Authenticated authorization journeys
         env:
           SARAFI_EVIDENCE_STAGE: authenticated

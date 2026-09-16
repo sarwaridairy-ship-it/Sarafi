@@ -28,6 +28,13 @@ engineering checks, not the remaining recovery or human-acceptance gates.
   PUBLIC/anon/authenticated execution on production; the supported branch-guarded
   `get_current_rates_v6` API remains available. No financial records were changed.
   Added a persistent authenticated CI assertion for the exact permission denial.
+- Opted into the two live anonymous checks. The organization probe had assumed
+  an empty RLS result, but production correctly denies execution of its protected
+  membership helper. The assertion now accepts only a SQL permission denial with
+  no data, or an empty successful result; network/schema errors still fail. The
+  financial probe now targets the supported `record_fx_trade_v5` RPC and requires
+  its precise permission denial. CI and protected release verification explicitly
+  run these live checks instead of relying on the offline suite's optional skips.
 
 ## Fresh evidence
 
@@ -35,6 +42,7 @@ engineering checks, not the remaining recovery or human-acceptance gates.
 | --- | --- |
 | TypeScript, lint and production build | Passed |
 | Current-source unit suite | 188 passed, 2 existing skips; 37 files passed, 1 skipped |
+| Full source suite with live anonymous checks enabled | 190 passed, 0 skipped; 38 files passed |
 | Live authenticated role/security API after legacy-rate fix | 10 passed, 0 skipped |
 | Read-only two-business rate isolation regression | All 6 checks passed; 0 financial writes |
 | Live named reports | All 22 report types returned valid responses |

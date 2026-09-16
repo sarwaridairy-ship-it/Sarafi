@@ -8,15 +8,24 @@ describe('live Supabase unauthenticated security boundary', () => {
     const client = getSupabaseClient()
     expect(client).not.toBeNull()
     const result = await client!.from('organizations').select('id').limit(10)
-    expect(result.error).toBeNull()
-    expect(result.data).toEqual([])
+    // Restricted EXECUTE on the RLS membership helper can reject the query
+    // outright. Both explicit denial and an empty RLS result protect the rows;
+    // network/schema/other errors must not masquerade as a passing boundary.
+    if (result.error) {
+      expect(result.error.code).toBe('42501')
+      expect(result.error.message).toMatch(/permission denied/)
+      expect(result.data).toBeNull()
+    } else {
+      expect(result.data).toEqual([])
+    }
   }, 30000)
 
   it.skipIf(!runLiveProbe)('rejects unauthenticated financial RPC invocation', async () => {
     const client = getSupabaseClient()
     expect(client).not.toBeNull()
-    const result = await client!.rpc('record_fx_trade', { command: { client_command_id: crypto.randomUUID() } })
-    expect(result.error).not.toBeNull()
+    const result = await client!.rpc('record_fx_trade_v5', { command: { client_command_id: crypto.randomUUID() } })
+    expect(result.error?.code).toBe('42501')
+    expect(result.error?.message).toMatch(/permission denied for function record_fx_trade_v5/)
     expect(result.data).toBeNull()
   }, 30000)
 })
