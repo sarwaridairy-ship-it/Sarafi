@@ -10,8 +10,8 @@ const copy = {
   'ps-AF': { title: 'د څانګې ورځنی نرخ تازه کړئ', buy: 'د صرافۍ د پېر نرخ', sell: 'د صرافۍ د پلور نرخ', save: 'نرخونه ثبت او تایید کړئ', saving: 'ثبتېږي…', invalid: 'سم نرخونه ولیکئ. د پلور نرخ دې د پېر له نرخ څخه کم نه وي.', reason: 'د دې پرېکړې دلیل ولیکئ.', mfa: 'له تایید مخکې د امنیتي پروګرام کوډ ولیکئ.', failed: 'نرخ ثبت نه شو. خپل لاسرسی وګورئ او بیا هڅه وکړئ.', help: 'د ۱ واحد اسعارو لپاره افغانۍ. دا نرخونه د همدې څانګې لپاره دي. صندوقدار معامله ګوري او ثبتوي.' },
 } as const
 
-export function DailyRateRequestEditor({ id, currency, language, reason, verified, onSaved, onToast }: {
-  id: string; currency: string; language: Language; reason: string; verified: boolean;
+export function DailyRateRequestEditor({ id, currency, branchName, language, reason, verified, inspection = false, onSaved, onToast }: {
+  id: string; currency: string; branchName: string; language: Language; reason: string; verified: boolean; inspection?: boolean;
   onSaved: () => void; onToast: (message: string) => void;
 }) {
   const text = copy[language]
@@ -19,7 +19,7 @@ export function DailyRateRequestEditor({ id, currency, language, reason, verifie
   const [sell, setSell] = useState('')
   const [busy, setBusy] = useState(false)
   const save = async () => {
-    if (busy) return
+    if (busy || inspection) return
     if (!positiveRate(buy) || !positiveRate(sell) || new Decimal(buy).gt(sell)) { onToast(text.invalid); return }
     if (reason.trim().length < 2) { onToast(text.reason); return }
     if (!verified) { onToast(text.mfa); return }
@@ -28,15 +28,18 @@ export function DailyRateRequestEditor({ id, currency, language, reason, verifie
       const result = await resolveOperationRateRequest(id, buy, sell, reason)
       if (result.error) onToast(result.error.includes('AAL2') ? text.mfa : text.failed)
       else onSaved()
+    } catch {
+      onToast(text.failed)
     } finally { setBusy(false) }
   }
   return <fieldset className="daily-rate-request-editor">
-    <legend>{text.title} · {currency}/AFN</legend>
+    <legend>{text.title} · <bdi>{currency}/AFN</bdi></legend>
+    <strong>{branchName}</strong>
     <small>{text.help}</small>
     <div className="daily-rate-request-inputs">
-      <label>{text.buy}<input inputMode="decimal" value={buy} onChange={(event) => setBuy(event.target.value)} disabled={busy} /></label>
-      <label>{text.sell}<input inputMode="decimal" value={sell} onChange={(event) => setSell(event.target.value)} disabled={busy} /></label>
+      <label>{text.buy}<input inputMode="decimal" dir="ltr" maxLength={40} value={buy} onChange={(event) => setBuy(event.target.value)} disabled={busy} /></label>
+      <label>{text.sell}<input inputMode="decimal" dir="ltr" maxLength={40} value={sell} onChange={(event) => setSell(event.target.value)} disabled={busy} /></label>
     </div>
-    <button type="button" className="primary-action" disabled={busy} onClick={() => void save()}>{busy ? text.saving : text.save}</button>
+    <button type="button" className="primary-action" disabled={busy || inspection || !branchName} onClick={() => void save()}>{busy ? text.saving : text.save}</button>
   </fieldset>
 }

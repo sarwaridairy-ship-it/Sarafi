@@ -172,7 +172,7 @@ export type WorkspaceContextRecord = {
   cashboxes: Array<{ id: string; name: string; branch_id: string }>
   subscription: { status?: string; period_end?: string | null; plan_code?: string }
 }
-export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null }
+export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null; branch_id?: string | null; branch_name?: string | null; expires_at?: string; is_current_requester?: boolean }
 export type ResumableApprovalDraft = { id: string; action_type: 'fx_trade' | 'hawala_payout'; status: string; reason: string; amount_base: string | null; currency_code: string | null; requested_at: string; expires_at: string; decided_at: string | null; decision_reason: string | null; resume_route: string | null; draft: Record<string, unknown>; consumed_at: string | null; consumed_journal_entry_id: string | null }
 export type TeamControlPlane = { members: TeamMemberRecord[]; invitations: TeamInvitationRecord[]; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[]; devices: DeviceRecord[]; approvals: ApprovalRecord[] }
 export type CreatedTeamInvitation = { id: string; invite_token: string; connection_code?: string; email: string; display_name: string; role_code: string; expires_at: string }

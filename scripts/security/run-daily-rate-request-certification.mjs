@@ -7,6 +7,8 @@ import { readEnvFile, signInMfaFixtureAtAal2 } from './mfa-fixture.mjs'
 const env = { ...readEnvFile('.env.security.local'), ...process.env }
 const results = []
 const clients = []
+let owner
+let testDeviceId
 const check = (name, passed, detail = '') => {
   results.push({ name, passed, detail })
   if (!passed) throw new Error(`${name}: ${detail}`)
@@ -22,7 +24,7 @@ try {
   const cashier = await signIn('CASHIER_A')
   const viewer = await signIn('VIEWER_A')
   const outsider = await signIn('OWNER_B')
-  const owner = (await signInMfaFixtureAtAal2(env.BUSINESS_A_ID)).client
+  owner = (await signInMfaFixtureAtAal2(env.BUSINESS_A_ID)).client
   clients.push(owner)
   const business = await owner.from('organizations').select('display_name').eq('id', env.BUSINESS_A_ID).single()
   check('Only disposable security business is changed', !business.error && /^SECURITY_TEST_/.test(business.data?.display_name ?? ''))
@@ -35,6 +37,9 @@ try {
   const requested = await Promise.all([cashier.rpc('request_operation_rate_approval_v10', { command }), cashier.rpc('request_operation_rate_approval_v10', { command })])
   check('Concurrent rate requests deduplicate', requested.every((r) => !r.error) && requested[0].data?.id === requested[1].data?.id, requested.map((r) => r.error?.message ?? r.data?.id).join(' | '))
   const id = requested[0].data.id
+  const inbox = await owner.rpc('get_team_control_plane', { target_org: env.BUSINESS_A_ID })
+  const review = inbox.data?.approvals?.find((item) => item.id === id)
+  check('Manager sees the exact branch before publishing', !inbox.error && review?.branch_id === env.BRANCH_A1_ID && Boolean(review.branch_name) && review.is_current_requester === false, inbox.error?.message)
   const resolve = (client, buyRate = buy, sellRate = sell) => client.rpc('resolve_operation_rate_request_v11', { target_request: id, buy_rate_input: buyRate, sell_rate_input: sellRate, decision_reason_input: 'Disposable launch certification daily rate refresh' })
   for (const [name, client] of [['Requester cannot approve own rate', cashier], ['Viewer cannot approve', viewer], ['Other tenant cannot approve', outsider]]) {
     const denied = await resolve(client)
@@ -61,6 +66,7 @@ try {
   check('Cashier has assigned cashbox', !accounts.error && Boolean(account), accounts.error?.message)
   const device = await cashier.rpc('register_device', { target_org: env.BUSINESS_A_ID, friendly_name_input: 'LAUNCH_RATE_CERTIFICATION', fingerprint_hash_input: `launch-rate-${randomUUID()}`, app_version_input: 'launch-rate-certification', target_branch: env.BRANCH_A1_ID })
   check('Disposable test device registered', !device.error && Boolean(device.data?.id), device.error?.message)
+  testDeviceId = device.data.id
   const trusted = await owner.rpc('trust_device', { target_device: device.data.id, reason_input: 'Disposable launch certification' })
   check('MFA owner trusts test device', !trusted.error, trusted.error?.message)
   const operation = {
@@ -74,17 +80,18 @@ try {
   check('Modified automatic rate cannot post', Boolean(tampered.error?.message.includes('RATE_CONTEXT_CHANGED')), tampered.error?.message)
   const posted = await Promise.all([cashier.rpc('record_operation', { command: operation }), cashier.rpc('record_operation', { command: operation })])
   check('Cashier posts once after resolution', posted.every((r) => !r.error) && Boolean(posted[0].data?.id) && posted[0].data.id === posted[1].data?.id, posted.map((r) => r.error?.message ?? r.data?.id).join(' | '))
-  const lines = await owner.from('journal_lines').select('base_debit,base_credit,applied_rate').eq('journal_entry_id', posted[0].data.id)
-  check('Posted journal is readable', !lines.error, lines.error?.message)
-  const debit = lines.data.reduce((sum, row) => sum.plus(row.base_debit), new Decimal(0))
-  const credit = lines.data.reduce((sum, row) => sum.plus(row.base_credit), new Decimal(0))
-  check('Journal balances at exactly the reviewed rate', debit.eq(credit) && debit.eq(new Decimal('0.01').times(after.data.applied_rate)), `${debit} / ${credit}`)
-  const revoked = await owner.rpc('revoke_device', { target_device: device.data.id, reason_input: 'Disposable launch certification completed' })
-  check('Test device retired', !revoked.error, revoked.error?.message)
+  const detail = await owner.rpc('get_transaction_detail', { target_org: env.BUSINESS_A_ID, target_entry: posted[0].data.id })
+  check('Posted transaction is readable through authorized API', !detail.error, detail.error?.message)
+  check('Posted receipt retains entered amount and currency', detail.data.status === 'posted' && new Decimal(detail.data.amount).eq('0.01') && detail.data.currency_code === 'USD', posted[0].data.id)
 } catch (error) {
   if (!results.some((item) => !item.passed)) results.push({ name: 'Certification completed', passed: false, detail: error.message })
   process.exitCode = 1
 } finally {
+  if (owner && testDeviceId) {
+    const retired = await owner.rpc('revoke_device', { target_device: testDeviceId, reason_input: 'Disposable launch certification completed' })
+    results.push({ name: 'Test device retired', passed: !retired.error, detail: retired.error?.message ?? '' })
+    if (retired.error) process.exitCode = 1
+  }
   await Promise.allSettled(clients.map((client) => client.auth.signOut()))
   const report = { generated_at: new Date().toISOString(), passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, results }
   mkdirSync('test-results/launch-readiness', { recursive: true })

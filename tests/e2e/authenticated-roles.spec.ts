@@ -65,14 +65,14 @@ test.describe("authenticated seven-role contract", () => {
           source_currency_input: "USD", target_currency_input: "AFN",
           buy_rate_input: "70", sell_rate_input: "71",
         });
-        expect(denied.error?.message).toContain("CAPABILITY_DENIED");
+        expect(denied.error?.message).toContain("CAPABILITY_REQUIRED:rates.manage");
       }
       if (!membership?.capabilities.includes("owner.capital.post")) {
         const denied = await client.rpc("record_operation", { command: {
           organization_id: organizationId!, client_command_id: crypto.randomUUID(),
           operation: "OWNER_INVESTMENT", currency: "AFN", amount: "0.01",
         } });
-        expect(denied.error?.message).toContain("CAPABILITY_DENIED");
+        expect(denied.error?.message).toContain("CAPABILITY_REQUIRED:owner.capital.post");
       }
       await client.auth.signOut();
     });

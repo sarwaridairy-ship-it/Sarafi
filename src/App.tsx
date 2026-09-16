@@ -4248,7 +4248,12 @@ function TeamDevicesView({
     inspection ? [previewCashbox] : [],
   );
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
-  const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRecord[]>(inspection ? [{
+    id: "inspection-daily-rate", action_type: "operation_rate", reason: "", amount_base: null,
+    currency_code: "USD", status: "pending", requested_at: new Date().toISOString(),
+    requested_by_name: u("previewCashierName"), decided_by_name: null,
+    branch_id: previewBranch.id, branch_name: previewBranch.name, is_current_requester: false,
+  }] : []);
   const [joinRequests, setJoinRequests] = useState<WorkerJoinRequestRecord[]>(inspection ? [{ id: "inspection-request", display_name: language === "en" ? "Ahmad Rahimi" : language === "fa-AF" ? "احمد رحیمی" : "احمد رحیمي", email: "ahmad@example.com", status: "pending", requested_at: new Date().toISOString(), assigned_role: null, branch_ids: [], cashbox_ids: [], capability_overrides: [], limits: {}, mfa_required: true, device_review_required: true }] : []);
   const [capabilityMatrix, setCapabilityMatrix] = useState<MembershipCapabilityMatrixRecord[]>([]);
   const [teamSection, setTeamSection] = useState<"people" | "invitations" | "requests" | "devices" | "roles">("people");
@@ -5208,7 +5213,7 @@ function TeamDevicesView({
                     {u("approvalRequest")} · {statusName(approval.status)}
                   </b>
                   <small>
-                    {approval.reason} · {u("requested")}{" "}
+                    {approval.action_type === "operation_rate" ? approval.requested_by_name : approval.reason} · {u("requested")}{" "}
                     {new Date(approval.requested_at).toLocaleString(language, { hour12: false })}
                   </small>
                 </span>
@@ -5218,9 +5223,10 @@ function TeamDevicesView({
                       ? `${approval.amount_base} ${approval.currency_code ?? ""}`
                       : u("review")}
                   </strong>
-                  {canDecideApprovals && approval.status === "pending" && <>
+                  {canDecideApprovals && approval.status === "pending" && !approval.is_current_requester && <>
                     {approval.action_type === "operation_rate" ? canManageRates ? <DailyRateRequestEditor
                       id={approval.id} currency={approval.currency_code ?? ""} language={language}
+                      branchName={approval.branch_name ?? ""} inspection={inspection}
                       reason={approvalReason} verified={mfa.verified} onToast={onToast}
                       onSaved={() => { setApprovalReason(""); setRefresh((value) => value + 1); onToast(u("savedSuccessfully")); }}
                     /> : null : <button className="text-button" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "approved")}>{u("approved")}</button>}
