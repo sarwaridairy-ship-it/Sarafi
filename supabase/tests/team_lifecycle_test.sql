@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(34);
+select plan(35);
 
 create function pg_temp.team_id(label text) returns uuid language sql immutable as $$
   select md5('SARAFI_TEAM_LIFECYCLE_' || label)::uuid;
@@ -107,5 +107,11 @@ select ok(not has_function_privilege('authenticated','public.require_aal2()','ex
 select ok(not has_function_privilege('authenticated','public.require_capability(uuid,text,jsonb)','execute') and not has_function_privilege('anon','public.require_capability(uuid,text,jsonb)','execute'),'capability helper is not a client RPC');
 select ok(not has_function_privilege('authenticated','public.require_sanctions_provider(uuid)','execute') and not has_function_privilege('anon','public.require_sanctions_provider(uuid)','execute'),'provider helper is not a client RPC');
 select ok(not has_function_privilege('authenticated','public.user_can_use_money_account(uuid,uuid)','execute') and not has_function_privilege('anon','public.user_can_use_money_account(uuid,uuid)','execute'),'account-use helper is not a client RPC');
+insert into public.membership_capability_overrides (membership_id,capability_code,allowed,granted_by,reason)
+  values (pg_temp.team_id('owner-membership'),'team.invite',false,pg_temp.team_id('owner'),'Synthetic explicit invitation denial');
+select pg_temp.team_signin('owner');
+set local role authenticated;
+select throws_ok($$select public.create_team_invitation(pg_temp.team_id('org'),'legacy@example.invalid','Synthetic worker','viewer','{}','{}',false)$$,'42501','CAPABILITY_REQUIRED:team.invite','legacy invitation API respects an explicit invitation denial');
+reset role;
 select * from finish();
 rollback;

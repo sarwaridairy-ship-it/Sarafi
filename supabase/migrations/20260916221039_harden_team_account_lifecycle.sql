@@ -1,4 +1,50 @@
 -- Harden legacy onboarding/team paths. Existing records are not rewritten.
+
+CREATE OR REPLACE FUNCTION public.create_team_invitation(target_org uuid, invited_email text, invited_name text, invited_role text, branch_scope uuid[] DEFAULT '{}'::uuid[], cashbox_scope uuid[] DEFAULT '{}'::uuid[], requires_mfa boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'auth', 'extensions'
+AS $function$
+declare actor_id uuid := auth.uid();
+declare normalized_email text := lower(trim(invited_email));
+declare normalized_name text := trim(invited_name);
+declare normalized_branches uuid[] := coalesce(array(select distinct unnest(branch_scope)), '{}'::uuid[]);
+declare normalized_cashboxes uuid[] := coalesce(array(select distinct unnest(cashbox_scope)), '{}'::uuid[]);
+declare invitation public.team_invitations;
+declare invitation_token text;
+begin
+  if actor_id is null then raise exception 'Authentication required'; end if;
+  perform public.require_capability(target_org, 'team.invite', '{}'::jsonb);
+  if not public.has_org_permission(target_org, 'team:manage') then raise exception 'Team management permission required'; end if;
+  perform public.require_aal2();
+  if normalized_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then raise exception 'A valid employee email is required'; end if;
+  if length(normalized_name) < 2 or length(normalized_name) > 100 then raise exception 'Employee name must be between 2 and 100 characters'; end if;
+  if invited_role not in ('manager', 'accountant', 'cashier', 'viewer', 'compliance_officer') then raise exception 'Choose a valid employee role'; end if;
+  if cardinality(normalized_branches) > 0 and exists (select 1 from unnest(normalized_branches) branch_id where not exists (select 1 from public.branches b where b.id = branch_id and b.organization_id = target_org and b.active)) then raise exception 'A selected branch is not active for this business'; end if;
+  if cardinality(normalized_cashboxes) > 0 and exists (select 1 from unnest(normalized_cashboxes) cashbox_id where not exists (select 1 from public.cashboxes c where c.id = cashbox_id and c.organization_id = target_org and c.active)) then raise exception 'A selected cashbox is not active for this business'; end if;
+  if invited_role = 'cashier' and (cardinality(normalized_branches) = 0 or cardinality(normalized_cashboxes) = 0) then raise exception 'A cashier must be assigned to at least one branch and cashbox'; end if;
+  if invited_role = 'cashier' and exists (select 1 from public.cashboxes c where c.id = any(normalized_cashboxes) and not (c.branch_id = any(normalized_branches))) then raise exception 'Every selected cashbox must belong to a selected branch'; end if;
+  if exists (select 1 from public.organization_memberships m join auth.users u on u.id = m.user_id where m.organization_id = target_org and lower(u.email) = normalized_email and m.active) then raise exception 'This email already belongs to an active team member'; end if;
+
+  update public.team_invitations set status = 'expired' where organization_id = target_org and lower(email) = normalized_email and status = 'pending' and expires_at <= now();
+  if exists (select 1 from public.team_invitations where organization_id = target_org and lower(email) = normalized_email and status = 'pending') then raise exception 'A pending invitation already exists for this email'; end if;
+
+  invitation_token := encode(extensions.gen_random_bytes(32), 'hex');
+  insert into public.team_invitations (organization_id, email, display_name, role_code, branch_ids, cashbox_ids, mfa_required, token_hash, invited_by, expires_at)
+    values (target_org, normalized_email, normalized_name, invited_role, normalized_branches, normalized_cashboxes, requires_mfa, encode(extensions.digest(invitation_token, 'sha256'), 'hex'), actor_id, now() + interval '72 hours')
+    returning * into invitation;
+
+  insert into public.security_audit_events (organization_id, actor_user_id, event_type, metadata)
+    values (target_org, actor_id, 'team_invitation_created', jsonb_build_object('invitation_id', invitation.id, 'email', normalized_email, 'role', invited_role, 'branch_count', cardinality(normalized_branches), 'cashbox_count', cardinality(normalized_cashboxes), 'expires_at', invitation.expires_at, 'aal', auth.jwt()->>'aal'));
+
+  return jsonb_build_object('id', invitation.id, 'invite_token', invitation_token, 'email', invitation.email, 'display_name', invitation.display_name, 'role_code', invitation.role_code, 'expires_at', invitation.expires_at);
+end;
+$function$;
+
+revoke all on function public.create_team_invitation(uuid,text,text,text,uuid[],uuid[],boolean) from public, anon;
+grant execute on function public.create_team_invitation(uuid,text,text,text,uuid[],uuid[],boolean) to authenticated;
+
 -- New invitations/re-admission replace former capability overrides; current invitations apply their approved bundle through the existing trigger.
 
 CREATE OR REPLACE FUNCTION public.create_business(command jsonb)

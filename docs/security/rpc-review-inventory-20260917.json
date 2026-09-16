@@ -1,0 +1,905 @@
+{
+  "format": "sarafi-rpc-review-inventory-v1",
+  "projectRef": "vbvwuqzqtcorassvotke",
+  "observedAt": "2026-09-16T22:06:00Z",
+  "source": "Read-only pg_proc/pg_get_functiondef inventory. Timestamp is approximate; hashes bind the observed definitions.",
+  "candidateMigration": "20260916221039_harden_team_account_lifecycle.sql",
+  "releaseApproved": false,
+  "fullyCertifiedFunctions": 0,
+  "functions": [
+    {
+      "signature": "accept_team_connection_code(text)",
+      "observedDefinitionMd5": "1ee7f2a73f0e4f62f8469cb8343dc786",
+      "anonymous": false,
+      "review": "Candidate: suspension check, inactive-owner protection and fresh assignment replacing former overrides; validated by new isolated tests, not yet live."
+    },
+    {
+      "signature": "accept_team_invitation(text)",
+      "observedDefinitionMd5": "2a9f5940886b8a7721abebf86003263e",
+      "anonymous": false,
+      "review": "Candidate: suspension check and fresh assignment replacing former overrides; preserves existing email/token/expiry/owner checks."
+    },
+    {
+      "signature": "approve_cashbox_close(uuid)",
+      "observedDefinitionMd5": "82c7f9703c1a5c542b74a76c2bf74260",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "archive_private_document(uuid,uuid,text,boolean,timestamp with time zone)",
+      "observedDefinitionMd5": "c99e8392ddcaae337def376faf359e52",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "authorize_private_document_access(uuid,uuid,uuid,text,text)",
+      "observedDefinitionMd5": "eda95207a6a5df030aa5b002174921b6",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "begin_hawala_payout_v9(jsonb)",
+      "observedDefinitionMd5": "a6e78666624d0691473cce85889a9520",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "cancel_team_invitation(uuid,text)",
+      "observedDefinitionMd5": "c8148751a6f918fe37bf2b07a33e4bbf",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "commit_import(jsonb)",
+      "observedDefinitionMd5": "4036381e75900097f5adb39db4d52996",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "complete_hawala_payout_v9(jsonb)",
+      "observedDefinitionMd5": "573001f79c5c0f74eba2033f4f5184ef",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "configure_compliance_rule_set_v9(jsonb)",
+      "observedDefinitionMd5": "6e925539fec48510d9035a5f8ac53ab5",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "configure_hawala_partner_endpoint_v7(uuid,uuid,text,uuid,uuid,uuid)",
+      "observedDefinitionMd5": "db4c9b4f5d49530544f345a074bc02da",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_business(jsonb)",
+      "observedDefinitionMd5": "0e40b08b1f7d698e2b4f8a9db49edc9e",
+      "anonymous": false,
+      "review": "Candidate: active platform account required before organization creation."
+    },
+    {
+      "signature": "create_business_admin_invitation(uuid,text,text)",
+      "observedDefinitionMd5": "c6b0df75bd55e42896885a5d43d2f5f9",
+      "anonymous": false,
+      "review": "Candidate: current team.invite capability required in addition to owner and AAL2."
+    },
+    {
+      "signature": "create_counterparty_v6(jsonb)",
+      "observedDefinitionMd5": "7e279babd0b7a90f74f4b0f9be77b1e6",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_financial_report_snapshot(jsonb)",
+      "observedDefinitionMd5": "0a113210a75fe5433ef36aa5f001115a",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_money_account(uuid,text,text,uuid,text)",
+      "observedDefinitionMd5": "e452d1ba2c32ce81e0b144f483a3d0b6",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_organization_branch(uuid,text,text)",
+      "observedDefinitionMd5": "1e144c09332df546c76533c19f202193",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_organization_cashbox(uuid,uuid,text)",
+      "observedDefinitionMd5": "da8fa7d959d64fd2955d7e8744e0388e",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_organization_join_code(uuid,text,timestamp with time zone)",
+      "observedDefinitionMd5": "fc70f02b651d1773fff95f868a29ae64",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_rate_group(uuid,text,text)",
+      "observedDefinitionMd5": "f57af627c7fed14ca79c12e6f021d0c2",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_subscription_payment_request_v2(uuid,uuid,text,smallint,text,text,text,text,text)",
+      "observedDefinitionMd5": "ce9667db5c9aa6ba53263990f02ab17a",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_team_invitation(uuid,text,text,text,uuid[],uuid[],boolean)",
+      "observedDefinitionMd5": "468cda282552e29c5c9d0b6c1d0748a5",
+      "anonymous": false,
+      "review": "Candidate: legacy API must respect team.invite denial, not only team.manage."
+    },
+    {
+      "signature": "create_team_invitation_v4(jsonb)",
+      "observedDefinitionMd5": "960445d6f627f4ab866bec1a61e459b0",
+      "anonymous": false,
+      "review": "Source read: team.invite+AAL2; same-org scopes; owner-only overrides disallowed. Complete delegated role/scope/limit containment review remains open."
+    },
+    {
+      "signature": "create_valuation_rate_set(jsonb)",
+      "observedDefinitionMd5": "a7e2b7ca79eaea3c8515949a053206f0",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "create_worker_connection_code(uuid)",
+      "observedDefinitionMd5": "f3e4e662645e249c2115c75338e58a55",
+      "anonymous": false,
+      "review": "Source boundary: current pending/unexpired invite, team permission and AAL2; new random code digest, audited."
+    },
+    {
+      "signature": "decide_approval(uuid,text,text)",
+      "observedDefinitionMd5": "0e25b2569d40ec8fc76cfd682801bf15",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "decide_compliance_alert(uuid,text,text)",
+      "observedDefinitionMd5": "dc0fca6976d199b1c348ceb3832ca558",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "decide_subscription_payment(uuid,text,text)",
+      "observedDefinitionMd5": "6220cd2f1f5371dd6a43efb863358b21",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "decide_support_access(uuid,text,text)",
+      "observedDefinitionMd5": "be3555504d915b2d2ec45b1eadd76f15",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "delegate_business_admin(uuid,boolean,text)",
+      "observedDefinitionMd5": "639992ee80d71713522e369dbffe4606",
+      "anonymous": false,
+      "review": "Candidate: current team/manage-capabilities permissions required; delegated admin MFA mandatory."
+    },
+    {
+      "signature": "find_hawala_payout(uuid,text)",
+      "observedDefinitionMd5": "4cbd18cff73319a6e6d4dc3a7fe2fd1e",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_billing_portal(uuid)",
+      "observedDefinitionMd5": "adb5ee194e708991c860ea005b466eb8",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_cashbox_balances_v6(uuid,uuid)",
+      "observedDefinitionMd5": "62aea968915f27bf81047fe3b4c6d30e",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_counterparty_detail_v6(uuid,uuid)",
+      "observedDefinitionMd5": "2d8a498b96da3f92c2294bbeabd35945",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_counterparty_statement_v6(uuid,uuid)",
+      "observedDefinitionMd5": "e7b7257eac373e13b4ffe7b674b098ec",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_current_rates_v6(uuid,uuid,text,text)",
+      "observedDefinitionMd5": "8c9f0d5aacd5e4f6364170bb1e940301",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_debt_detail_v5(uuid,uuid)",
+      "observedDefinitionMd5": "a7ba30670a170e0496d8bffc040a366f",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_debts_v5(uuid)",
+      "observedDefinitionMd5": "c29a4a34f9f3a1e601f003d07ea6c4eb",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_effective_capabilities(uuid)",
+      "observedDefinitionMd5": "66cd6f1af08ce8d7df128d955dd669d8",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_hawala_partner_statement(uuid,uuid)",
+      "observedDefinitionMd5": "116e147cb08ac85963fc0bc4b0f20304",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_hawala_partners(uuid)",
+      "observedDefinitionMd5": "a8e33719ad2b6ad5bf133d1e2973094b",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_journal_balance_audit(uuid)",
+      "observedDefinitionMd5": "89f7ec6948a45d1fc71d0460559da39d",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_membership_capability_matrix(uuid)",
+      "observedDefinitionMd5": "ce6f2094206fe11b11108e42b5bf2e53",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_money_accounts(uuid)",
+      "observedDefinitionMd5": "3ca4be78bed68f5271fb61a996dc05b3",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_money_location_evidence(uuid)",
+      "observedDefinitionMd5": "5affdb4a835cd2f7126d27fff187173a",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_money_valuation_snapshot(uuid,date,text,jsonb)",
+      "observedDefinitionMd5": "61e73d46748baf57972d7214bfee7f17",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_my_capabilities(uuid)",
+      "observedDefinitionMd5": "239d8005bb596d0e550ab46a2fff505b",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_my_operation_rate_request_v11(uuid)",
+      "observedDefinitionMd5": "1bb146856e3e7f048c0eb9041438f1f4",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_my_resumable_approval_draft(uuid)",
+      "observedDefinitionMd5": "b515828a848a3fc91b292d16b34f82e1",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_my_workspace_context()",
+      "observedDefinitionMd5": "c039b97d1f95c2febbe1dddf00090113",
+      "anonymous": false,
+      "review": "Source boundary: only auth.uid() active memberships, suspension returns empty; branch/cashbox access arrays applied."
+    },
+    {
+      "signature": "get_named_financial_report(uuid,text,date,date)",
+      "observedDefinitionMd5": "42f0bfd6731de0bc30b2d05d71183206",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_organization_control_plane(uuid)",
+      "observedDefinitionMd5": "7d4e9320e5b9287a938b8201aa19c54c",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_organization_data_export(uuid)",
+      "observedDefinitionMd5": "65a16531454060209f8dde8f684128ac",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_platform_admin_console()",
+      "observedDefinitionMd5": "706701cc31d4143d7a4b1943fa1807d5",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_platform_operations()",
+      "observedDefinitionMd5": "8e845d8606a115b7a905e13944137d13",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_platform_organization_users(uuid)",
+      "observedDefinitionMd5": "a8178e9c80990c916fbe1adeefd2d011",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_public_platform_status()",
+      "observedDefinitionMd5": "adcb8a5b93c38244d0daa61f0625235f",
+      "anonymous": true,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_receipt_for_journal_v6(uuid,uuid)",
+      "observedDefinitionMd5": "a9546ff9f1606610671b98b081fe3233",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_reconciliation_workspace(uuid)",
+      "observedDefinitionMd5": "e4140226f12b028518868a9c157689a5",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_role_dashboard(uuid,date)",
+      "observedDefinitionMd5": "394753060bb5e2540f11032a953af9a8",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_support_diagnostics(uuid)",
+      "observedDefinitionMd5": "601428a8068531c0bd7de6f553f94fda",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_team_control_plane(uuid)",
+      "observedDefinitionMd5": "cb0dcab8150539123d16b611f4695d6f",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_transaction_detail(uuid,uuid)",
+      "observedDefinitionMd5": "dc6173bf87410ecb8e183b918e3175d2",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_transaction_history(uuid,integer)",
+      "observedDefinitionMd5": "09fd4c3b57f4691977eb12b67b93f778",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_transaction_history_page(uuid,integer,integer)",
+      "observedDefinitionMd5": "fece31c620c2dbb53ac72ca14823b428",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_transaction_rate_context(uuid,uuid,text,text)",
+      "observedDefinitionMd5": "347717cc1b29761a89f190e15b16a70f",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "get_worker_join_requests(uuid)",
+      "observedDefinitionMd5": "e35e9eefa58869f557cb7c5c9d917a01",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "has_active_support_access(uuid,text)",
+      "observedDefinitionMd5": "3962afc2b8a17431bba32fcfdf572bab",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "has_capability(uuid,text,jsonb)",
+      "observedDefinitionMd5": "6ada129abbfcb7f45891005532c20e12",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "has_org_permission(uuid,text)",
+      "observedDefinitionMd5": "6d93532f4f89b225a7e4a02503a9b05e",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "is_org_member(uuid)",
+      "observedDefinitionMd5": "9ab7524f1fdfdba327d25c73964cdc2c",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "is_org_owner(uuid)",
+      "observedDefinitionMd5": "75d1c7d6fc4d4b7585cb71661f8ac663",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "is_platform_admin()",
+      "observedDefinitionMd5": "08bdfb6faa9d854ca1faeb9b62f4b6f9",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "is_platform_user_active()",
+      "observedDefinitionMd5": "0b71557a7ffd04ecd5c3da8eb70594f7",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "list_counterparties_v6(uuid)",
+      "observedDefinitionMd5": "0bcb733586b7faaaef6483ee5cc733fa",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "list_hawala_transfers_v6(uuid)",
+      "observedDefinitionMd5": "a5c2b689794f48b67b824487e14f4ddf",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "list_hawala_transfers_v7(uuid,uuid)",
+      "observedDefinitionMd5": "e597d60e001c58fbfb38bb7f918a5677",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "list_rate_history_v6(uuid)",
+      "observedDefinitionMd5": "5203fddad68d856024c0cb3381cb4985",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "mark_notification_state(uuid,text)",
+      "observedDefinitionMd5": "7e35db87913fa786103bd0c3a2353e3b",
+      "anonymous": false,
+      "review": "Source boundary: update is restricted to auth.uid() recipient; invalid state rejected. Personal notification mutation, not financial authority."
+    },
+    {
+      "signature": "pay_hawala_beneficiary(jsonb)",
+      "observedDefinitionMd5": "a91c7287f2c36aba90930e8f204fc277",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "private_document_upload_target_is_valid(uuid,uuid)",
+      "observedDefinitionMd5": "3b85be22b8faf443775434ae9e65106c",
+      "anonymous": false,
+      "review": "Source boundary: document capability and same-org counterparty, or own nonexpired payout draft at recipient branch. All branch-scope combinations remain to test."
+    },
+    {
+      "signature": "record_cashbox_close(jsonb)",
+      "observedDefinitionMd5": "afa8fd5fa8f4ec00af8140f6c16f9db3",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_client_telemetry(jsonb)",
+      "observedDefinitionMd5": "d5e1dac86f2f3c38b3f49c94412e7ad6",
+      "anonymous": false,
+      "review": "Source boundary: authenticated actor; optional org membership; bounded identifiers/status, rate cap and correlation dedupe. Concurrent rate-cap behavior not certified."
+    },
+    {
+      "signature": "record_compliance_alert(uuid,uuid,uuid,text,jsonb)",
+      "observedDefinitionMd5": "d58a81111d99dbd046fb43d91832bf2a",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_debt(jsonb)",
+      "observedDefinitionMd5": "198687cd77a8acaf2133b5978b2fdbf4",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_fx_trade(jsonb)",
+      "observedDefinitionMd5": "edb5f13786b2be1fbd9c9e527b50f991",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_fx_trade_v5(jsonb)",
+      "observedDefinitionMd5": "ee82a4df791c23ed2967e1fe202e734f",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_hawala_incoming(jsonb)",
+      "observedDefinitionMd5": "f61a5a82737c4de1f33501c93ef38c48",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_hawala_incoming_v7(jsonb)",
+      "observedDefinitionMd5": "b63696a513bbd27cf96b68cbeb9922cc",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_hawala_send(jsonb)",
+      "observedDefinitionMd5": "03c84a55dd0e4d019ae2dcff94ad5d9c",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_hawala_send_v6(jsonb)",
+      "observedDefinitionMd5": "995b8dbb1f68467b879b5a26cd4b745b",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_hawala_send_v7(jsonb)",
+      "observedDefinitionMd5": "d5d8b6dab90539823ee2429aa657361b",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_opening_balance(jsonb)",
+      "observedDefinitionMd5": "3c796b7e3548b685632a74414d756cff",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_operation(jsonb)",
+      "observedDefinitionMd5": "64b96fc933e4f17b30ff994534dbb9ba",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_report_export(jsonb)",
+      "observedDefinitionMd5": "869de1f5d925f257f6cbd3b9d8087b6f",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "record_sensitive_document_access(uuid,uuid,text)",
+      "observedDefinitionMd5": "e3b3d4b74dd7ceeb2d6a66473981f895",
+      "anonymous": false,
+      "review": "Source boundary: action-specific capability and exact same-org attachment; returns audit record, not document bytes."
+    },
+    {
+      "signature": "register_device(uuid,text,text,text,uuid)",
+      "observedDefinitionMd5": "ebcec4ee4ddeefb8a594e5a5ccdc7b4a",
+      "anonymous": false,
+      "review": "Source boundary: active platform/org membership, assigned branch for non-owner, same-user fingerprint, revoked devices stay revoked. Device trust/real biometrics remain separate gates."
+    },
+    {
+      "signature": "reject_cashbox_close(uuid,text)",
+      "observedDefinitionMd5": "6b5d521da1fb9dc7374e27da52f359f0",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "request_business_access(text,text)",
+      "observedDefinitionMd5": "50ecd6db79452e6f5afd866b61840b4f",
+      "anonymous": false,
+      "review": "Candidate: active platform account required before request lookup/write."
+    },
+    {
+      "signature": "request_fx_trade_approval(jsonb)",
+      "observedDefinitionMd5": "a9ea7cf6f4b52ed363e4034375d52b25",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "request_fx_trade_approval_v5(jsonb)",
+      "observedDefinitionMd5": "24b5ae21808a3d754b70d1b446676d39",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "request_hawala_payout_approval(jsonb)",
+      "observedDefinitionMd5": "a9ad5e40f8e78a69ba3e9f90415efbd0",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "request_operation_rate_approval_v10(jsonb)",
+      "observedDefinitionMd5": "1771e26b56678ae112114d1d26fbefaf",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "request_reversal(jsonb)",
+      "observedDefinitionMd5": "42ec32c11493d7bb1bcdcd13f346ffe3",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "request_support_access(uuid,text[],text,integer)",
+      "observedDefinitionMd5": "3c8bba52abc920cd9084ceb94a2f8df7",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "require_aal2()",
+      "observedDefinitionMd5": "c7ceeeccc8cdd61a91ee3b047d3d871b",
+      "anonymous": false,
+      "review": "Candidate internal-only: nested definer APIs retain their own privileges; direct client execution unnecessary."
+    },
+    {
+      "signature": "require_active_device(uuid,uuid)",
+      "observedDefinitionMd5": "2ff160591ecb65ee17819f55c98af17e",
+      "anonymous": false,
+      "review": "Candidate internal-only: no application/Edge caller, RLS policy, view or invoker-function reference found. Direct authenticated/anon execution revoked; nested flow verification required."
+    },
+    {
+      "signature": "require_capability(uuid,text,jsonb)",
+      "observedDefinitionMd5": "2aeef0c4f8120466e5c200a07122dac5",
+      "anonymous": false,
+      "review": "Candidate internal-only: no direct client, RLS/view or invoker-function caller found."
+    },
+    {
+      "signature": "require_sanctions_provider(uuid)",
+      "observedDefinitionMd5": "db28fffaba3f955dcd128ccc6ff2e466",
+      "anonymous": false,
+      "review": "Candidate internal-only: compliance permission predicate present; direct client API unnecessary."
+    },
+    {
+      "signature": "resolve_operation_rate_request_v11(uuid,numeric,numeric,text)",
+      "observedDefinitionMd5": "814fd1f7afdd91d3fdd6c78416f52cc4",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "resume_approved_fx_trade(uuid)",
+      "observedDefinitionMd5": "5a20a85f9dd7084779c34c4228dc0466",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "resume_approved_hawala_payout(uuid)",
+      "observedDefinitionMd5": "4ae27a3b4a5a416c52b0d9c6e0eec75a",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "review_worker_join_request(uuid,text,text,uuid[],uuid[],jsonb,jsonb,boolean,text)",
+      "observedDefinitionMd5": "b1fc16c920e8b6517b0900f7a7a34f3c",
+      "anonymous": false,
+      "review": "Candidate: no owner/active-member replacement; suspended recipients denied; cashier branch/cashbox consistency; fresh overrides and admin MFA."
+    },
+    {
+      "signature": "revoke_device(uuid,text)",
+      "observedDefinitionMd5": "4e4524241899d937804cc76ad3c8da78",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "revoke_support_access(uuid,text)",
+      "observedDefinitionMd5": "cf50fd4a11642d8c80934a49ee5da6d9",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "save_compliance_case(jsonb)",
+      "observedDefinitionMd5": "2c424ba8b4618b3941f0b2b0b26497ca",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "search_counterparties_v7(uuid,text)",
+      "observedDefinitionMd5": "662915a1b98fcfa6c3f763ef07391b1d",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "search_transaction_history_v7(uuid,text,date,date,integer)",
+      "observedDefinitionMd5": "ee70feb14250dfa0ef3710cad4e04358",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_exchange_rate(uuid,uuid,text,text,numeric,numeric)",
+      "observedDefinitionMd5": "19618169ba6b1d79331f365d584b63fc",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_membership_active(uuid,boolean,text)",
+      "observedDefinitionMd5": "36d98fc3c3f3da0a1e49d4d6e5e11331",
+      "anonymous": false,
+      "review": "Candidate: self/owner mutation prohibited; peer business-admin mutation reserved for owner."
+    },
+    {
+      "signature": "set_membership_capability(uuid,text,boolean,uuid[],uuid[],jsonb,text)",
+      "observedDefinitionMd5": "9d33531dc5317c0c535ed2b43a2fb7e2",
+      "anonymous": false,
+      "review": "Source read: team capability+AAL2, owner/self/peer restrictions and same-org scope validation. Complete delegated scope/limit containment review remains open."
+    },
+    {
+      "signature": "set_notification_preference(uuid,text,boolean,numeric)",
+      "observedDefinitionMd5": "76e706470fd084ee6bc71795ec7f383e",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_organization_branch_state(uuid,boolean,text)",
+      "observedDefinitionMd5": "2bc2fbe307c00855acad83b422dcc5fd",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_organization_cashbox_state(uuid,boolean,text)",
+      "observedDefinitionMd5": "d0f9b4d1817b360acff9ee35c06f75b5",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_organization_currency(uuid,text,boolean)",
+      "observedDefinitionMd5": "70e6d795f7497580f647b890cfbfb75e",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_organization_feature_state(uuid,text,boolean)",
+      "observedDefinitionMd5": "08fa08fdd7503c6d240c036c37c73158",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_organization_rate_currencies(uuid,text[])",
+      "observedDefinitionMd5": "83daa2edd08478fb8238ad3457695a3c",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_payment_provider_state(text,text)",
+      "observedDefinitionMd5": "1234c9eeaa9338eb67bd7496529af5f4",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_platform_announcement(jsonb)",
+      "observedDefinitionMd5": "9d32969ffdc304fd4aa39b34810479e5",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_platform_app_version(jsonb)",
+      "observedDefinitionMd5": "1d8d4e03f1c30098c9788f9da7670b7d",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_platform_user_access(uuid,text,text)",
+      "observedDefinitionMd5": "1bd6366938ae869519a7910a9413064e",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_rate_group_exchange_rate(uuid,uuid,uuid,text,text,numeric,numeric,numeric)",
+      "observedDefinitionMd5": "bf74d2f5138d4c63ba3f5e35662bd3ea",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_subscription_plan_price(uuid,smallint,numeric,boolean)",
+      "observedDefinitionMd5": "72ded2b5f336981e3e6f167b98c97831",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "set_subscription_status(uuid,text,text)",
+      "observedDefinitionMd5": "cfd44f2b759851d0b9dcfb7e1cdba1ce",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "settle_debt(jsonb)",
+      "observedDefinitionMd5": "241bc8fb8470b226a60b8d3a99814048",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "settle_hawala_partner(jsonb)",
+      "observedDefinitionMd5": "e8314b091e71b5158c444d28c78d9e24",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "submit_cashbox_close(uuid)",
+      "observedDefinitionMd5": "8b78f8ae3190e46a91a87da3ec782818",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "transition_hawala_status(jsonb)",
+      "observedDefinitionMd5": "1b23bdd9fb5a7a02c3431ab2a37cfcaf",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "transition_hawala_status_v7(jsonb)",
+      "observedDefinitionMd5": "37637886918e90c44f1039d21edf1199",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "trust_device(uuid,text)",
+      "observedDefinitionMd5": "266699d90c59f48a8844e1444850fb93",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "update_app_lock_policy(uuid,jsonb)",
+      "observedDefinitionMd5": "7be92ee6c79ee2dc2b77ea570fbcf580",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "update_organization_control_settings(jsonb)",
+      "observedDefinitionMd5": "e5cfc1c9ed861dace17b411f0d2f15b3",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "update_organization_profile(uuid,text,text,text,date)",
+      "observedDefinitionMd5": "badc98b7f9fcfd97f6462f38daed1173",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "update_organization_settings(uuid,text,text,text,boolean)",
+      "observedDefinitionMd5": "e6cb31241303b66113d25ebca736345b",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "update_team_assignment_v4(jsonb)",
+      "observedDefinitionMd5": "c887c6b5efff246b1f07727255014fda",
+      "anonymous": false,
+      "review": "Source read: guarded wrapper calls legacy membership/delegation and per-capability setters. Changed legacy endpoints are under regression tests; same-role override replacement semantics remain open."
+    },
+    {
+      "signature": "update_team_membership(uuid,text,uuid[],uuid[],boolean,text)",
+      "observedDefinitionMd5": "3e6225820d8a8575926e5a646d2610ed",
+      "anonymous": false,
+      "review": "Candidate: only owner may alter another business administrator through the legacy endpoint."
+    },
+    {
+      "signature": "upsert_expense_category(uuid,text,boolean)",
+      "observedDefinitionMd5": "5ccdaf21cd803a0a54253447f534d42d",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "upsert_kyc_profile(jsonb)",
+      "observedDefinitionMd5": "09dd93c49143f16f4a39126c9ebb643d",
+      "anonymous": false,
+      "review": "NOT_REVIEWED_IN_THIS_PASS"
+    },
+    {
+      "signature": "user_can_use_money_account(uuid,uuid)",
+      "observedDefinitionMd5": "da549dbf0ab527e1f9982c269a112898",
+      "anonymous": false,
+      "review": "Candidate internal-only. Legacy boolean checks membership/cashier assignment but not suspension; financial callers still need their own capability/scope review."
+    }
+  ]
+}
