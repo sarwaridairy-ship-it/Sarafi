@@ -4,6 +4,13 @@ The repository now has an executable post-restore reconciliation check. It does 
 perform the provider restore itself because Supabase backup/PITR restore is controlled
 by the project owner and requires a separate target project.
 
+The checker requires Node.js 24 and a quiescent target: stop test/business writes
+for the before/after snapshots. It pages through the complete tables, requests
+database numerics as decimal strings, and verifies each posted journal separately.
+It fails on truncated/changing page counts. This is not an atomic database snapshot
+and does not itself perform or certify a restore. Create a fresh `decimal_strings_v2`
+baseline; older number-encoded reports cannot establish exact decimal equality.
+
 ## Required provider action
 
 Record the linked project plan, backup retention, PITR availability, restore timestamp,

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Decimal from "decimal.js";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { exactTotal, invalidPostedJournals, readCompletePages } from "../../src/domain/reconciliation.ts";
 
 const source = process.env.SARAFI_STEP17_ENV ?? ".env.step16.local";
 const fileEnv = readFileSync(source, "utf8")
@@ -44,14 +45,14 @@ const signedIn = await client.auth.signInWithPassword({
 if (signedIn.error)
   throw new Error(`sign in failed: ${signedIn.error.message}`);
 const organization = env.BUSINESS_A_ID;
-const rows = async (table, columns = "*") => {
-  const result = await observer
+const rows = async (table, columns = "id") => readCompletePages(async (offset, size) => {
+  return observer
     .from(table)
-    .select(columns)
-    .eq(table === "organizations" ? "id" : "organization_id", organization);
-  if (result.error) throw new Error(`${table}: ${result.error.message}`);
-  return result.data;
-};
+    .select(columns, { count: "exact" })
+    .eq(table === "organizations" ? "id" : "organization_id", organization)
+    .order(table === "fx_inventory_cost_state" ? "currency_code" : "id")
+    .range(offset, offset + size - 1);
+});
 const snapshot = async () => {
   const [
     organizations,
@@ -74,13 +75,13 @@ const snapshot = async () => {
     rows("journal_entries", "id,status"),
     rows(
       "journal_lines",
-      "id,native_debit,native_credit,base_debit,base_credit",
+      "id,journal_entry_id,native_debit::text,native_credit::text,base_debit::text,base_credit::text",
     ),
-    rows("debts", "id,outstanding_amount"),
-    rows("settlements", "id,amount"),
+    rows("debts", "id,outstanding_amount::text"),
+    rows("settlements", "id,amount::text"),
     rows(
       "fx_inventory_cost_state",
-      "currency_code,quantity,carrying_base_value",
+      "currency_code,quantity::text,carrying_base_value::text",
     ),
     rows("security_audit_events", "id,event_type"),
   ]);
@@ -100,47 +101,18 @@ const snapshot = async () => {
       security_audit_events: audits.length,
     },
     totals: {
-      journal_base_debit: Number(
-        lines
-          .reduce((sum, row) => sum.plus(row.base_debit ?? 0), new Decimal(0))
-          .toFixed(12),
-      ),
-      journal_base_credit: Number(
-        lines
-          .reduce((sum, row) => sum.plus(row.base_credit ?? 0), new Decimal(0))
-          .toFixed(12),
-      ),
-      journal_native_debit: Number(
-        lines
-          .reduce((sum, row) => sum.plus(row.native_debit ?? 0), new Decimal(0))
-          .toFixed(12),
-      ),
-      journal_native_credit: Number(
-        lines
-          .reduce(
-            (sum, row) => sum.plus(row.native_credit ?? 0),
-            new Decimal(0),
-          )
-          .toFixed(12),
-      ),
-      outstanding_debt: Number(
-        debts
-          .reduce(
-            (sum, row) => sum.plus(row.outstanding_amount ?? 0),
-            new Decimal(0),
-          )
-          .toFixed(12),
-      ),
-      settlement_amount: Number(
-        settlements
-          .reduce((sum, row) => sum.plus(row.amount ?? 0), new Decimal(0))
-          .toFixed(12),
-      ),
+      journal_base_debit: exactTotal(lines, "base_debit"),
+      journal_base_credit: exactTotal(lines, "base_credit"),
+      journal_native_debit: exactTotal(lines, "native_debit"),
+      journal_native_credit: exactTotal(lines, "native_credit"),
+      outstanding_debt: exactTotal(debts, "outstanding_amount"),
+      settlement_amount: exactTotal(settlements, "amount"),
     },
     inventory: inventory.sort((left, right) =>
       left.currency_code.localeCompare(right.currency_code),
     ),
     posted_entries: entries.filter((entry) => entry.status === "posted").length,
+    invalid_posted_journals: invalidPostedJournals(entries, lines),
   };
 };
 const actual = await snapshot();
@@ -159,13 +131,16 @@ const comparable = (value) =>
 // Double-entry balance is authoritative in the organization's base currency.
 // Native amounts belong to different currencies (for example AFN and USD) and
 // must never be added together or compared as if they shared one unit.
-const balanced = new Decimal(String(actual.totals.journal_base_debit)).eq(
+const balanced = actual.invalid_posted_journals.length === 0 && new Decimal(String(actual.totals.journal_base_debit)).eq(
   String(actual.totals.journal_base_credit),
 );
 const report = {
   project: new URL(env.SUPABASE_URL).hostname,
   generated_at: new Date().toISOString(),
   mode: expected ? "reconcile" : "snapshot",
+  numeric_encoding: "decimal_strings_v2",
+  requires_quiescent_target: true,
+  restore_performed_by_this_script: false,
   balanced,
   balance_basis: "base_currency",
   native_totals: "informational_only_cross_currency",
