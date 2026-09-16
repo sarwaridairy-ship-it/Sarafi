@@ -1521,3 +1521,9 @@
   .automatic-rate-switch { gap:4px; padding-inline-start:8px; }
   .transaction-rate-exception { align-items:stretch; flex-direction:column; }
 }
+.daily-rate-request-editor{border:1px solid var(--border,#d8e3df);border-radius:12px;padding:12px;min-width:0;width:min(100%,360px);display:grid;gap:10px;text-align:start}
+.daily-rate-request-editor legend{font-weight:700;font-size:.85rem}
+.daily-rate-request-editor small{white-space:normal;line-height:1.5}
+.daily-rate-request-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.daily-rate-request-inputs label{display:grid;gap:5px;min-width:0;font-size:.8rem}
+.daily-rate-request-inputs input{width:100%;min-width:0}

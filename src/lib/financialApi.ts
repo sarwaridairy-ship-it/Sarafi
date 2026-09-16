@@ -1107,6 +1107,22 @@ export async function requestOperationRateApproval(command: {
   return { data: result.data as { id: string; status: string } | null, error: result.error?.message ?? null }
 }
 
+export async function getOperationRateRequest(id: string): Promise<RpcResult<{ status: string; expires_at: string }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_my_operation_rate_request_v11', { target_request: id })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function resolveOperationRateRequest(id: string, buyRate: string, sellRate: string, reason: string): Promise<RpcResult<ApprovalRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('resolve_operation_rate_request_v11', {
+    target_request: id, buy_rate_input: buyRate, sell_rate_input: sellRate, decision_reason_input: reason,
+  })
+  return { data: result.data as ApprovalRecord | null, error: result.error?.message ?? null }
+}
+
 export async function createTeamInvitation(input: { organizationId: string; email: string; displayName: string; role: string; branchIds: string[]; cashboxIds: string[]; capabilityOverrides?: Array<{ capability: string; allowed: boolean }>; limits?: Record<string, unknown>; requiresMfa?: boolean }): Promise<RpcResult<CreatedTeamInvitation>> {
   const client = getSupabaseClient()
   if (!client) return { data: null, error: 'Supabase is not configured' }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { InlineRatePublication } from "../../domain/commands";
-import { getTransactionRateContext, requestOperationRateApproval, type OperationRateContext } from "../../lib/financialApi";
+import { getOperationRateRequest, getTransactionRateContext, requestOperationRateApproval, type OperationRateContext } from "../../lib/financialApi";
+import { midpointRate, positiveRate, rateOutsideTolerance } from "../../domain/rateMath";
 import type { Language } from "../../lib/i18n";
 import { TransactionRateControl } from "./TransactionRateControl";
 
@@ -14,22 +15,25 @@ const copy = {
   en: {
     loading: "Checking the approved daily rate…",
     restricted: "A manager must approve this rate. Your complete draft stays on this page.",
-    approval: "This rate will be sent to a manager for approval. Your complete draft will stay here.",
-    approvalSent: "Rate approval requested. Your draft remains on this page.",
+    approval: "Ask a manager to update the daily rate. Your draft stays here.",
+    approvalSent: "Waiting for the daily rate. This form updates automatically.",
+    approvalClosed: "This rate request was closed. You can request a new daily rate.",
     exceptionReason: "Reason for this exceptional rate",
   },
   "fa-AF": {
     loading: "نرخ روزانه تأییدشده بررسی می‌شود…",
     restricted: "مدیر باید این نرخ را تأیید کند. تمام معلومات فورم در همین صفحه می‌ماند.",
-    approval: "این نرخ برای تأیید به مدیر فرستاده می‌شود. تمام معلومات فورم محفوظ می‌ماند.",
-    approvalSent: "درخواست تأیید نرخ فرستاده شد. فورم شما در همین صفحه محفوظ است.",
+    approval: "از مدیر بخواهید نرخ روزانه را تازه کند. معلومات فورم شما محفوظ می‌ماند.",
+    approvalSent: "منتظر نرخ روزانه هستیم. نرخ در همین فورم خودکار تازه می‌شود.",
+    approvalClosed: "درخواست نرخ بسته شد. می‌توانید دوباره درخواست کنید.",
     exceptionReason: "دلیل این نرخ استثنایی",
   },
   "ps-AF": {
     loading: "تایید شوی ورځنی نرخ کتل کېږي…",
     restricted: "مدیر باید دا نرخ تایید کړي. ستاسو ټوله مسوده په همدې پاڼه کې پاتې کېږي.",
-    approval: "دا نرخ به مدیر ته د تایید لپاره ولېږل شي. ستاسو ټوله مسوده به همدلته پاتې وي.",
-    approvalSent: "د نرخ د تایید غوښتنه ولېږل شوه. ستاسو مسوده په همدې پاڼه کې پاتې ده.",
+    approval: "له مدیر څخه د ورځني نرخ د تازه کولو غوښتنه وکړئ. ستاسو معلومات دلته ساتل کېږي.",
+    approvalSent: "د ورځني نرخ په تمه یو. نرخ په همدې فورمه کې پخپله تازه کېږي.",
+    approvalClosed: "د نرخ غوښتنه وتړل شوه. بیا غوښتنه کولی شئ.",
     exceptionReason: "د دې استثنايي نرخ دلیل",
   },
 } as const;
@@ -65,7 +69,8 @@ export function InlineRateResolver({
   const key = `${organizationId ?? ""}:${branchId ?? ""}:${normalizedCurrency}:AFN:${rateSide}`;
   const [loaded, setLoaded] = useState<LoadedRateContext | null>(null);
   const [rateUi, setRateUi] = useState({ key, reversed: true, automatic: true });
-  const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+  const [approvalRequest, setApprovalRequest] = useState<{ key: string; id?: string; message: string; pending: boolean } | null>(null);
+  const currentRequest = approvalRequest?.key === key ? approvalRequest : null;
   const reversed = rateUi.key === key ? rateUi.reversed : true;
   const requestedAutomatic = rateUi.key === key ? rateUi.automatic : true;
   const [inspectionNow] = useState(() => Date.now());
@@ -78,7 +83,7 @@ export function InlineRateResolver({
     to_currency: "AFN",
     buy_rate: inspectionScenario === "missing" ? undefined : inspectionBuyRate,
     sell_rate: inspectionScenario === "missing" ? undefined : inspectionSellRate,
-    applied_rate: inspectionScenario === "missing" ? undefined : String((Number(inspectionBuyRate) + Number(inspectionSellRate)) / 2),
+    applied_rate: inspectionScenario === "missing" ? undefined : midpointRate(inspectionBuyRate, inspectionSellRate),
     quote_direction: "AFN_FIRST",
     operation_rate_source: "APPROVED_DAILY",
     effective_from: new Date(inspectionScenario === "stale" ? inspectionNow - 48 * 60 * 60 * 1000 : inspectionNow).toISOString(),
@@ -107,6 +112,32 @@ export function InlineRateResolver({
     return () => { active = false; };
   }, [branchId, key, normalizedCurrency, onReadyChange, organizationId]);
 
+  useEffect(() => {
+    if (!currentRequest?.id || !currentRequest.pending || !organizationId || !branchId || organizationId === "inspection") return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      const [rate, request] = await Promise.all([
+        getTransactionRateContext(organizationId, branchId, normalizedCurrency, "AFN"),
+        getOperationRateRequest(currentRequest.id!),
+      ]);
+      if (!active) return;
+      if (rate.data && !rate.error && !rate.data.missing && !rate.data.stale) {
+        setLoaded({ key, value: rate.data, error: null });
+        setRateUi((current) => ({ ...current, key, automatic: true }));
+        setApprovalRequest(null);
+        return;
+      }
+      if (request.data && (request.data.status === "rejected" || Date.parse(request.data.expires_at) <= Date.now())) {
+        setApprovalRequest({ key, message: text.approvalClosed, pending: false });
+        return;
+      }
+      timer = setTimeout(() => void refresh(), 5000);
+    };
+    timer = setTimeout(() => void refresh(), 1500);
+    return () => { active = false; clearTimeout(timer); };
+  }, [branchId, currentRequest?.id, currentRequest?.pending, key, normalizedCurrency, organizationId, text.approvalClosed]);
+
   const context = organizationId === "inspection"
     ? inspectionContext
     : loaded?.key === key ? loaded.value : null;
@@ -116,20 +147,17 @@ export function InlineRateResolver({
   const automatic = unavailable ? false : requestedAutomatic;
   const relevantField = rateSide === "sell" ? "sell_rate" : rateSide === "buy" ? "buy_rate" : "applied_rate";
   const contextRate = context?.[relevantField] ?? (context?.buy_rate && context?.sell_rate
-    ? String((Number(context.buy_rate) + Number(context.sell_rate)) / 2)
+    ? midpointRate(context.buy_rate, context.sell_rate)
     : context?.buy_rate);
   const fallbackRate = value?.rate ?? value?.[rateSide === "sell" ? "sell_rate" : "buy_rate"];
   const canonicalRate = automatic && !unavailable ? contextRate : fallbackRate ?? contextRate;
   const canResolve = canPublish;
   const enteredRate = value?.rate ?? value?.[rateSide === "sell" ? "sell_rate" : "buy_rate"];
-  const differenceBps = enteredRate && contextRate && Number(contextRate) > 0
-    ? Math.abs(Number(enteredRate) - Number(contextRate)) / Number(contextRate) * 10000
-    : 0;
   const outsideTolerance = value?.rate_mode === "manual"
-    && differenceBps > Number(context?.tolerance_bps ?? 50);
+    && rateOutsideTolerance(enteredRate, contextRate, context?.tolerance_bps ?? 50);
   const publicationValid = Boolean(
     value
-      && Number(enteredRate) > 0
+      && positiveRate(enteredRate)
       && value.source_currency === normalizedCurrency
       && value.target_currency === "AFN"
       && (!outsideTolerance || Boolean(value.reason?.trim())),
@@ -166,17 +194,14 @@ export function InlineRateResolver({
 
   useEffect(() => {
     if (normalizedCurrency === "AFN") return;
-    onReadyChange(!loading && (!unavailable || (canResolve && publicationValid)));
-  }, [canResolve, loading, normalizedCurrency, onReadyChange, publicationValid, unavailable]);
+    onReadyChange(!loading && (automatic ? !unavailable && positiveRate(contextRate) : canResolve && publicationValid));
+  }, [automatic, canResolve, contextRate, loading, normalizedCurrency, onReadyChange, publicationValid, unavailable]);
 
   if (normalizedCurrency === "AFN") return null;
 
   const updateRate = (next: string) => {
     const fallback = next || contextRate || "";
-    const nextDifferenceBps = next && contextRate && Number(contextRate) > 0
-      ? Math.abs(Number(next) - Number(contextRate)) / Number(contextRate) * 10000
-      : 0;
-    const nextOutsideTolerance = nextDifferenceBps > Number(context?.tolerance_bps ?? 50);
+    const nextOutsideTolerance = rateOutsideTolerance(next, contextRate, context?.tolerance_bps ?? 50);
     onChange({
       branch_id: branchId ?? undefined,
       source_currency: normalizedCurrency,
@@ -203,9 +228,9 @@ export function InlineRateResolver({
     else updateRate(contextRate ?? "");
   };
   const requestApproval = async () => {
-    if (!canRequestApproval || !organizationId || !branchId) return;
+    if (!canRequestApproval || !organizationId || !branchId || currentRequest?.pending) return;
+    setApprovalRequest({ key, message: text.approvalSent, pending: true });
     if (organizationId === "inspection") {
-      setApprovalStatus(text.approvalSent);
       return;
     }
     const result = await requestOperationRateApproval({
@@ -216,7 +241,7 @@ export function InlineRateResolver({
       context_id: context?.context_id,
       reason: context?.missing ? "approved daily rate missing" : "approved daily rate stale",
     });
-    setApprovalStatus(result.error ?? text.approvalSent);
+    setApprovalRequest({ key, id: result.data?.id, message: result.error ?? text.approvalSent, pending: !result.error && Boolean(result.data?.id) });
   };
 
   if (loading) return <div className="transaction-rate-loading" role="status">{text.loading}</div>;
@@ -233,11 +258,11 @@ export function InlineRateResolver({
         targetCurrency="AFN"
         reversed={reversed}
         updatedAt={context?.effective_from}
-        approvalMessage={approvalStatus ?? (unavailable ? (canRequestApproval && !canPublish ? text.approval : !canResolve ? text.restricted : undefined) : undefined)}
+        approvalMessage={currentRequest?.message ?? (unavailable ? (canRequestApproval && !canPublish ? text.approval : !canResolve ? text.restricted : undefined) : undefined)}
         onAutomaticChange={changeAutomatic}
         onCanonicalRateChange={updateRate}
         onReverse={() => setRateUi((current) => ({ key, automatic: current.key === key ? current.automatic : true, reversed: !(current.key === key ? current.reversed : true) }))}
-        onRequestApproval={canRequestApproval && !canPublish && !approvalStatus ? () => void requestApproval() : undefined}
+        onRequestApproval={unavailable && canRequestApproval && !canPublish && !currentRequest?.pending ? () => void requestApproval() : undefined}
       />
       {outsideTolerance && canResolve ? (
         <label className="rate-exception-reason">

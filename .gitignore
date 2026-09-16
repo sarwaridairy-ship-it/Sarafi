@@ -31,3 +31,6 @@ supabase/.temp
 *.sw?
 
 .vercel
+playwright-report/
+evidence-results/
+release-evidence/

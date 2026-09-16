@@ -159,6 +159,7 @@ import {
 import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot, workspaceSectionPath } from "./app/routes";
 import type { InlineRateResolverProps } from "./features/rates/InlineRateResolver";
 import { TransactionRateControl } from "./features/rates/TransactionRateControl";
+import { DailyRateRequestEditor } from "./features/rates/DailyRateRequestEditor";
 import { ReferenceScanner } from "./features/hawala/ReferenceScanner";
 import { MoneyValuationSummary } from "./features/money/MoneyValuationSummary";
 import { HawalaPayoutConfirmation, HawalaReceivedList, HawalaRecipientSearch, type HawalaListTab, type HawalaRecipientType } from "./features/hawala/HawalaWorkflowParts";
@@ -3895,6 +3896,7 @@ function WorkspaceView({
         canManageCapabilities={canManageCapabilities}
         canInviteBusinessAdmin={canInviteBusinessAdmin}
         canDecideApprovals={canDecideApprovals}
+        canManageRates={hasCapability(capabilities, "rates.manage")}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -4161,6 +4163,7 @@ function TeamDevicesView({
   canManageCapabilities,
   canInviteBusinessAdmin,
   canDecideApprovals,
+  canManageRates,
   onDashboard,
   onToast,
 }: {
@@ -4171,6 +4174,7 @@ function TeamDevicesView({
   canManageCapabilities: boolean;
   canInviteBusinessAdmin: boolean;
   canDecideApprovals: boolean;
+  canManageRates: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -5214,7 +5218,14 @@ function TeamDevicesView({
                       ? `${approval.amount_base} ${approval.currency_code ?? ""}`
                       : u("review")}
                   </strong>
-                  {canDecideApprovals && approval.status === "pending" && <><button className="text-button" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "approved")}>{u("approved")}</button><button className="text-button danger" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "rejected")}>{u("rejected")}</button></>}
+                  {canDecideApprovals && approval.status === "pending" && <>
+                    {approval.action_type === "operation_rate" ? canManageRates ? <DailyRateRequestEditor
+                      id={approval.id} currency={approval.currency_code ?? ""} language={language}
+                      reason={approvalReason} verified={mfa.verified} onToast={onToast}
+                      onSaved={() => { setApprovalReason(""); setRefresh((value) => value + 1); onToast(u("savedSuccessfully")); }}
+                    /> : null : <button className="text-button" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "approved")}>{u("approved")}</button>}
+                    <button className="text-button danger" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "rejected")}>{u("rejected")}</button>
+                  </>}
                 </div>
               </div>
             ))

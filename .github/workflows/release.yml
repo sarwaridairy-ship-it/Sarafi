@@ -35,6 +35,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      SARAFI_EVIDENCE_STAGE: inspection
     steps:
       - uses: actions/checkout@v5
         with:
@@ -70,6 +72,7 @@ jobs:
           test -n "$SARAFI_E2E_ROLE_FIXTURES"
       - name: Authenticated authorization journeys
         env:
+          SARAFI_EVIDENCE_STAGE: authenticated
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
@@ -85,11 +88,14 @@ jobs:
       - name: Apply every migration from zero
         run: npx supabase db reset --local --no-seed
       - name: Lint the migrated database
-        run: npx supabase db lint --local --level error
+        run: npx supabase db lint --local --level error --fail-on error
       - name: Stop isolated local database
         if: always()
         run: npx supabase stop --no-backup
       - run: npm run build
+      - name: Record evidence for this commit
+        if: always()
+        run: node scripts/write-evidence-manifest.mjs inspection authenticated
       - name: Retain protected verification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -102,6 +108,8 @@ jobs:
             test-results/
             artifacts/
             output/pdf/
+            evidence-results/
+            release-evidence/test-manifest.json
 
   production-promotion:
     if: ${{ inputs.promote == true }}
