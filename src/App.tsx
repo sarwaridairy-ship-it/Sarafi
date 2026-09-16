@@ -3946,6 +3946,7 @@ function WorkspaceView({
   if (section === "Offline")
     return (
       <OfflineView
+        key={JSON.stringify([organizationId, userId, deviceId, cashboxId])}
         organizationId={organizationId}
         userId={userId}
         deviceId={deviceId}

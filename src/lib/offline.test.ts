@@ -35,6 +35,7 @@ describe('offline draft safety', () => {
     const policy = { tenantId: 'tenant-1', userId: 'user-1', deviceId: 'device-1', cashboxId: 'cash-1', maxAmountBase: '1000', allowKinds: ['BUY_FX'] as const }
     const first = new OfflineDraftBook(policy, store)
     const draft = first.saveDraft({ ...policy, amount: '100', currency: 'USD', kind: 'BUY_FX' })
+    await first.persistDraft(draft)
     const second = new OfflineDraftBook(policy, store)
     await second.hydrate()
     expect(second.all()).toMatchObject([{ draftId: draft.draftId, status: 'draft_offline' }])
@@ -59,5 +60,29 @@ describe('offline draft safety', () => {
     cleanup()
     globalThis.window = previousWindow
     expect(reconnects).toBe(1)
+  })
+
+  it('hydrates only this shop, user, device and cashbox on a shared browser', async () => {
+    const policy = { tenantId: 'tenant-1', userId: 'user-1', deviceId: 'device-1', cashboxId: 'cash-1', maxAmountBase: '1000', allowKinds: ['BUY_FX'] as const }
+    const own = new OfflineDraftBook(policy).saveDraft({ ...policy, amount: '100', currency: 'USD', kind: 'BUY_FX' })
+    const others = (['tenantId', 'userId', 'deviceId', 'cashboxId'] as const).map((field, index) => ({ ...own, draftId: `foreign-${index}`, [field]: 'other', localSequence: 900 + index }))
+    const store = { save: async () => undefined, list: async () => [...others, own] }
+    const book = new OfflineDraftBook(policy, store)
+    await book.hydrate()
+    expect(book.all()).toEqual([own])
+    expect(book.saveDraft({ ...policy, amount: '1', currency: 'USD', kind: 'BUY_FX' }).localSequence).toBe(2)
+    await expect(book.persistDraft(others[0])).rejects.toThrow('identity binding')
+  })
+
+  it('waits for one durable write and removes rejected drafts from the saved list', async () => {
+    const policy = { tenantId: 'tenant-1', userId: 'user-1', deviceId: 'device-1', cashboxId: 'cash-1', maxAmountBase: '1000', allowKinds: ['BUY_FX'] as const }
+    let writes = 0
+    const store = { save: async () => { writes += 1; throw new Error('Storage full') }, list: async () => [] }
+    const book = new OfflineDraftBook(policy, store)
+    const draft = book.saveDraft({ ...policy, amount: '100', currency: 'USD', kind: 'BUY_FX' })
+    expect(writes).toBe(0)
+    await expect(book.persistDraft(draft)).rejects.toThrow('Storage full')
+    expect(writes).toBe(1)
+    expect(book.all()).toEqual([])
   })
 })

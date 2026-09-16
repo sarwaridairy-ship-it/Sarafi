@@ -35,12 +35,18 @@ was still on `3e2ae5bc9f06a719a149b1079c2d7422ed6a7a5e` at this audit boundary.
 - The recovery checker reads all result pages, requests decimal strings, and
   checks each posted journal instead of trusting a global total. It explicitly
   does not claim to perform a restore and requires a quiescent target.
+- The final skipped-test audit found and fixed shared-browser offline draft
+  isolation. Hydration now filters shop/user/device/cashbox, identity changes
+  remount the view, failed saves do not linger as saved drafts, and one awaited
+  durable write replaces duplicate background writes. IndexedDB waits for commit
+  and concurrent tabs cannot replace the winning encryption key. The formerly
+  skipped encrypted-draft reload/tamper browser regression is enabled again.
 
 ## Observed verification
 
 | Evidence | Result and boundary |
 |---|---|
-| Local unit tests | 167 passed, 2 explicit skips |
+| Local unit tests | 169 passed, 2 explicit skips |
 | TypeScript / lint | Passed |
 | Production build | Passed; not itself a release approval |
 | New Chromium regressions | 10 passed; EN/Dari/Pashto at 360/768/1366 and empty-manual-rate guard |

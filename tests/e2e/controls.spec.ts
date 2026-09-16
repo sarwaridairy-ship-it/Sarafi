@@ -539,7 +539,7 @@ test.describe("workspace controls", () => {
     ).toBeVisible();
   });
 
-  test.skip("offline drafts stay encrypted and never auto-post", async ({
+  test("offline drafts stay encrypted and never auto-post", async ({
     page,
   }) => {
     await page.goto("/");
@@ -586,7 +586,7 @@ test.describe("workspace controls", () => {
             const read = store.getAll();
             read.onsuccess = () => {
               const record = read.result[0];
-              record.data = record.data.slice(0, -2) + "AA";
+              record.data = (record.data[0] === "A" ? "B" : "A") + record.data.slice(1);
               store.put(record);
               transaction.oncomplete = () => resolve();
               transaction.onerror = () => reject(transaction.error);

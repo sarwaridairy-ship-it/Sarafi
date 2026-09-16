@@ -16,8 +16,14 @@ export class OfflineDraftBook {
   async hydrate(): Promise<void> {
     if (!this.store) return
     const stored = await this.store.list()
-    this.drafts.splice(0, this.drafts.length, ...stored.sort((a, b) => a.localSequence - b.localSequence))
+    const scoped = stored.filter((draft) => this.belongsToIdentity(draft))
+    this.drafts.splice(0, this.drafts.length, ...scoped.sort((a, b) => a.localSequence - b.localSequence))
     this.nextSequence = Math.max(0, ...this.drafts.map((draft) => draft.localSequence)) + 1
+  }
+
+  private belongsToIdentity(draft: OfflineDraft): boolean {
+    return draft.tenantId === this.policy.tenantId && draft.userId === this.policy.userId
+      && draft.deviceId === this.policy.deviceId && draft.cashboxId === this.policy.cashboxId
   }
 
   saveDraft(input: Omit<OfflineDraft, 'draftId' | 'localSequence' | 'createdAt' | 'status'>): OfflineDraft {
@@ -29,11 +35,20 @@ export class OfflineDraftBook {
     if (!amount.isFinite() || amount.lte(0) || !limit.isFinite() || amount.gt(limit)) throw new Error('Offline draft exceeds the permitted amount')
     const draft = { ...input, draftId: crypto.randomUUID(), localSequence: this.nextSequence++, createdAt: new Date().toISOString(), status: 'draft_offline' as const }
     this.drafts.push(draft)
-    void this.store?.save(draft)
     return draft
   }
 
-  async persistDraft(draft: OfflineDraft): Promise<void> { await this.store?.save(draft) }
+  async persistDraft(draft: OfflineDraft): Promise<void> {
+    if (!this.belongsToIdentity(draft)) throw new Error('Offline command identity binding is invalid')
+    try {
+      await this.store?.save(draft)
+    } catch (error) {
+      // A rejected durable write must not be presented as a saved draft later.
+      const index = this.drafts.findIndex((item) => item.draftId === draft.draftId)
+      if (index !== -1) this.drafts.splice(index, 1)
+      throw error
+    }
+  }
 
   all(): OfflineDraft[] { return [...this.drafts] }
 }
