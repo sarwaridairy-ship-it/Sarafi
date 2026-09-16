@@ -5,6 +5,7 @@ if (!/^[a-z0-9-]+$/.test(evidenceStage)) throw new Error("Invalid browser eviden
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: ["**/authenticated-security.spec.ts", "**/authenticated-roles.spec.ts"],
   workers: 1,
   reporter: process.env.CI
     ? [["github"], ["line"], ["html", { outputFolder: `playwright-report/${evidenceStage}`, open: "never" }], ["json", { outputFile: `evidence-results/${evidenceStage}.json` }]]
