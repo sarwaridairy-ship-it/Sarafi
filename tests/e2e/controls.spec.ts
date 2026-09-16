@@ -831,7 +831,7 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/transactions/new/fx/buy?role=cashier&rate=missing");
     await page.locator(".financial-task-form").getByRole("textbox", { name: /We receive/ }).fill("1000");
     await page.getByRole("button", { name: "Request rate approval" }).click();
-    await expect(page.getByText("Rate approval requested. Your draft remains on this page.")).toBeVisible();
+    await expect(page.getByText("Waiting for the daily rate. This form updates automatically.")).toBeVisible();
     await expect(page.locator(".transaction-page-form")).toBeVisible();
     await expect(page.locator(".financial-task-form").getByRole("textbox", { name: /We receive/ })).toHaveValue("1000");
   });
@@ -854,7 +854,7 @@ test.describe("workspace controls", () => {
     await page.addInitScript(() => window.localStorage.setItem("sarafi-language", "en"));
     await page.goto("/app/inspection/transactions/new/money-out/expense?role=cashier&rate=missing");
     await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
-    await expect(page.getByText(/sent to a manager for approval/)).toBeVisible();
+    await expect(page.getByText("Ask a manager to update the daily rate. Your draft stays here.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Request rate approval" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Save money paid/ })).toBeDisabled();
     await expect(page).toHaveURL(/transactions\/new\/money-out\/expense/);
