@@ -3,7 +3,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(24);
+select plan(25);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-000000000001', 'authorization-a@example.invalid'),
@@ -63,6 +63,11 @@ select throws_ok($$select public.commit_import(pg_temp.import_command('foreign-o
 select throws_ok($$select public.commit_import(pg_temp.import_command('foreign-branch', '30000000-0000-4000-8000-000000000002'))$$, 'P0001', 'CAPABILITY_REQUIRED:data.import.branch', 'foreign branch is rejected');
 select throws_ok($$select public.commit_import(pg_temp.import_command('no-branch', null))$$, 'P0001', 'CAPABILITY_REQUIRED:data.import.branch', 'unscoped customer import is rejected');
 reset role;
+update public.branches set active = false where id = '30000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select throws_ok($$select public.commit_import(pg_temp.import_command('inactive-branch'))$$, 'P0001', 'CAPABILITY_REQUIRED:data.import.branch', 'inactive branch cannot receive imports');
+reset role;
+update public.branches set active = true where id = '30000000-0000-4000-8000-000000000001';
 update public.organization_memberships set role_code = 'owner' where id = '60000000-0000-4000-8000-000000000001';
 insert into public.membership_capability_overrides (membership_id, capability_code, allowed, granted_by, reason)
   values ('60000000-0000-4000-8000-000000000001', 'data.import', false, '10000000-0000-4000-8000-000000000002', 'Synthetic denial');

@@ -45,7 +45,9 @@ begin
   for row_item in select value from jsonb_array_elements(rows) loop
     row_number := row_number + 1;
     branch_id_value := coalesce(nullif(row_item->>'branch_id', '')::uuid, nullif(command->>'branch_id', '')::uuid);
-    if branch_id_value is null or not public.can_access_branch_v6(org_id, branch_id_value, 'data.import') then
+    if branch_id_value is null or not exists (
+      select 1 from public.branches b where b.id = branch_id_value and b.organization_id = org_id and b.active
+    ) or not public.can_access_branch_v6(org_id, branch_id_value, 'data.import') then
       raise exception 'CAPABILITY_REQUIRED:data.import.branch';
     end if;
     if kind = 'counterparties' then
