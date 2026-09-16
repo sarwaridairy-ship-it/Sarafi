@@ -435,3 +435,11 @@ revoke all on function public.set_membership_active(uuid,boolean,text) from publ
 grant execute on function public.set_membership_active(uuid,boolean,text) to authenticated;
 revoke all on function public.review_worker_join_request(uuid,text,text,uuid[],uuid[],jsonb,jsonb,boolean,text) from public, anon;
 grant execute on function public.review_worker_join_request(uuid,text,text,uuid[],uuid[],jsonb,jsonb,boolean,text) to authenticated;
+
+-- Internal helpers are reached only through the guarded SECURITY DEFINER APIs.
+-- No application/Edge client, RLS policy, view or invoker function calls them.
+revoke all on function public.require_active_device(uuid,uuid) from public, anon, authenticated;
+revoke all on function public.require_aal2() from public, anon, authenticated;
+revoke all on function public.require_capability(uuid,text,jsonb) from public, anon, authenticated;
+revoke all on function public.require_sanctions_provider(uuid) from public, anon, authenticated;
+revoke all on function public.user_can_use_money_account(uuid,uuid) from public, anon, authenticated;

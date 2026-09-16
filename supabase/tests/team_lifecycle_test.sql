@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(29);
+select plan(34);
 
 create function pg_temp.team_id(label text) returns uuid language sql immutable as $$
   select md5('SARAFI_TEAM_LIFECYCLE_' || label)::uuid;
@@ -102,5 +102,10 @@ select lives_ok($$select public.accept_team_invitation(repeat('b',64))$$, 'activ
 reset role;
 select is((select count(*) from public.membership_capability_overrides where membership_id=pg_temp.team_id('tokenworker-membership') and capability_code='data.import'),0::bigint,'accepted token does not revive old privileges');
 select is((select count(*) from public.organizations where display_name='Should not exist'),0::bigint,'denied onboarding leaves no organization behind');
+select ok(not has_function_privilege('authenticated','public.require_active_device(uuid,uuid)','execute') and not has_function_privilege('anon','public.require_active_device(uuid,uuid)','execute'),'device helper is not a client RPC');
+select ok(not has_function_privilege('authenticated','public.require_aal2()','execute') and not has_function_privilege('anon','public.require_aal2()','execute'),'MFA helper is not a client RPC');
+select ok(not has_function_privilege('authenticated','public.require_capability(uuid,text,jsonb)','execute') and not has_function_privilege('anon','public.require_capability(uuid,text,jsonb)','execute'),'capability helper is not a client RPC');
+select ok(not has_function_privilege('authenticated','public.require_sanctions_provider(uuid)','execute') and not has_function_privilege('anon','public.require_sanctions_provider(uuid)','execute'),'provider helper is not a client RPC');
+select ok(not has_function_privilege('authenticated','public.user_can_use_money_account(uuid,uuid)','execute') and not has_function_privilege('anon','public.user_can_use_money_account(uuid,uuid)','execute'),'account-use helper is not a client RPC');
 select * from finish();
 rollback;
