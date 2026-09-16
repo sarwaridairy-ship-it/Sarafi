@@ -140,3 +140,25 @@ for select to authenticated using (
       and public.has_capability(attachments.organization_id, 'documents.hawala_payout.view_own_draft', jsonb_build_object('branch_id', d.recipient_branch_id))
   )
 );
+
+-- PostgreSQL numeric NaN passes a simple >= 0 check and compares equal to
+-- itself. Reject special values at storage so they cannot poison a balanced
+-- journal, a daily quote, a debt, or an inventory calculation through any RPC.
+do $$
+declare item record;
+begin
+  for item in
+    select c.relname as table_name,
+      string_agg(format('(%I is null or %I not in (''NaN''::numeric, ''Infinity''::numeric, ''-Infinity''::numeric))', a.attname, a.attname), ' and ' order by a.attnum) as predicate
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      join pg_attribute a on a.attrelid = c.oid
+    where n.nspname = 'public' and c.relkind = 'r' and a.attnum > 0 and not a.attisdropped
+      and a.atttypid = 'numeric'::regtype
+      and c.relname in ('journal_lines', 'rate_board_entries', 'debts', 'settlements',
+        'fx_inventory_cost_state', 'fx_inventory_movements', 'hawala_transfers', 'hawala_statement_lines')
+    group by c.relname
+  loop
+    execute format('alter table public.%I add constraint %I check (%s)', item.table_name, item.table_name || '_finite_values_v11', item.predicate);
+  end loop;
+end;
+$$;
