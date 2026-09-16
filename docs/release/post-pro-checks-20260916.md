@@ -20,6 +20,14 @@ engineering checks, not the remaining recovery or human-acceptance gates.
   CLI filter also discovered an archived checkout under `tmp`, duplicating tests
   and producing two misleading CRLF-sensitive failures. No genuine source test
   was deleted, skipped or weakened. Vite's existing configuration is retained.
+- Closed an exposed legacy `current_rate` SECURITY DEFINER helper. Its body had
+  no tenant check, its authenticated EXECUTE grant bypassed the protected rate
+  table, and neither application code nor another database function used it.
+  A read-only two-business fixture regression failed before the fix and passes
+  afterward. Migration `20260916193628_restrict_legacy_rate_helper.sql` revoked
+  PUBLIC/anon/authenticated execution on production; the supported branch-guarded
+  `get_current_rates_v6` API remains available. No financial records were changed.
+  Added a persistent authenticated CI assertion for the exact permission denial.
 
 ## Fresh evidence
 
@@ -27,7 +35,8 @@ engineering checks, not the remaining recovery or human-acceptance gates.
 | --- | --- |
 | TypeScript, lint and production build | Passed |
 | Current-source unit suite | 188 passed, 2 existing skips; 37 files passed, 1 skipped |
-| Live authenticated role/security API | 9 passed, 0 skipped |
+| Live authenticated role/security API after legacy-rate fix | 10 passed, 0 skipped |
+| Read-only two-business rate isolation regression | All 6 checks passed; 0 financial writes |
 | Live named reports | All 22 report types returned valid responses |
 | Public status and anonymous financial-report boundary | Public status available; anonymous financial report denied |
 | Owner controls, reconciliation history and sensitive-feature MFA | Passed; cashier denied owner controls |
@@ -54,6 +63,9 @@ search path and returns explicit active version/announcement fields. Its access
 is intentional; the underlying protected tables were not exposed. All inspected
 authenticated SECURITY DEFINER functions have fixed search paths. This is not a
 complete authorization review of their bodies, call chains or every role pair.
+The subsequent legacy-rate fix reduces authenticated executable definers from
+150 to 149. The fresh advisor still reports function-exposure categories; these
+remaining findings have not been blanket-suppressed or certified as safe.
 
 ## Still not done
 

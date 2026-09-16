@@ -35,6 +35,24 @@ test.describe('authenticated security journeys', () => {
     expect(guessedOtherTenant.data).toEqual([])
   })
 
+  test('legacy rate helper is not exposed as an authenticated RPC', async () => {
+    const client = createClient(url!, anonKey!, { auth: { persistSession: false, autoRefreshToken: false } })
+    const signedIn = await client.auth.signInWithPassword({ email: email!, password: password! })
+    expect(signedIn.error).toBeNull()
+    try {
+      const result = await client.rpc('current_rate', {
+        target_org: organizationId!, target_group: crypto.randomUUID(), target_branch: null,
+        source_currency: 'USD', target_currency: 'AFN',
+      })
+      // A null rate or generic network failure is not proof of revoked access.
+      expect(result.error?.code).toBe('42501')
+      expect(result.error?.message).toMatch(/permission denied for function current_rate/)
+      expect(result.data).toBeNull()
+    } finally {
+      await client.auth.signOut({ scope: 'local' })
+    }
+  })
+
   test('concurrent duplicate commands resolve to one idempotent result', async () => {
     const client = createClient(url!, anonKey!, { auth: { persistSession: false, autoRefreshToken: false } })
     const signedIn = await client.auth.signInWithPassword({ email: email!, password: password! })
