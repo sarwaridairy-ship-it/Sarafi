@@ -13,6 +13,10 @@ for (const language of ['en', 'fa-AF', 'ps-AF']) {
       await editor.locator('input').first().fill('70.25')
       await editor.locator('input').last().fill('70.35')
       await expect(editor.getByRole('button')).toBeDisabled() // Inspection never publishes real rates.
+      const description = await page.locator('.approval-record .balance-name').boundingBox()
+      expect(description!.width).toBeGreaterThan(160)
+      expect(description!.height).toBeLessThan(200) // Contained is not enough: text must not collapse into a vertical column.
+      expect((await editor.boundingBox())!.width).toBeGreaterThan(220)
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1)
       for (const input of await editor.locator('input,button').all()) {
         const box = await input.boundingBox()

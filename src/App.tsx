@@ -5189,7 +5189,7 @@ function TeamDevicesView({
           </div>
         </div>
       </div>
-      <div className="panel" hidden={teamSection !== "roles"}>
+      <div className="panel team-approval-inbox" hidden={teamSection !== "roles"}>
         <div className="panel-header">
           <div>
             <h2>{u("approvalInbox")}</h2>
@@ -5204,7 +5204,7 @@ function TeamDevicesView({
         <div className="balance-list">
           {approvals.length ? (
             approvals.map((approval) => (
-              <div className={`balance-row ${routeApprovalId === approval.id ? "deep-link-focus" : ""}`} id={`approval-${approval.id}`} key={approval.id}>
+              <div className={`balance-row approval-record ${routeApprovalId === approval.id ? "deep-link-focus" : ""}`} id={`approval-${approval.id}`} key={approval.id}>
                 <span className="currency-badge usd">
                   {approval.status === "pending" ? "!" : "✓"}
                 </span>
