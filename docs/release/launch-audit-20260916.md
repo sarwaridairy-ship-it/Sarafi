@@ -6,6 +6,10 @@ This is not a 100% completion certificate. Automated inspection, authenticated A
 tests, live schema checks and a reachable site are different evidence classes.
 Neither an empty backup file nor a financial snapshot proves recovery.
 
+Post-Pro continuation: see [the fresh checks](post-pro-checks-20260916.md).
+The project transfer and backup availability are now verified; actual recovery,
+provider hardening and independent/human acceptance are not yet complete.
+
 The candidate is on `codex/exact-instruction-v10`, proposed in
 [review #2](https://github.com/sarwaridairy-ship-it/Sarafi/pull/2). The latest
 commit's CI checks and `release-evidence/test-manifest.json` are authoritative for
@@ -65,23 +69,34 @@ No customer financial history was deleted or rewritten.
 
 ## Outstanding release gates
 
-1. **Verified backup and restore:** local attempted schema/data dumps are both
-   zero bytes. No provider restore into a private, isolated target is proved.
-   The last provider check showed no available backups and PITR disabled. Choose
-   an appropriate plan/retention, perform the restore, and verify RPO/RTO plus exact
-   reconciliation. A fresh empty-database migration replay is not a substitute.
-2. **Release protection and independent review:** main is unprotected. The
-   connected Git credential has `push: true`, `admin: false`, `maintain: false`.
-   Both existing GitHub environments have no protection rules. No settings were
-   changed after this permission check. A repository administrator must require
-   CI/migration checks, review and protected production promotion. Do not bypass
-   the gate with a direct push or manual alias promotion.
+1. **Verified backup and restore:** SARAFI is now in the existing Pro organization;
+   seven physical daily backups were visible for 9–15 September. No private,
+   isolated restore is proved. The fresh hazard screen blocks one-click cloning:
+   an active cleanup job, outbound HTTP extension and copied Vault credentials
+   could act on production. Follow the revised
+   [recovery procedure](../audits/step-17-recovery-drill.md), including separate
+   Storage backup, target/cost approval, RPO/RTO and backup-time reconciliation.
+   An empty-database migration replay is not a substitute.
+2. **Release protection and independent review:** main protection and the
+   Production environment's required reviewer/protected-branch rules were saved
+   and verified after the original audit. A fresh API check confirms main is
+   protected and the environment rules remain present. The API credential still
+   cannot read detailed main-protection settings. Independent review, signed
+   release tag and protected promotion prerequisites remain outstanding. Do not
+   bypass the gate with a direct main push or manual alias promotion.
 3. **Human acceptance:** qualified Afghan Dari/Pashto terminology review,
    actual cashier/owner/Hawala-worker journeys, physical device/biometric tests,
    and 58mm/80mm/A4 printer acceptance remain unverified.
 4. **Operational/legal approval:** backup ownership, alert response ownership,
    market-data usage rights, and applicable legal/compliance/provider sign-off
    need real evidence from the responsible people. Software tests cannot grant it.
+5. **Provider security:** leaked-password protection was enabled after reconnecting
+   the owner dashboard; a fresh provider scan no longer reports that warning.
+   No password or reauthentication policy was changed. The 150 authenticated SECURITY DEFINER notices
+   still require explicit authorization review; fixed search paths and passing
+   contract tests are not blanket clearance. The sole anonymous RPC was inspected
+   and intentionally returns public version/announcement fields, not financial
+   records. No security warning was silently dismissed.
 
 ## Deployment boundary
 

@@ -13,6 +13,46 @@ baseline; older number-encoded reports cannot establish exact decimal equality.
 
 ## Required provider action
 
+### Mandatory external-action safety screen
+
+Before using **Restore to a new project**, run
+`scripts/security/recovery-preflight.sql` read-only on the intended source.
+Save only the returned `recovery_preflight` JSON object in a private evidence file,
+and retain the actual source project reference from the connection/tool record.
+Within 15 minutes run:
+
+```powershell
+node scripts/security/check-recovery-preflight.mjs <private-evidence.json> <source-project-ref>
+```
+
+Exit 2 means cloning is blocked; exit 1 means the evidence is invalid or incomplete.
+Exit 0 only passes this limited hazard screen, not target/cost approval, recovery
+verification, or launch readiness. Re-run immediately before any approved restore.
+No source writes, credential reads, or restore calls are made by this checker.
+
+Supabase physical clones copy Vault's encryption root key and can immediately
+restart cron, HTTP and external-extension activity. Disabling jobs **after** the
+clone starts is too late. See the provider's
+[restore limitations](https://supabase.com/docs/guides/platform/clone-project).
+
+For SARAFI, the 16 September 2026 read-only inventory found one active cleanup
+job (every five minutes), `pg_net`, two Vault secrets and 24 Storage objects.
+The cleanup job uses the saved source URL and service credential. A physical
+clone could therefore call the **production** cleanup endpoint. Do not use
+one-click physical cloning for this source in its current state.
+
+Instead prepare an approved private, isolated target and a reviewed logical
+restore that excludes scheduled jobs, outbound queues, webhook/foreign-server
+connections and live credentials before services start. Logical restore does
+not automatically preserve Vault decryption; record that limitation. Never
+disable production cleanup or change its credentials just to make a drill pass.
+Do not reuse Sahibash's live project as a restore target. Additional project
+cost and retention/deletion decisions need an explicit bounded approval.
+
+Database backups do not include Storage file contents. Back up and verify the
+private objects separately, preserving access controls, counts and checksums.
+Do not copy private production data into local/shared test environments.
+
 Record the linked project plan, backup retention, PITR availability, restore timestamp,
 RPO, RTO, operator, and isolated target project. Restore a production-like backup into
 that target. Never restore production data into local development or a shared test
@@ -20,9 +60,13 @@ project.
 
 ## Validate the restored target
 
-Create an env file containing the target URL, anon key, cashier test credentials, and
-restored organization ID. Run the snapshot before restore and retain its JSON output as
-the expected baseline. After restore, run:
+Create an env file containing the target URL, anon key, server-only observer key,
+cashier test credentials, and restored organization ID. Run the source snapshot
+at the selected backup's consistency boundary and retain its JSON output as the
+expected baseline. A snapshot of today's changing production data cannot serve
+as the expected result for yesterday's backup. The existing checker is scoped
+to one organization; run it for each included organization and separately
+inventory global/auth records and Storage contents. After restore, run:
 
 ```powershell
 $env:SARAFI_STEP17_ENV = ".env.step17-restore.local"
