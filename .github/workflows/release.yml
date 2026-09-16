@@ -95,6 +95,8 @@ jobs:
         run: npx supabase db reset --local --no-seed
       - name: Lint the migrated database
         run: npx supabase db lint --local --level error --fail-on error
+      - name: Verify rollback-only authorization regressions
+        run: npx supabase test db --local
       - name: Stop isolated local database
         if: always()
         run: npx supabase stop --no-backup

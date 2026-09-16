@@ -3957,8 +3957,10 @@ function WorkspaceView({
   if (section === "Import")
     return (
       <ImportWorkspace
+        key={`${organizationId ?? "inspection"}:${branchId ?? "no-branch"}`}
         language={language}
         organizationId={organizationId}
+        branchId={branchId}
         onBack={onDashboard}
         onToast={onToast}
       />

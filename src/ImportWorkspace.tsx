@@ -12,11 +12,13 @@ import { ux } from "./lib/uxCopy";
 export function ImportWorkspace({
   language,
   organizationId,
+  branchId,
   onBack,
   onToast,
 }: {
   language: Language;
   organizationId: string | null;
+  branchId: string | null;
   onBack: () => void;
   onToast: (message: string) => void;
 }) {
@@ -48,9 +50,10 @@ export function ImportWorkspace({
     URL.revokeObjectURL(link.href);
   };
   const commit = async () => {
-    if (!organizationId || !preview?.canCommit) return;
+    if (!organizationId || !branchId || !preview?.canCommit) return;
     const result = await commitImport({
       organization_id: organizationId,
+      branch_id: branchId,
       import_key: importKey,
       kind,
       rows: preview.rows.map((row) => row.values),
@@ -153,7 +156,7 @@ export function ImportWorkspace({
             <div className="notice">
               <span className="sync-dot online" />
               <span>{u("importReady")}</span>
-              <button onClick={() => void commit()} disabled={!organizationId}>
+              <button onClick={() => void commit()} disabled={!organizationId || !branchId}>
                 {u("confirmImport")}
               </button>
             </div>
