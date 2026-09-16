@@ -7,6 +7,7 @@ tests, live schema checks and a reachable site are different evidence classes.
 Neither an empty backup file nor a financial snapshot proves recovery.
 
 Post-Pro continuation: see [the fresh checks](post-pro-checks-20260916.md).
+Latest security/recovery continuation: see [17 September evidence](security-recovery-continuation-20260917.md).
 The project transfer and backup availability are now verified; actual recovery,
 provider hardening and independent/human acceptance are not yet complete.
 

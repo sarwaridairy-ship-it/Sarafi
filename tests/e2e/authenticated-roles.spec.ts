@@ -67,6 +67,17 @@ test.describe("authenticated seven-role contract", () => {
         });
         expect(denied.error?.message).toContain("CAPABILITY_REQUIRED:rates.manage");
       }
+      if (!membership?.capabilities.includes("data.import")) {
+        const denied = await client.rpc("commit_import", { command: {
+          organization_id: organizationId!, import_key: `denied-ci-${crypto.randomUUID()}`,
+          kind: "counterparties", rows: [],
+        } });
+        // Authorization must run before row validation or idempotency lookup.
+        // Empty rows also ensure a broken permission guard cannot create data.
+        expect(denied.error?.code).toBe("42501");
+        expect(denied.error?.message).toBe("CAPABILITY_REQUIRED:data.import");
+        expect(denied.data).toBeNull();
+      }
       if (!membership?.capabilities.includes("owner.capital.post")) {
         const denied = await client.rpc("record_operation", { command: {
           organization_id: organizationId!, client_command_id: crypto.randomUUID(),

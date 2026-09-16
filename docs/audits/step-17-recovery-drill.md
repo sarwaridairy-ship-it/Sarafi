@@ -53,6 +53,38 @@ Database backups do not include Storage file contents. Back up and verify the
 private objects separately, preserving access controls, counts and checksums.
 Do not copy private production data into local/shared test environments.
 
+### Read-only Storage coverage check
+
+The following server-side helper reads every file-bucket/object page twice and
+downloads each object's bytes into memory once. It persists only bucket IDs,
+hashed object keys, sizes and SHA-256 checksums, never object contents or URLs.
+Use a private env file with `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (or inject
+the server key through the process environment). Never commit that file or key.
+The expected reference must exactly match the Supabase URL; do not use Sahibash.
+
+```powershell
+node scripts/security/capture-storage-manifest.mjs <private-env-file> <expected-project-ref> <new-private-manifest.json>
+```
+
+The output must be a new file. Public buckets, incomplete metadata, unreadable
+objects, changing metadata, duplicate entries, more than 1,000 buckets/10,000
+entries or more than 25 MiB fail closed. This is a bounded readiness check, not
+a general backup tool. A stable two-pass inventory is not a transactional snapshot.
+A matching SQL bucket/object inventory should also be retained to check coverage.
+
+After an independently authorized, isolated restore, capture the target and run:
+
+```powershell
+node scripts/security/compare-storage-manifests.mjs <backup-time-manifest.json> <isolated-target-manifest.json>
+```
+
+The comparator rejects a same-project no-op, public buckets and malformed evidence;
+it counts missing, extra and changed objects and missing/extra buckets. Exit 2 is
+a mismatch, exit 1 is invalid evidence, exit 0 means only Storage bytes match.
+Neither command creates a backup, restores data, establishes a common database/
+Storage consistency boundary, or grants release approval. The source manifest
+must be from the actual selected backup boundary, not a later production snapshot.
+
 Record the linked project plan, backup retention, PITR availability, restore timestamp,
 RPO, RTO, operator, and isolated target project. Restore a production-like backup into
 that target. Never restore production data into local development or a shared test
