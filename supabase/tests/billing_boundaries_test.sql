@@ -3,6 +3,9 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
+-- Mimic the Storage API's deletion context for isolated metadata-only fixtures.
+-- This does not bypass RLS; no hosted SQL or actual file object is touched.
+set local storage.allow_delete_query = 'true';
 select plan(43);
 
 create function pg_temp.billing_id(label text) returns uuid language sql immutable as $$
@@ -36,8 +39,10 @@ insert into public.subscription_plan_prices (plan_id,term_months,price_afn)
   values (pg_temp.billing_id('plan'),1,100);
 insert into public.payment_provider_configs (code,name_en,name_dari,name_pashto,provider_mode,state)
   values ('security-test-manual','Synthetic manual','Synthetic manual','Synthetic manual','manual_review','live');
-insert into public.organization_subscriptions (id,organization_id,plan_id,status,suspension_reason)
-  values (pg_temp.billing_id('subscription'),pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'suspended','Synthetic expired shop subscription');
+-- Organization creation already provisions a subscription through its trigger.
+update public.organization_subscriptions
+  set plan_id=pg_temp.billing_id('plan'), status='suspended', suspension_reason='Synthetic expired shop subscription'
+  where organization_id=pg_temp.billing_id('org');
 insert into storage.objects (id,bucket_id,name,owner_id)
   select pg_temp.billing_id(label),'subscription-payment-receipts',pg_temp.receipt_path(org_label,user_label,label || '.pdf'),pg_temp.billing_id(user_label)::text
   from (values ('receipt','org','owner'),('unlinked','org','owner'),('foreign-receipt','foreign-org','foreign-owner')) f(label,org_label,user_label);
@@ -76,7 +81,7 @@ select is((with removed as (delete from storage.objects where id=pg_temp.billing
 select is((with removed as (delete from storage.objects where id=pg_temp.billing_id('unlinked') returning id) select count(*) from removed),1::bigint,'active owner may clean up own unlinked receipt');
 select throws_ok($$select public.create_subscription_payment_request_v2(pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'security-test-manual',1::smallint,'TEST-RECEIPT',null,pg_temp.receipt_path('org','owner','upload.pdf'),'upload.pdf',null)$$,'P0001','Upload a PDF, JPG, or PNG payment receipt','null MIME type is rejected');
 reset role;
-select is((select status from public.organization_subscriptions where id=pg_temp.billing_id('subscription')),'suspended','submitting a receipt does not activate a suspended subscription');
+select is((select status from public.organization_subscriptions where organization_id=pg_temp.billing_id('org')),'suspended','submitting a receipt does not activate a suspended subscription');
 
 select pg_temp.billing_signin('manager');
 set local role authenticated;

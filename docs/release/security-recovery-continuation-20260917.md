@@ -83,7 +83,7 @@ No new paid project, subscription, top-up or add-on was purchased.
 
 ## Remaining security and release gates
 
-The fresh provider advisor still reports 149 authenticated SECURITY DEFINER
+The fresh provider advisor now reports 144 authenticated SECURITY DEFINER
 functions, one intentionally anonymous public-status function, and 15 informational
 RLS-enabled/no-policy tables. These categories were not blanket-suppressed or
 declared safe. Fixed search paths do not replace authorization/call-chain review.
@@ -91,6 +91,42 @@ See the provider guidance for
 [authenticated privileged functions](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
 and [RLS without policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
 The previously enabled leaked-password protection warning remains absent.
+
+## Team-lifecycle continuation
+
+Migration `20260916221039_harden_team_account_lifecycle.sql` is now live on
+SARAFI only. Ten onboarding/team APIs were hardened: suspended-account denial,
+current invitation capabilities, owner/peer-administrator protection, active
+member protection, matching cashier branch/cashbox assignment, and mandatory MFA
+for administrator admission. Explicitly accepted invitations and re-admissions
+replace old capability overrides with the newly approved assignment. No existing
+memberships were bulk-rewritten.
+
+Five unused internal authorization helpers were removed from the client RPC
+surface after checking database callers and absence of client/policy references.
+They remain callable internally by their privileged owning functions. This
+reduces the advisor count from 149 to 144; it does not certify the remainder.
+
+Full [CI run 35156783314](https://github.com/sarwaridairy-ship-it/Sarafi/actions/runs/35156783314)
+passed for `a2234ced38d7a1303f1743459a9d89847c5c5d40`, including all three
+browser engines, schema replay/lint, live anonymous checks, authenticated tests,
+and **60 rollback-only pgTAP assertions**. After live deployment, database lint
+returned no errors, **68/68 read-only privileged RPC boundary probes** passed,
+and the **10 authenticated role/security tests** passed again. The full local
+current-source suite subsequently passed **215 tests, zero skipped**, including
+live anonymous checks.
+
+`scripts/security/check-privileged-rpc-boundaries.mjs` uses only the existing
+seven disposable roles and anonymous key. It asserts exact denial codes/messages
+for internal helper access, platform consoles and cross-business billing, writes
+no financial records and changes no access. Sanitized output is kept in ignored
+`test-results/privileged-rpc/result.json`. Test accounts are verified as belonging
+to the dedicated `SECURITY_TEST_` business before probing.
+
+The RPC inventory is a timestamped pre-team-deployment source-review snapshot,
+not a claim that its old definition hashes still describe deployed functions.
+No full delegated-scope/limit containment or independent audit is implied by
+these targeted tests. The protected production alias has not been promoted.
 
 Independent review, signed release tag, protected production promotion, full RPC
 authorization review, secure account-recovery acceptance, qualified Afghan Dari/
