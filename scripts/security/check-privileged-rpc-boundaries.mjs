@@ -45,6 +45,19 @@ try {
         ['get_platform_organization_users', { target_org: env.BUSINESS_B_ID }],
       ]) await probe(client, role, rpc, args, 'P0001', 'Platform administrator access required')
       await probe(client, role, 'get_billing_portal', { target_org: env.BUSINESS_B_ID }, 'P0001', 'Only the business owner can manage the plan')
+      if (role === 'owner') {
+        const billing = await client.rpc('get_billing_portal', { target_org: env.BUSINESS_A_ID })
+        results.push({ role, rpc: 'get_billing_portal:own', passed: !billing.error && Boolean(billing.data?.subscription) && Array.isArray(billing.data?.requests) })
+      } else {
+        await probe(client, role, 'get_billing_portal', { target_org: env.BUSINESS_A_ID }, 'P0001', 'Only the business owner can manage the plan')
+      }
+      // An empty filename makes this a guaranteed non-writing probe even if an
+      // authorization regression occurs. Never use an actual receipt or plan.
+      await probe(client, role, 'create_subscription_payment_request_v2', {
+        target_org: env.BUSINESS_A_ID, target_plan: randomUUID(), target_provider: 'security-readonly-probe',
+        term_months_input: 1, payer_reference_input: null, payer_note_input: null,
+        receipt_path_input: null, receipt_file_name_input: '', receipt_mime_type_input: 'application/pdf',
+      }, 'P0001', role === 'owner' ? 'Payment receipt file name is required' : 'Only the business owner can request plan activation')
     } finally {
       await client.auth.signOut({ scope: 'local' })
     }
