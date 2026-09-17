@@ -1,8 +1,8 @@
 {
   "format": "sarafi-rpc-review-inventory-v1",
   "projectRef": "vbvwuqzqtcorassvotke",
-  "observedAt": "2026-09-16T22:06:00Z",
-  "source": "Read-only pg_proc/pg_get_functiondef inventory. Timestamp is approximate; hashes bind the observed definitions.",
+  "observedAt": "2026-09-16 22:16:00.946503+00",
+  "source": "Read-only pg_proc/pg_get_functiondef inventory; all definition hashes were rechecked at the database timestamp above.",
   "candidateMigration": "20260916221039_harden_team_account_lifecycle.sql",
   "releaseApproved": false,
   "fullyCertifiedFunctions": 0,
