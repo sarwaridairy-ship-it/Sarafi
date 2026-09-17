@@ -542,8 +542,9 @@ test.describe("workspace controls", () => {
   test("offline drafts stay encrypted and never auto-post", async ({
     page,
   }) => {
-    await page.goto("/");
-    await page.goto("/app/inspection/offline");
+    await page.goto("/app/inspection/offline", {
+      waitUntil: "domcontentloaded",
+    });
     await page
       .getByRole("combobox", { name: "Operation" })
       .selectOption("BUY_FX");
@@ -561,7 +562,10 @@ test.describe("workspace controls", () => {
               .transaction("drafts", "readonly")
               .objectStore("drafts")
               .getAll();
-            read.onsuccess = () => resolve(read.result);
+            read.onsuccess = () => {
+              request.result.close();
+              resolve(read.result);
+            };
             read.onerror = () => reject(read.error);
           };
           request.onerror = () => reject(request.error);
@@ -570,8 +574,7 @@ test.describe("workspace controls", () => {
     const serialized = JSON.stringify(raw);
     expect(serialized).not.toContain("12345.67");
     expect(serialized).not.toContain("BUY_FX");
-    await page.reload();
-    await page.goto("/app/inspection/offline");
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText(/DRAFT — NOT POSTED/)).toBeVisible();
     await page.evaluate(
       async () =>
@@ -588,7 +591,10 @@ test.describe("workspace controls", () => {
               const record = read.result[0];
               record.data = (record.data[0] === "A" ? "B" : "A") + record.data.slice(1);
               store.put(record);
-              transaction.oncomplete = () => resolve();
+              transaction.oncomplete = () => {
+                request.result.close();
+                resolve();
+              };
               transaction.onerror = () => reject(transaction.error);
             };
             read.onerror = () => reject(read.error);
@@ -596,8 +602,7 @@ test.describe("workspace controls", () => {
           request.onerror = () => reject(request.error);
         }),
     );
-    await page.reload();
-    await page.goto("/app/inspection/offline");
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText(/Draft storage unavailable/)).toBeVisible();
   });
 
