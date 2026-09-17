@@ -65,7 +65,7 @@ select throws_ok($$select public.get_billing_portal(pg_temp.billing_id('org'))$$
 select throws_ok($$select public.create_subscription_payment_request_v2(pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'security-test-manual',1::smallint,'TEST-RECEIPT',null,pg_temp.receipt_path('org','owner','receipt.pdf'),'receipt.pdf','application/pdf')$$,'P0001','Only the business owner can request plan activation','platform suspension denies payment submission before receipt lookup');
 select is((select count(*) from storage.objects where id=pg_temp.billing_id('receipt')),0::bigint,'suspended owner cannot read private receipt');
 select throws_ok($$insert into storage.objects (bucket_id,name,owner_id) values ('subscription-payment-receipts',pg_temp.receipt_path('org','owner','suspended.pdf'),pg_temp.billing_id('owner')::text)$$,'42501',null,'suspended owner cannot upload');
-select is((with removed as (delete from storage.objects where id=pg_temp.billing_id('unlinked') returning id) select count(*) from removed),0::bigint,'suspended owner cannot delete even unlinked receipts');
+select results_eq($$with removed as (delete from storage.objects where id=pg_temp.billing_id('unlinked') returning id) select count(*) from removed$$,$$values (0::bigint)$$,'suspended owner cannot delete even unlinked receipts');
 reset role;
 select is((select count(*) from public.subscription_payment_requests where organization_id=pg_temp.billing_id('org')),0::bigint,'denied submission creates no payment request');
 delete from public.platform_user_access where user_id=pg_temp.billing_id('owner');
@@ -77,8 +77,8 @@ insert into public.membership_capability_overrides (membership_id,capability_cod
 set local role authenticated;
 select is((public.create_subscription_payment_request_v2(pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'security-test-manual',1::smallint,'TEST-RECEIPT',null,pg_temp.receipt_path('org','owner','receipt.pdf'),'receipt.pdf','application/pdf')->'request'->>'amount_afn')::numeric,100::numeric,'active owner submission uses server price despite shop subscription suspension');
 select is(jsonb_array_length(public.get_billing_portal(pg_temp.billing_id('org'))->'requests'),1,'owner sees linked request despite a shop-settings capability denial');
-select is((with removed as (delete from storage.objects where id=pg_temp.billing_id('receipt') returning id) select count(*) from removed),0::bigint,'linked receipt cannot be deleted when settings permission is denied');
-select is((with removed as (delete from storage.objects where id=pg_temp.billing_id('unlinked') returning id) select count(*) from removed),1::bigint,'active owner may clean up own unlinked receipt');
+select results_eq($$with removed as (delete from storage.objects where id=pg_temp.billing_id('receipt') returning id) select count(*) from removed$$,$$values (0::bigint)$$,'linked receipt cannot be deleted when settings permission is denied');
+select results_eq($$with removed as (delete from storage.objects where id=pg_temp.billing_id('unlinked') returning id) select count(*) from removed$$,$$values (1::bigint)$$,'active owner may clean up own unlinked receipt');
 select throws_ok($$select public.create_subscription_payment_request_v2(pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'security-test-manual',1::smallint,'TEST-RECEIPT',null,pg_temp.receipt_path('org','owner','upload.pdf'),'upload.pdf',null)$$,'P0001','Upload a PDF, JPG, or PNG payment receipt','null MIME type is rejected');
 reset role;
 select is((select status from public.organization_subscriptions where organization_id=pg_temp.billing_id('org')),'suspended','submitting a receipt does not activate a suspended subscription');
