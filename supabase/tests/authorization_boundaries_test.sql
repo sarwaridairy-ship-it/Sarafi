@@ -3,7 +3,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(29);
+select plan(30);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-000000000001', 'authorization-a@example.invalid'),
@@ -120,5 +120,9 @@ update public.journal_entries set status='posted',posted_at=now(),posted_by='100
   where id='80000000-0000-4000-8000-000000000002';
 select throws_ok($$set constraints posted_entry_must_balance immediate$$,'P0001','Journal entry 80000000-0000-4000-8000-000000000002 must contain at least two lines','a posted journal cannot commit without double-entry lines');
 select is((public.get_platform_operations()->'health'->>'unbalanced_posted_entries')::bigint,(select unbalanced_count + 1 from platform_health_baseline),'administrator health detects a legacy zero-line posted journal');
+select ok((select p.prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='assert_posted_entry_balanced')
+  and not has_function_privilege('authenticated','public.assert_posted_entry_balanced()','execute')
+  and not has_function_privilege('anon','public.assert_posted_entry_balanced()','execute'),
+  'deferred balance trigger stays privileged without becoming a client RPC');
 select * from finish();
 rollback;
