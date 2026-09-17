@@ -53,10 +53,11 @@ Other real customer businesses were not used for mutation testing. The new
 live import-denial probes use empty rows, so even a regression in authorization
 cannot create a customer or financial entry.
 
-The complete browser CI result must be checked for the **final** candidate SHA;
-the earlier green `51f968d` workflow and an isolated green database job do not
-certify later changes or all three browser engines. No fresh physical-device,
-printer, biometric or native-speaker acceptance is claimed here.
+The complete browser CI result must be checked for every code-bearing candidate
+SHA; an earlier green workflow or an isolated green database job does not certify
+later runtime changes or all three browser engines. The latest code-bearing SHA
+and its evidence are recorded below. No fresh physical-device, printer, biometric
+or native-speaker acceptance is claimed here.
 
 ## Recovery progress and limitations
 
@@ -166,6 +167,57 @@ functions, one intentionally anonymous public-status function and 15
 informational RLS-without-policy tables; this migration added no exposed
 privileged RPC. These results validate this narrow correction, not the whole
 remaining RPC inventory or a public release.
+
+## Ledger-structure and deferred-trigger continuation
+
+Migration `20260917075058_enforce_posted_journal_structure_and_health.sql` is
+live on SARAFI only. A posted journal now requires at least two lines as well as
+equal base debits and credits. The platform health calculation uses a left join,
+so legacy zero-line or one-line posted journals can no longer disappear from its
+malformed-entry count. The read-only deployment preflight found 263 posted
+journals, a minimum of two lines, and zero malformed entries; no historical
+journal was rewritten by the migration.
+
+Full [CI run 35196701875](https://github.com/sarwaridairy-ship-it/Sarafi/actions/runs/35196701875)
+passed for `d55a1db07ddaa0ee8c8680f30075b94e7594988a`, including the three-browser
+matrix, schema replay/lint and 107 rollback-only pgTAP assertions. The subsequent
+live authenticated posting check nevertheless caught a production privilege
+regression: replacing the deferred trigger function had omitted its previous
+`SECURITY DEFINER` attribute. Posting failed closed with permission denied on the
+protected journal-line table; it did not create a malformed posted journal.
+
+Migration `20260917080745_restore_deferred_journal_security_definer.sql` is now
+live. It restores the deferred trigger's privileged execution with an empty
+search path while revoking direct execution from `PUBLIC`, `anon` and
+`authenticated`. A permanent pgTAP assertion now checks all four properties,
+bringing the rollback-only database suite to 108 assertions.
+
+The first hotfix workflow's isolated database job was green, but its browser job
+correctly prevented a green build after one WebKit navigation failure in the
+offline-draft encryption test. The test itself left direct IndexedDB connections
+open and performed redundant full navigations. Commit
+`0374ce778b7170ec125c6514a955bb18da2c6c0c` closes those test-only connections
+and reloads the same route once without weakening the plaintext, auto-post or
+tamper-detection assertions. The repaired test passed targeted Chromium, Firefox
+and WebKit execution plus three consecutive additional WebKit runs.
+
+Full [CI run 35199942240](https://github.com/sarwaridairy-ship-it/Sarafi/actions/runs/35199942240)
+then passed for that code-bearing commit: **411 browser tests**, zero failures and
+zero flaky tests across Chromium, Firefox and WebKit; performance/import checks;
+schema replay/lint; **108 rollback-only pgTAP assertions**; three authenticated
+security journeys; and all seven role contracts. The retained evidence manifest
+binds those stages to the workflow's GitHub merge commit and records their SHA-256
+digests.
+
+Final read-only live reconciliation found both ledger migrations, 271 posted
+journals, a minimum of two lines and **zero malformed posted journals**. The
+count increase is from repeated idempotency checks in the dedicated
+`SECURITY_TEST_` business, not a rewrite of customer journals. The trigger remains
+security-definer and non-executable by anonymous or authenticated browser roles;
+the health function contains both the left join and structural check. Live
+database lint remained clean, the 82 non-writing privileged-boundary probes and
+ten authenticated role/security checks passed after the hotfix, and the public
+alias was not promoted.
 
 Independent review, signed release tag, protected production promotion, full RPC
 authorization review, secure account-recovery acceptance, qualified Afghan Dari/
