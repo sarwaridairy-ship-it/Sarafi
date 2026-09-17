@@ -159,6 +159,7 @@ import {
 import { capabilityForFinancialRoute, financialRoute, financialRouteSuffix, workspaceRoot, workspaceSectionPath } from "./app/routes";
 import type { InlineRateResolverProps } from "./features/rates/InlineRateResolver";
 import { TransactionRateControl } from "./features/rates/TransactionRateControl";
+import { DailyRateRequestEditor } from "./features/rates/DailyRateRequestEditor";
 import { ReferenceScanner } from "./features/hawala/ReferenceScanner";
 import { MoneyValuationSummary } from "./features/money/MoneyValuationSummary";
 import { HawalaPayoutConfirmation, HawalaReceivedList, HawalaRecipientSearch, type HawalaListTab, type HawalaRecipientType } from "./features/hawala/HawalaWorkflowParts";
@@ -3895,6 +3896,7 @@ function WorkspaceView({
         canManageCapabilities={canManageCapabilities}
         canInviteBusinessAdmin={canInviteBusinessAdmin}
         canDecideApprovals={canDecideApprovals}
+        canManageRates={hasCapability(capabilities, "rates.manage")}
         onDashboard={onDashboard}
         onToast={onToast}
       />
@@ -3944,6 +3946,7 @@ function WorkspaceView({
   if (section === "Offline")
     return (
       <OfflineView
+        key={JSON.stringify([organizationId, userId, deviceId, cashboxId])}
         organizationId={organizationId}
         userId={userId}
         deviceId={deviceId}
@@ -3954,8 +3957,10 @@ function WorkspaceView({
   if (section === "Import")
     return (
       <ImportWorkspace
+        key={`${organizationId ?? "inspection"}:${branchId ?? "no-branch"}`}
         language={language}
         organizationId={organizationId}
+        branchId={branchId}
         onBack={onDashboard}
         onToast={onToast}
       />
@@ -4161,6 +4166,7 @@ function TeamDevicesView({
   canManageCapabilities,
   canInviteBusinessAdmin,
   canDecideApprovals,
+  canManageRates,
   onDashboard,
   onToast,
 }: {
@@ -4171,6 +4177,7 @@ function TeamDevicesView({
   canManageCapabilities: boolean;
   canInviteBusinessAdmin: boolean;
   canDecideApprovals: boolean;
+  canManageRates: boolean;
   onDashboard: () => void;
   onToast: (message: string) => void;
 }) {
@@ -4244,7 +4251,12 @@ function TeamDevicesView({
     inspection ? [previewCashbox] : [],
   );
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
-  const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRecord[]>(inspection ? [{
+    id: "inspection-daily-rate", action_type: "operation_rate", reason: "", amount_base: null,
+    currency_code: "USD", status: "pending", requested_at: new Date().toISOString(),
+    requested_by_name: u("previewCashierName"), decided_by_name: null,
+    branch_id: previewBranch.id, branch_name: previewBranch.name, is_current_requester: false,
+  }] : []);
   const [joinRequests, setJoinRequests] = useState<WorkerJoinRequestRecord[]>(inspection ? [{ id: "inspection-request", display_name: language === "en" ? "Ahmad Rahimi" : language === "fa-AF" ? "احمد رحیمی" : "احمد رحیمي", email: "ahmad@example.com", status: "pending", requested_at: new Date().toISOString(), assigned_role: null, branch_ids: [], cashbox_ids: [], capability_overrides: [], limits: {}, mfa_required: true, device_review_required: true }] : []);
   const [capabilityMatrix, setCapabilityMatrix] = useState<MembershipCapabilityMatrixRecord[]>([]);
   const [teamSection, setTeamSection] = useState<"people" | "invitations" | "requests" | "devices" | "roles">("people");
@@ -5180,7 +5192,7 @@ function TeamDevicesView({
           </div>
         </div>
       </div>
-      <div className="panel" hidden={teamSection !== "roles"}>
+      <div className="panel team-approval-inbox" hidden={teamSection !== "roles"}>
         <div className="panel-header">
           <div>
             <h2>{u("approvalInbox")}</h2>
@@ -5195,7 +5207,7 @@ function TeamDevicesView({
         <div className="balance-list">
           {approvals.length ? (
             approvals.map((approval) => (
-              <div className={`balance-row ${routeApprovalId === approval.id ? "deep-link-focus" : ""}`} id={`approval-${approval.id}`} key={approval.id}>
+              <div className={`balance-row approval-record ${routeApprovalId === approval.id ? "deep-link-focus" : ""}`} id={`approval-${approval.id}`} key={approval.id}>
                 <span className="currency-badge usd">
                   {approval.status === "pending" ? "!" : "✓"}
                 </span>
@@ -5204,7 +5216,7 @@ function TeamDevicesView({
                     {u("approvalRequest")} · {statusName(approval.status)}
                   </b>
                   <small>
-                    {approval.reason} · {u("requested")}{" "}
+                    {approval.action_type === "operation_rate" ? approval.requested_by_name : approval.reason} · {u("requested")}{" "}
                     {new Date(approval.requested_at).toLocaleString(language, { hour12: false })}
                   </small>
                 </span>
@@ -5214,7 +5226,15 @@ function TeamDevicesView({
                       ? `${approval.amount_base} ${approval.currency_code ?? ""}`
                       : u("review")}
                   </strong>
-                  {canDecideApprovals && approval.status === "pending" && <><button className="text-button" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "approved")}>{u("approved")}</button><button className="text-button danger" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "rejected")}>{u("rejected")}</button></>}
+                  {canDecideApprovals && approval.status === "pending" && !approval.is_current_requester && <>
+                    {approval.action_type === "operation_rate" ? canManageRates ? <DailyRateRequestEditor
+                      id={approval.id} currency={approval.currency_code ?? ""} language={language}
+                      branchName={approval.branch_name ?? ""} inspection={inspection}
+                      reason={approvalReason} verified={mfa.verified} onToast={onToast}
+                      onSaved={() => { setApprovalReason(""); setRefresh((value) => value + 1); onToast(u("savedSuccessfully")); }}
+                    /> : null : <button className="text-button" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "approved")}>{u("approved")}</button>}
+                    <button className="text-button danger" disabled={approvalBusy === approval.id} onClick={() => void decidePendingApproval(approval, "rejected")}>{u("rejected")}</button>
+                  </>}
                 </div>
               </div>
             ))

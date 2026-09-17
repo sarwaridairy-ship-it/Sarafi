@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
+import Decimal from 'decimal.js'
 
 const url = process.env.VITE_SUPABASE_URL
 const anonKey = process.env.VITE_SUPABASE_ANON_KEY
@@ -34,13 +35,57 @@ test.describe('authenticated security journeys', () => {
     expect(guessedOtherTenant.data).toEqual([])
   })
 
+  test('legacy rate helper is not exposed as an authenticated RPC', async () => {
+    const client = createClient(url!, anonKey!, { auth: { persistSession: false, autoRefreshToken: false } })
+    const signedIn = await client.auth.signInWithPassword({ email: email!, password: password! })
+    expect(signedIn.error).toBeNull()
+    try {
+      const result = await client.rpc('current_rate', {
+        target_org: organizationId!, target_group: crypto.randomUUID(), target_branch: null,
+        source_currency: 'USD', target_currency: 'AFN',
+      })
+      // A null rate or generic network failure is not proof of revoked access.
+      expect(result.error?.code).toBe('42501')
+      expect(result.error?.message).toMatch(/permission denied for function current_rate/)
+      expect(result.data).toBeNull()
+    } finally {
+      await client.auth.signOut({ scope: 'local' })
+    }
+  })
+
   test('concurrent duplicate commands resolve to one idempotent result', async () => {
     const client = createClient(url!, anonKey!, { auth: { persistSession: false, autoRefreshToken: false } })
     const signedIn = await client.auth.signInWithPassword({ email: email!, password: password! })
     expect(signedIn.error).toBeNull()
-    const command = { organization_id: organizationId!, client_command_id: crypto.randomUUID() }
-    const results = await Promise.all([client.rpc('record_fx_trade', { command }), client.rpc('record_fx_trade', { command })])
-    expect(results.filter((result) => result.data !== null)).toHaveLength(0)
-    expect(results.every((result) => result.error !== null)).toBe(true)
+    const organization = await client.from('organizations').select('display_name').eq('id', organizationId!).single()
+    expect(organization.error).toBeNull()
+    expect(organization.data?.display_name, 'Writes are limited to the disposable security business').toMatch(/^SECURITY_TEST_/)
+    const accounts = await client.rpc('get_money_accounts', { target_org: organizationId! })
+    expect(accounts.error).toBeNull()
+    const account = (accounts.data as Array<{ id: string; active: boolean; branch_id: string; account_type: string }>).find((item) => item.active && item.branch_id && item.account_type === 'cashbox')
+    expect(account).toBeDefined()
+    const devices = await client.from('devices').select('id').eq('organization_id', organizationId!).eq('user_id', signedIn.data.user!.id).eq('status', 'trusted').limit(1)
+    expect(devices.error).toBeNull()
+    expect(devices.data).toHaveLength(1)
+    const command = {
+      organization_id: organizationId!, branch_id: account!.branch_id,
+      destination_money_account_id: account!.id, device_id: devices.data![0].id,
+      operation: 'OWNER_INVESTMENT', currency: 'AFN', amount: '0.01',
+      client_command_id: `ci-idempotency-${crypto.randomUUID()}`, memo: 'Disposable CI idempotency check',
+    }
+    const results = await Promise.all([client.rpc('record_operation', { command }), client.rpc('record_operation', { command })])
+    for (const result of results) expect(result.error, result.error?.message).toBeNull()
+    expect(results[0].data?.id).toBeTruthy()
+    expect(results[0].data.id).toBe(results[1].data.id)
+    const detail = await client.rpc('get_transaction_detail', { target_org: organizationId!, target_entry: results[0].data.id })
+    expect(detail.error).toBeNull()
+    expect(detail.data?.id).toBe(results[0].data.id)
+    expect(detail.data?.status).toBe('posted')
+    expect(new Decimal(detail.data.amount).eq('0.01')).toBe(true)
+    expect(detail.data.currency_code).toBe('AFN')
+    const receipt = await client.rpc('get_receipt_for_journal_v6', { target_org: organizationId!, target_entry: results[0].data.id })
+    expect(receipt.error).toBeNull()
+    expect(receipt.data?.journal_entry_id).toBe(results[0].data.id)
+    await client.auth.signOut()
   })
 })

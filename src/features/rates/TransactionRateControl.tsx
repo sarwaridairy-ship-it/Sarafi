@@ -138,7 +138,7 @@ export function TransactionRateControl({
         <span>{rightCurrency}</span>
         <button type="button" className="compact-rate-swap" onClick={onReverse} aria-label={text.reverse} disabled={disabled}>⇄</button>
         </div>
-        <small className="transaction-rate-meta">{unavailable ? text.manual : updatedLabel}</small>
+        <small className="transaction-rate-meta">{unavailable ? (canEdit ? text.manual : text.unavailable) : automatic ? updatedLabel : text.manual}</small>
       </div>
       {approvalMessage ? (
         <div className="transaction-rate-exception" role="status">

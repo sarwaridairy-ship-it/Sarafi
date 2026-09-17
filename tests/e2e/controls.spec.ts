@@ -539,11 +539,12 @@ test.describe("workspace controls", () => {
     ).toBeVisible();
   });
 
-  test.skip("offline drafts stay encrypted and never auto-post", async ({
+  test("offline drafts stay encrypted and never auto-post", async ({
     page,
   }) => {
-    await page.goto("/");
-    await page.goto("/app/inspection/offline");
+    await page.goto("/app/inspection/offline", {
+      waitUntil: "domcontentloaded",
+    });
     await page
       .getByRole("combobox", { name: "Operation" })
       .selectOption("BUY_FX");
@@ -561,7 +562,10 @@ test.describe("workspace controls", () => {
               .transaction("drafts", "readonly")
               .objectStore("drafts")
               .getAll();
-            read.onsuccess = () => resolve(read.result);
+            read.onsuccess = () => {
+              request.result.close();
+              resolve(read.result);
+            };
             read.onerror = () => reject(read.error);
           };
           request.onerror = () => reject(request.error);
@@ -570,8 +574,7 @@ test.describe("workspace controls", () => {
     const serialized = JSON.stringify(raw);
     expect(serialized).not.toContain("12345.67");
     expect(serialized).not.toContain("BUY_FX");
-    await page.reload();
-    await page.goto("/app/inspection/offline");
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText(/DRAFT — NOT POSTED/)).toBeVisible();
     await page.evaluate(
       async () =>
@@ -586,9 +589,12 @@ test.describe("workspace controls", () => {
             const read = store.getAll();
             read.onsuccess = () => {
               const record = read.result[0];
-              record.data = record.data.slice(0, -2) + "AA";
+              record.data = (record.data[0] === "A" ? "B" : "A") + record.data.slice(1);
               store.put(record);
-              transaction.oncomplete = () => resolve();
+              transaction.oncomplete = () => {
+                request.result.close();
+                resolve();
+              };
               transaction.onerror = () => reject(transaction.error);
             };
             read.onerror = () => reject(read.error);
@@ -596,8 +602,7 @@ test.describe("workspace controls", () => {
           request.onerror = () => reject(request.error);
         }),
     );
-    await page.reload();
-    await page.goto("/app/inspection/offline");
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByText(/Draft storage unavailable/)).toBeVisible();
   });
 
@@ -831,7 +836,7 @@ test.describe("workspace controls", () => {
     await page.goto("/app/inspection/transactions/new/fx/buy?role=cashier&rate=missing");
     await page.locator(".financial-task-form").getByRole("textbox", { name: /We receive/ }).fill("1000");
     await page.getByRole("button", { name: "Request rate approval" }).click();
-    await expect(page.getByText("Rate approval requested. Your draft remains on this page.")).toBeVisible();
+    await expect(page.getByText("Waiting for the daily rate. This form updates automatically.")).toBeVisible();
     await expect(page.locator(".transaction-page-form")).toBeVisible();
     await expect(page.locator(".financial-task-form").getByRole("textbox", { name: /We receive/ })).toHaveValue("1000");
   });
@@ -854,7 +859,7 @@ test.describe("workspace controls", () => {
     await page.addInitScript(() => window.localStorage.setItem("sarafi-language", "en"));
     await page.goto("/app/inspection/transactions/new/money-out/expense?role=cashier&rate=missing");
     await page.getByRole("combobox", { name: "Currency" }).selectOption("USD");
-    await expect(page.getByText(/sent to a manager for approval/)).toBeVisible();
+    await expect(page.getByText("Ask a manager to update the daily rate. Your draft stays here.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Request rate approval" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Save money paid/ })).toBeDisabled();
     await expect(page).toHaveURL(/transactions\/new\/money-out\/expense/);

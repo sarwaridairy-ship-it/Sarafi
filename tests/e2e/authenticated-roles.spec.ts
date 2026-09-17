@@ -53,6 +53,38 @@ test.describe("authenticated seven-role contract", () => {
         expect(membership?.capabilities).not.toContain("financial.post.fx");
         expect(membership?.capabilities).not.toContain("financial.reverse");
       }
+      const ownBusiness = await client.from("organizations").select("id").eq("id", organizationId!);
+      expect(ownBusiness.error).toBeNull();
+      expect(ownBusiness.data).toHaveLength(1);
+      const otherBusiness = await client.from("organizations").select("id").neq("id", organizationId!).limit(1);
+      expect(otherBusiness.error).toBeNull();
+      expect(otherBusiness.data).toEqual([]);
+      if (!membership?.capabilities.includes("rates.manage")) {
+        const denied = await client.rpc("set_exchange_rate", {
+          target_org: organizationId!, target_branch: null,
+          source_currency_input: "USD", target_currency_input: "AFN",
+          buy_rate_input: "70", sell_rate_input: "71",
+        });
+        expect(denied.error?.message).toContain("CAPABILITY_REQUIRED:rates.manage");
+      }
+      if (!membership?.capabilities.includes("data.import")) {
+        const denied = await client.rpc("commit_import", { command: {
+          organization_id: organizationId!, import_key: `denied-ci-${crypto.randomUUID()}`,
+          kind: "counterparties", rows: [],
+        } });
+        // Authorization must run before row validation or idempotency lookup.
+        // Empty rows also ensure a broken permission guard cannot create data.
+        expect(denied.error?.code).toBe("42501");
+        expect(denied.error?.message).toBe("CAPABILITY_REQUIRED:data.import");
+        expect(denied.data).toBeNull();
+      }
+      if (!membership?.capabilities.includes("owner.capital.post")) {
+        const denied = await client.rpc("record_operation", { command: {
+          organization_id: organizationId!, client_command_id: crypto.randomUUID(),
+          operation: "OWNER_INVESTMENT", currency: "AFN", amount: "0.01",
+        } });
+        expect(denied.error?.message).toContain("CAPABILITY_REQUIRED:owner.capital.post");
+      }
       await client.auth.signOut();
     });
   }

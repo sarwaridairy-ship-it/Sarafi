@@ -172,7 +172,7 @@ export type WorkspaceContextRecord = {
   cashboxes: Array<{ id: string; name: string; branch_id: string }>
   subscription: { status?: string; period_end?: string | null; plan_code?: string }
 }
-export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null }
+export type ApprovalRecord = { id: string; action_type: string; reason: string; amount_base: string | null; currency_code: string | null; status: string; requested_at: string; requested_by_name: string; decided_by_name: string | null; branch_id?: string | null; branch_name?: string | null; expires_at?: string; is_current_requester?: boolean }
 export type ResumableApprovalDraft = { id: string; action_type: 'fx_trade' | 'hawala_payout'; status: string; reason: string; amount_base: string | null; currency_code: string | null; requested_at: string; expires_at: string; decided_at: string | null; decision_reason: string | null; resume_route: string | null; draft: Record<string, unknown>; consumed_at: string | null; consumed_journal_entry_id: string | null }
 export type TeamControlPlane = { members: TeamMemberRecord[]; invitations: TeamInvitationRecord[]; branches: TeamScopeRecord[]; cashboxes: TeamScopeRecord[]; devices: DeviceRecord[]; approvals: ApprovalRecord[] }
 export type CreatedTeamInvitation = { id: string; invite_token: string; connection_code?: string; email: string; display_name: string; role_code: string; expires_at: string }
@@ -1105,6 +1105,22 @@ export async function requestOperationRateApproval(command: {
   if (!session.data.session) return { data: null, error: 'Authentication required' }
   const result = await client.rpc('request_operation_rate_approval_v10', { command })
   return { data: result.data as { id: string; status: string } | null, error: result.error?.message ?? null }
+}
+
+export async function getOperationRateRequest(id: string): Promise<RpcResult<{ status: string; expires_at: string }>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('get_my_operation_rate_request_v11', { target_request: id })
+  return { data: result.data, error: result.error?.message ?? null }
+}
+
+export async function resolveOperationRateRequest(id: string, buyRate: string, sellRate: string, reason: string): Promise<RpcResult<ApprovalRecord>> {
+  const client = getSupabaseClient()
+  if (!client) return { data: null, error: 'Supabase is not configured' }
+  const result = await client.rpc('resolve_operation_rate_request_v11', {
+    target_request: id, buy_rate_input: buyRate, sell_rate_input: sellRate, decision_reason_input: reason,
+  })
+  return { data: result.data as ApprovalRecord | null, error: result.error?.message ?? null }
 }
 
 export async function createTeamInvitation(input: { organizationId: string; email: string; displayName: string; role: string; branchIds: string[]; cashboxIds: string[]; capabilityOverrides?: Array<{ capability: string; allowed: boolean }>; limits?: Record<string, unknown>; requiresMfa?: boolean }): Promise<RpcResult<CreatedTeamInvitation>> {

@@ -35,6 +35,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      SARAFI_EVIDENCE_STAGE: inspection
     steps:
       - uses: actions/checkout@v5
         with:
@@ -68,8 +70,15 @@ jobs:
           test -n "$SARAFI_E2E_PASSWORD"
           test -n "$SARAFI_E2E_ORGANIZATION_ID"
           test -n "$SARAFI_E2E_ROLE_FIXTURES"
+      - name: Anonymous live security boundary
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_RUN_LIVE_TESTS: "true"
+        run: npx vitest run src/lib/liveSecurity.test.ts
       - name: Authenticated authorization journeys
         env:
+          SARAFI_EVIDENCE_STAGE: authenticated
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
@@ -77,7 +86,7 @@ jobs:
           SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
           SARAFI_E2E_ROLE_FIXTURES: ${{ secrets.SARAFI_E2E_ROLE_FIXTURES }}
           STEP15_CERTIFICATION: "true"
-        run: npx playwright test tests/e2e/authenticated-security.spec.ts tests/e2e/authenticated-roles.spec.ts
+        run: npx playwright test --config=playwright.api.config.ts tests/e2e/authenticated-security.spec.ts tests/e2e/authenticated-roles.spec.ts
       - name: Initialize isolated local database configuration
         run: npx supabase init --yes
       - name: Start isolated local database
@@ -85,11 +94,16 @@ jobs:
       - name: Apply every migration from zero
         run: npx supabase db reset --local --no-seed
       - name: Lint the migrated database
-        run: npx supabase db lint --local --level error
+        run: npx supabase db lint --local --level error --fail-on error
+      - name: Verify rollback-only authorization regressions
+        run: npx supabase test db --local
       - name: Stop isolated local database
         if: always()
         run: npx supabase stop --no-backup
       - run: npm run build
+      - name: Record evidence for this commit
+        if: always()
+        run: node scripts/write-evidence-manifest.mjs inspection authenticated
       - name: Retain protected verification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -102,6 +116,8 @@ jobs:
             test-results/
             artifacts/
             output/pdf/
+            evidence-results/
+            release-evidence/test-manifest.json
 
   production-promotion:
     if: ${{ inputs.promote == true }}

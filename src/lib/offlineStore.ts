@@ -15,30 +15,47 @@ async function openDatabase(): Promise<IDBDatabase> {
 }
 
 async function withStore<T>(mode: IDBTransactionMode, action: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const database = await openDatabase()
-  return new Promise((resolve, reject) => {
-    const request = action(database.transaction(storeName, mode).objectStore(storeName))
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-  })
+  return withNamedStore(storeName, mode, action)
 }
 
 async function withNamedStore<T>(name: string, mode: IDBTransactionMode, action: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const database = await openDatabase()
-  return new Promise((resolve, reject) => {
-    const request = action(database.transaction(name, mode).objectStore(name))
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-  })
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      const transaction = database.transaction(name, mode)
+      const request = action(transaction.objectStore(name))
+      transaction.oncomplete = () => resolve(request.result)
+      transaction.onabort = () => reject(transaction.error ?? new Error('Draft storage write aborted'))
+      transaction.onerror = () => reject(transaction.error ?? request.error)
+    })
+  } finally {
+    database.close()
+  }
 }
 
 async function getDurableKey(): Promise<CryptoKey> {
-  const database = await openDatabase()
-  const existing = await new Promise<CryptoKey | undefined>((resolve, reject) => { const request = database.transaction(keyStoreName, 'readonly').objectStore(keyStoreName).get('session-key'); request.onsuccess = () => resolve(request.result?.key as CryptoKey | undefined); request.onerror = () => reject(request.error) })
-  if (existing) return existing
+  const existing = await withNamedStore(keyStoreName, 'readonly', (store) => store.get('session-key')) as { key: CryptoKey } | undefined
+  if (existing) return existing.key
   const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
-  await new Promise<void>((resolve, reject) => { const request = database.transaction(keyStoreName, 'readwrite').objectStore(keyStoreName).put({ id: 'session-key', key }); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error) })
-  return key
+  const database = await openDatabase()
+  try {
+    return await new Promise<CryptoKey>((resolve, reject) => {
+      // Concurrent tabs must reuse the winner, never overwrite its encryption key.
+      const transaction = database.transaction(keyStoreName, 'readwrite')
+      const store = transaction.objectStore(keyStoreName)
+      const request = store.get('session-key')
+      let durableKey = key
+      request.onsuccess = () => {
+        if (request.result?.key) durableKey = request.result.key as CryptoKey
+        else store.put({ id: 'session-key', key })
+      }
+      transaction.oncomplete = () => resolve(durableKey)
+      transaction.onabort = () => reject(transaction.error ?? new Error('Draft encryption key write aborted'))
+      transaction.onerror = () => reject(transaction.error ?? request.error)
+    })
+  } finally {
+    database.close()
+  }
 }
 
 export async function saveOfflineDraft(draft: OfflineDraft): Promise<void> { await createEncryptedOfflineStore(await getDurableKey()).save(draft) }

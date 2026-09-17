@@ -14,10 +14,11 @@ Configure these variables only in the test runner secret store:
 - `SARAFI_E2E_PASSWORD`
 - `SARAFI_E2E_ORGANIZATION_ID`
 
-Run `npx playwright test tests/e2e/authenticated-security.spec.ts` and retain the
-report. The suite covers sign-in, MFA assurance state, tenant isolation, and duplicate
-command behavior. Add separate owner, manager, accountant, cashier, viewer, and
-compliance identities before treating role coverage as complete.
+Run `npx playwright test --config=playwright.api.config.ts` and retain the
+stage-specific report. These are authenticated API contracts, not UI click journeys.
+Set `SARAFI_E2E_ROLE_FIXTURES` for all seven roles and `STEP15_CERTIFICATION=true`
+so missing fixtures fail instead of silently skipping. Keep browser rendering and
+authenticated API results separate; neither replaces live UI acceptance.
 
 ## Compliance Provider
 
@@ -59,7 +60,8 @@ execute the UAT guide and sign the production-readiness record.
 
 ## Current Status
 
-Technical automated checks are green, Supabase migrations are applied and lint-clean,
-and the web preview is deployed. The gates above remain open until the named external
-owners provide evidence; this document must not be replaced with an unsupported
+Check the current commit's CI manifest and the
+[16 September launch audit](launch-audit-20260916.md). Historical green tests do
+not certify a later commit. The external gates remain open until their owners
+provide evidence; this document must not be replaced with an unsupported
 "complete" claim.

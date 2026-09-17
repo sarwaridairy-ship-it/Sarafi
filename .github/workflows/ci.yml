@@ -7,6 +7,8 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      SARAFI_EVIDENCE_STAGE: inspection
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -36,22 +38,34 @@ jobs:
           test -n "$SARAFI_E2E_PASSWORD"
           test -n "$SARAFI_E2E_ORGANIZATION_ID"
           test -n "$SARAFI_E2E_ROLE_FIXTURES"
+      - name: Anonymous live security boundary
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_RUN_LIVE_TESTS: "true"
+        run: npx vitest run src/lib/liveSecurity.test.ts
       - name: Authenticated security journeys
         env:
+          SARAFI_EVIDENCE_STAGE: authenticated-security
+          STEP15_CERTIFICATION: "true"
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           SARAFI_E2E_EMAIL: ${{ secrets.SARAFI_E2E_EMAIL }}
           SARAFI_E2E_PASSWORD: ${{ secrets.SARAFI_E2E_PASSWORD }}
           SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
-        run: npx playwright test tests/e2e/authenticated-security.spec.ts
+        run: npx playwright test --config=playwright.api.config.ts tests/e2e/authenticated-security.spec.ts
       - name: Authenticated seven-role contract
         env:
+          SARAFI_EVIDENCE_STAGE: authenticated-roles
           STEP15_CERTIFICATION: "true"
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           SARAFI_E2E_ORGANIZATION_ID: ${{ secrets.SARAFI_E2E_ORGANIZATION_ID }}
           SARAFI_E2E_ROLE_FIXTURES: ${{ secrets.SARAFI_E2E_ROLE_FIXTURES }}
-        run: npx playwright test tests/e2e/authenticated-roles.spec.ts
+        run: npx playwright test --config=playwright.api.config.ts tests/e2e/authenticated-roles.spec.ts
+      - name: Record evidence for this commit
+        if: always()
+        run: node scripts/write-evidence-manifest.mjs inspection authenticated-security authenticated-roles
       - name: Retain browser, PDF, screenshot, and trace evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -64,3 +78,26 @@ jobs:
             test-results/
             artifacts/
             output/pdf/
+            evidence-results/
+            release-evidence/test-manifest.json
+
+  migration-replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx supabase init --yes
+      - run: npx supabase start --yes
+      - name: Replay the complete schema in an isolated database
+        run: npx supabase db reset --local --no-seed
+      - name: Reject database errors
+        run: npx supabase db lint --local --level error --fail-on error
+      - name: Verify rollback-only authorization regressions
+        run: npx supabase test db --local
+      - name: Stop isolated database
+        if: always()
+        run: npx supabase stop --no-backup
