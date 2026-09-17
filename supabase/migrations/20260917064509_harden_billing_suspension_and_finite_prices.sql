@@ -244,12 +244,7 @@ with check (
   bucket_id = 'subscription-payment-receipts'
   and (select public.is_platform_user_active())
   and (storage.foldername(name))[2] = (select auth.uid())::text
-  and exists (
-    select 1 from public.organization_memberships membership
-    where membership.organization_id::text = (storage.foldername(name))[1]
-      and membership.user_id = (select auth.uid())
-      and membership.active and membership.role_code = 'owner'
-  )
+  and (select public.is_org_owner(((storage.foldername(name))[1])::uuid))
 );
 alter policy subscription_payment_receipt_authorized_read on storage.objects
 using (
@@ -257,12 +252,7 @@ using (
   and (select public.is_platform_user_active())
   and (
     (select public.is_platform_admin())
-    or exists (
-      select 1 from public.organization_memberships membership
-      where membership.organization_id::text = (storage.foldername(name))[1]
-        and membership.user_id = (select auth.uid())
-        and membership.active and membership.role_code = 'owner'
-    )
+    or (select public.is_org_owner(((storage.foldername(name))[1])::uuid))
   )
 );
 alter policy subscription_payment_receipt_owner_cleanup on storage.objects
@@ -270,12 +260,7 @@ using (
   bucket_id = 'subscription-payment-receipts'
   and (select public.is_platform_user_active())
   and (storage.foldername(name))[2] = (select auth.uid())::text
-  and exists (
-    select 1 from public.organization_memberships membership
-    where membership.organization_id::text = (storage.foldername(name))[1]
-      and membership.user_id = (select auth.uid())
-      and membership.active and membership.role_code = 'owner'
-  )
+  and (select public.is_org_owner(((storage.foldername(name))[1])::uuid))
   and not exists (
     select 1 from public.subscription_payment_requests request
     where request.receipt_storage_path = name
