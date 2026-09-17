@@ -128,6 +128,45 @@ not a claim that its old definition hashes still describe deployed functions.
 No full delegated-scope/limit containment or independent audit is implied by
 these targeted tests. The protected production alias has not been promoted.
 
+## Billing and payment-receipt boundary continuation
+
+Migration `20260917064509_harden_billing_suspension_and_finite_prices.sql`
+is now live on SARAFI only. It denies billing portal/payment-request access when
+the user's platform account is suspended while preserving an active owner's
+ability to renew a shop whose subscription itself is suspended. Browser roles
+still have no direct access to the private payment-request table.
+
+Payment-receipt Storage policies now use the guarded owner helper instead of a
+raw query against the protected memberships table. Linked-receipt checks run
+through a private, non-API security-definer helper, so denying general shop
+settings cannot hide the payment link and make evidence deletable. The helper
+returns false outside the caller's own active owner path; anonymous and `PUBLIC`
+have no execute privilege. The live receipt bucket contained zero objects at the
+deployment boundary, so no existing object was moved, deleted or rewritten.
+
+Subscription plan, term-price and payment-request amounts now reject PostgreSQL
+`NaN` and infinities at both the administrator API and table-constraint layers.
+Read-only preflight and postflight checks found zero invalid existing values; all
+three constraints are validated. No payment or subscription record was changed
+by deployment or verification.
+
+Full [CI run 35193568339](https://github.com/sarwaridairy-ship-it/Sarafi/actions/runs/35193568339)
+passed for `b8963a9d0216a57fccc2aa50d87b838015f7ba6c`: **411 browser
+tests** across Chromium, Firefox and WebKit; schema replay/lint; **103 pgTAP
+assertions** across three rollback-only files, including all **43 new billing and
+Storage assertions**; three authenticated security journeys; and all seven role
+contracts. The exact live dry run and deployment contained one migration, no
+seeds, role synchronization or Vault changes.
+
+After deployment, live database lint returned no errors, the existing ten
+authenticated role/security journeys passed, and the expanded non-writing
+privileged-boundary probe passed **82/82** with zero financial writes and zero
+access changes. The provider advisor remains at 144 authenticated privileged
+functions, one intentionally anonymous public-status function and 15
+informational RLS-without-policy tables; this migration added no exposed
+privileged RPC. These results validate this narrow correction, not the whole
+remaining RPC inventory or a public release.
+
 Independent review, signed release tag, protected production promotion, full RPC
 authorization review, secure account-recovery acceptance, qualified Afghan Dari/
 Pashto review, actual operator/device/printer acceptance and responsible legal/

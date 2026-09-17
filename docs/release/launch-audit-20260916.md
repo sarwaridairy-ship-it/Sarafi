@@ -94,7 +94,7 @@ No customer financial history was deleted or rewritten.
 5. **Provider security:** leaked-password protection was enabled after reconnecting
    the owner dashboard; a fresh provider scan no longer reports that warning.
    No password or reauthentication policy was changed. After revoking the unused
-   legacy `current_rate` helper, 149 authenticated SECURITY DEFINER functions
+   legacy `current_rate` helper and five internal authorization helpers, 144 authenticated SECURITY DEFINER functions
    still require explicit authorization review; fixed search paths and passing
    contract tests are not blanket clearance. The sole anonymous RPC was inspected
    and intentionally returns public version/announcement fields, not financial
