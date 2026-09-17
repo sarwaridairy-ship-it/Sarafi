@@ -3,7 +3,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(25);
+select plan(29);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-000000000001', 'authorization-a@example.invalid'),
@@ -93,5 +93,32 @@ select lives_ok($$select public.record_compliance_alert('20000000-0000-4000-8000
 select throws_ok($$select public.record_compliance_alert('20000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000001',null,'kyc_required','{}')$$, 'P0001', 'Compliance permission required', 'alert cannot be created in another organization');
 reset role;
 select is((select count(*) from public.import_batches where organization_id = '20000000-0000-4000-8000-000000000001'), 2::bigint, 'failed imports leave no committed batch');
+
+create temp table platform_health_baseline as
+select (public.get_platform_operations()->'health'->>'unbalanced_posted_entries')::bigint as unbalanced_count;
+insert into public.ledger_accounts (id, organization_id, code, name, category, currency_code) values
+  ('70000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','SECURITY_TEST_DEBIT','Synthetic debit','asset','AFN'),
+  ('70000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','SECURITY_TEST_CREDIT','Synthetic credit','equity','AFN');
+insert into public.financial_events (id,organization_id,branch_id,event_type,immutable_reference,occurred_at,created_by,client_command_id)
+  values ('50000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','record_income','SECURITY-TEST-BALANCED',now(),'10000000-0000-4000-8000-000000000001','security-test-balanced');
+insert into public.journal_entries (id,organization_id,branch_id,financial_event_id,status,occurred_at,created_by)
+  values ('80000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000003','pending_approval',now(),'10000000-0000-4000-8000-000000000001');
+insert into public.journal_lines (organization_id,journal_entry_id,account_id,currency_code,native_debit,native_credit,base_debit,base_credit,applied_rate) values
+  ('20000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000001','AFN',1,0,1,0,1),
+  ('20000000-0000-4000-8000-000000000001','80000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000002','AFN',0,1,0,1,1);
+update public.journal_entries set status='posted',posted_at=now(),posted_by='10000000-0000-4000-8000-000000000001'
+  where id='80000000-0000-4000-8000-000000000001';
+select lives_ok($$set constraints posted_entry_must_balance immediate$$,'a two-line balanced journal satisfies the deferred posting constraint');
+select is((public.get_platform_operations()->'health'->>'unbalanced_posted_entries')::bigint,(select unbalanced_count from platform_health_baseline),'administrator health excludes a structurally valid balanced journal');
+set constraints posted_entry_must_balance deferred;
+
+insert into public.financial_events (id,organization_id,branch_id,event_type,immutable_reference,occurred_at,created_by,client_command_id)
+  values ('50000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','record_expense','SECURITY-TEST-EMPTY',now(),'10000000-0000-4000-8000-000000000001','security-test-empty');
+insert into public.journal_entries (id,organization_id,branch_id,financial_event_id,status,occurred_at,created_by)
+  values ('80000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000004','pending_approval',now(),'10000000-0000-4000-8000-000000000001');
+update public.journal_entries set status='posted',posted_at=now(),posted_by='10000000-0000-4000-8000-000000000001'
+  where id='80000000-0000-4000-8000-000000000002';
+select throws_ok($$set constraints posted_entry_must_balance immediate$$,'P0001','Journal entry 80000000-0000-4000-8000-000000000002 must contain at least two lines','a posted journal cannot commit without double-entry lines');
+select is((public.get_platform_operations()->'health'->>'unbalanced_posted_entries')::bigint,(select unbalanced_count + 1 from platform_health_baseline),'administrator health detects a legacy zero-line posted journal');
 select * from finish();
 rollback;
