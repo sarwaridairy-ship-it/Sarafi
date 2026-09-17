@@ -239,6 +239,42 @@ grant execute on function public.set_subscription_plan_price(uuid,smallint,numer
 alter policy organization_payment_owner_read on public.subscription_payment_requests
 using ((select public.is_org_owner(organization_id)));
 
+create schema if not exists private authorization postgres;
+revoke all on schema private from public, anon, authenticated;
+grant usage on schema private to authenticated;
+
+create or replace function private.can_delete_subscription_payment_receipt(target_path text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  folders text[] := storage.foldername(target_path);
+  target_org uuid;
+begin
+  if coalesce(array_length(folders, 1), 0) < 2
+    or folders[2] <> (select auth.uid())::text
+    or not public.is_platform_user_active() then
+    return false;
+  end if;
+  begin
+    target_org := folders[1]::uuid;
+  exception when invalid_text_representation then
+    return false;
+  end;
+  if not public.is_org_owner(target_org) then return false; end if;
+  return not exists (
+    select 1 from public.subscription_payment_requests request
+    where request.receipt_storage_path = target_path
+  );
+end;
+$$;
+
+revoke all on function private.can_delete_subscription_payment_receipt(text) from public, anon, authenticated;
+grant execute on function private.can_delete_subscription_payment_receipt(text) to authenticated;
+
 alter policy subscription_payment_receipt_owner_insert on storage.objects
 with check (
   bucket_id = 'subscription-payment-receipts'
@@ -258,13 +294,7 @@ using (
 alter policy subscription_payment_receipt_owner_cleanup on storage.objects
 using (
   bucket_id = 'subscription-payment-receipts'
-  and (select public.is_platform_user_active())
-  and (storage.foldername(name))[2] = (select auth.uid())::text
-  and (select public.is_org_owner(((storage.foldername(name))[1])::uuid))
-  and not exists (
-    select 1 from public.subscription_payment_requests request
-    where request.receipt_storage_path = name
-  )
+  and (select private.can_delete_subscription_payment_receipt(name))
 );
 
 -- PostgreSQL NaN passes ordinary positive-number comparisons. These constraints
