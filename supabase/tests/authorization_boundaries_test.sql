@@ -3,7 +3,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(30);
+select plan(35);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-000000000001', 'authorization-a@example.invalid'),
@@ -88,6 +88,11 @@ set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-000000000001","r
 select lives_ok($$select public.commit_import(pg_temp.import_command('mfa-allowed'))$$, 'AAL2 restores authorized import access');
 select ok(not has_function_privilege('anon', 'public.current_rate(uuid,text,text,uuid,uuid)', 'EXECUTE'), 'anonymous legacy rate helper remains revoked');
 select ok(not has_function_privilege('authenticated', 'public.current_rate(uuid,text,text,uuid,uuid)', 'EXECUTE'), 'authenticated legacy rate helper remains revoked');
+select ok(not has_function_privilege('authenticated', 'public.record_fx_trade(jsonb)', 'EXECUTE'), 'legacy FX implementation is not a client RPC');
+select ok(not has_function_privilege('authenticated', 'public.request_fx_trade_approval(jsonb)', 'EXECUTE'), 'legacy FX approval implementation is not a client RPC');
+select ok(not has_function_privilege('authenticated', 'public.record_hawala_incoming(jsonb)', 'EXECUTE'), 'legacy incoming Hawala implementation is not a client RPC');
+select ok(not has_function_privilege('authenticated', 'public.record_hawala_send(jsonb)', 'EXECUTE'), 'legacy Hawala send implementation is not a client RPC');
+select ok(not has_function_privilege('authenticated', 'public.record_hawala_send_v6(jsonb)', 'EXECUTE'), 'legacy v6 Hawala send implementation is not a client RPC');
 select throws_ok($$select public.record_compliance_alert('20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000002','kyc_required','{}')$$, 'P0001', 'Event tenant mismatch', 'unowned event cannot be linked to compliance alert');
 select lives_ok($$select public.record_compliance_alert('20000000-0000-4000-8000-000000000001','40000000-0000-4000-8000-000000000001',null,'kyc_required','{}')$$, 'authorized non-event alert still works');
 select throws_ok($$select public.record_compliance_alert('20000000-0000-4000-8000-000000000002','40000000-0000-4000-8000-000000000001',null,'kyc_required','{}')$$, 'P0001', 'Compliance permission required', 'alert cannot be created in another organization');
