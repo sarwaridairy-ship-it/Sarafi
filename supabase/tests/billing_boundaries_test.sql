@@ -76,7 +76,7 @@ insert into public.membership_capability_overrides (membership_id,capability_cod
   values (pg_temp.billing_id('owner-membership'),'organization.manage',false,pg_temp.billing_id('owner'),'Synthetic settings denial');
 set local role authenticated;
 select is((public.create_subscription_payment_request_v2(pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'security-test-manual',1::smallint,'TEST-RECEIPT',null,pg_temp.receipt_path('org','owner','receipt.pdf'),'receipt.pdf','application/pdf')->'request'->>'amount_afn')::numeric,100::numeric,'active owner submission uses server price despite shop subscription suspension');
-select is((select count(*) from public.subscription_payment_requests where organization_id=pg_temp.billing_id('org')),1::bigint,'owner sees linked request despite a shop-settings capability denial');
+select is(jsonb_array_length(public.get_billing_portal(pg_temp.billing_id('org'))->'requests'),1,'owner sees linked request despite a shop-settings capability denial');
 select is((with removed as (delete from storage.objects where id=pg_temp.billing_id('receipt') returning id) select count(*) from removed),0::bigint,'linked receipt cannot be deleted when settings permission is denied');
 select is((with removed as (delete from storage.objects where id=pg_temp.billing_id('unlinked') returning id) select count(*) from removed),1::bigint,'active owner may clean up own unlinked receipt');
 select throws_ok($$select public.create_subscription_payment_request_v2(pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'security-test-manual',1::smallint,'TEST-RECEIPT',null,pg_temp.receipt_path('org','owner','upload.pdf'),'upload.pdf',null)$$,'P0001','Upload a PDF, JPG, or PNG payment receipt','null MIME type is rejected');
@@ -87,7 +87,7 @@ select pg_temp.billing_signin('manager');
 set local role authenticated;
 select throws_ok($$select public.get_billing_portal(pg_temp.billing_id('org'))$$,'P0001','Only the business owner can manage the plan','business administrator is not the billing owner');
 select throws_ok($$select public.create_subscription_payment_request_v2(pg_temp.billing_id('org'),pg_temp.billing_id('plan'),'security-test-manual',1::smallint,'TEST-RECEIPT',null,null,null,null)$$,'P0001','Only the business owner can request plan activation','business administrator cannot submit an owner payment');
-select is((select count(*) from public.subscription_payment_requests where organization_id=pg_temp.billing_id('org')),0::bigint,'settings permission does not expose payment request details to staff');
+select throws_ok($$select count(*) from public.subscription_payment_requests where organization_id=pg_temp.billing_id('org')$$,'42501','permission denied for table subscription_payment_requests','settings permission does not expose the private payment table to staff');
 select is((select count(*) from storage.objects where id=pg_temp.billing_id('receipt')),0::bigint,'staff cannot read owner payment receipts');
 select throws_ok($$select public.set_subscription_plan_price(pg_temp.billing_id('plan'),1::smallint,200,true)$$,'P0001','Platform administrator access required','shop administrator cannot change platform prices');
 reset role;
